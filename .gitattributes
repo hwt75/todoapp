@@ -1,0 +1,14 @@
+# Normalize line endings: LF in the repo and in the working copy.
+# core.autocrlf=true is set globally on this machine; without this, BMAD's
+# shell and Python scripts would be checked out with CRLF and break.
+* text=auto eol=lf
+
+# Binary — never touch
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
