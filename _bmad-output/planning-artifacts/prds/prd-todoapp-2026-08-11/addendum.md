@@ -10,6 +10,31 @@ updated: 2026-08-11
 Depth from the PRD conversation that architecture, UX, and story work will need, plus rationale for
 options considered and set aside. Not part of the PRD.
 
+## Revised during UX (2026-08-11)
+
+Two decisions taken in the UX phase overturned settled PRD scope, and the PRD was patched rather than
+left to drift.
+
+**In-app Commitment editing came back.** The PRD had ruled it out on the grounds that five fixed
+commitments do not justify a create/edit/delete flow for a solo builder. The author asked for it
+directly. The cost is real but the argument against it was weaker than it looked: he cannot know in
+advance which commitments are worth staking money on, and a fixed set makes that unlearnable.
+
+**Verification tiers collapsed into optional Auto-checks.** The PRD modelled Machine / Declared /
+Timer as three exclusive tiers assigned per commitment. The author asked for automatic checks to be
+opt-in at creation time instead. The resulting model is simpler, not more complex: every Commitment
+is declared, and an Auto-check merely files that declaration on his behalf. It also removes an
+awkwardness the tiered model never resolved — that Timer was a "verification tier" which verified
+nothing.
+
+That change forced a question the tiered model had hidden: when an Auto-check says missed and the
+author says done, who wins? FR-2a settles it on whether money is at stake. Machine wins where a
+Penalty rides on it, appealable to the Referee; the author's word wins where none does, with no
+Appeal and no referee involvement at all. Rejected alternatives were *machine always wins* (turns
+every penalty-free commitment into an argument with a sensor) and *the author always wins* (leaves
+Auto-checks with no authority anywhere, making the gym commitment as honor-based as the abstinence
+one).
+
 ## Where this PRD departs from the brief
 
 Three departures, all deliberate, all the author's call.

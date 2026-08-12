@@ -1,0 +1,78 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 08-11-2026 14:30
+last_updated: 08-11-2026 14:30
+project: todoapp
+project_key: NOKEY
+tracking_system: file-system
+story_location: F:\claude\todoapp\_bmad-output\implementation-artifacts
+development_status:
+  epic-1: backlog
+  1-1-an-installable-shell-and-the-tokens-everything-else-is-built: backlog
+  1-2-a-push-arrives-on-a-locked-phone-and-survives-a-reboot: backlog
+  1-3-settle-whether-tryhackme-can-be-read-from-outside: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-sign-in-as-the-doer: backlog
+  2-2-create-and-edit-a-commitment: backlog
+  2-3-see-today-and-the-row-and-pill-everything-else-reuses: backlog
+  2-4-answer-for-yesterday: backlog
+  2-5-the-day-closes-on-its-own: backlog
+  2-6-a-failed-day-costs-money-and-i-can-see-every-one: backlog
+  2-7-silence-is-not-a-way-out: backlog
+  2-8-the-day-tells-me-how-it-went: backlog
+  2-9-chains-that-survive-a-bad-day: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-start-the-work-by-starting-a-clock: backlog
+  3-2-know-where-the-hours-stand-without-opening-anything: backlog
+  3-3-a-weekly-quota-that-counts-down: backlog
+  3-4-the-week-closes-and-settles: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-attach-a-check-that-answers-for-me: backlog
+  4-2-a-check-that-cannot-run-never-says-i-missed: backlog
+  4-3-when-money-rides-on-it-the-machine-s-word-stands: backlog
+  4-4-contest-a-miss-the-machine-got-wrong: backlog
+  4-5-the-referee-has-his-own-way-in: backlog
+  4-6-the-referee-rules: backlog
+  4-7-the-app-does-the-asking-the-referee-does-the-collecting: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-a-countable-way-to-be-forgiven: backlog
+  5-2-the-app-notices-i-have-gone-quiet: backlog
+  5-3-the-friend-is-told-i-have-disappeared: backlog
+  5-4-the-long-view-including-whether-this-still-works: backlog
+  epic-5-retrospective: optional

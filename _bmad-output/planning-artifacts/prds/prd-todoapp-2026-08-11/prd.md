@@ -13,7 +13,11 @@ updated: 2026-08-11
 This PRD is for the author, who is the product manager, the only engineer, and the only user of
 version 1. It builds on `briefs/brief-todoapp-2026-08-11/brief.md` and its addendum and does not
 repeat them; where this document contradicts the brief, this document wins and the change is recorded
-in `.memlog.md`. Vocabulary is fixed by §3 Glossary and used verbatim throughout. Features are grouped
+in `.memlog.md`. The UX phase that followed produced
+[DESIGN.md](../../ux-designs/ux-todoapp-2026-08-11/DESIGN.md) and
+[EXPERIENCE.md](../../ux-designs/ux-todoapp-2026-08-11/EXPERIENCE.md), which own visual identity and
+interaction behavior respectively and are not duplicated here; §4.1, §4.3 and FR-2a were revised to
+match decisions taken there. Vocabulary is fixed by §3 Glossary and used verbatim throughout. Features are grouped
 in §4 with globally numbered functional requirements nested under them, so downstream architecture and
 story work has stable references. Inferences the author has not confirmed are tagged `[ASSUMPTION]`
 inline and indexed in §10.
@@ -83,7 +87,10 @@ Anyone but the author and his Referee. No second doer, no second Referee, no pub
   appears; his friend, who was there, approves it that evening. The session counts, the money never
   moves.
   **Climax:** he was not charged for the phone's mistake, which is the only reason he still trusts
-  the machine tier at all.
+  the Auto-checks at all.
+  *In v1 this journey runs for the TryHackMe Commitment rather than the gym, since the location
+  Auto-check is deferred. The mechanism it exercises — a machine miss, a held Penalty, an Appeal, a
+  ruling — is unchanged and is the reason the journey stays.*
 
 - **UJ-4. Day two of going quiet.**
   He slipped on Wednesday, paid, and felt terrible. Thursday he did not open the app. Friday morning
@@ -107,22 +114,34 @@ Anyone but the author and his Referee. No second doer, no second Referee, no pub
   arithmetic. By Saturday morning, one session left and one day remaining, it is the loudest thing on
   his phone.
 
+- **UJ-7. He adds a commitment and decides how much truth it needs.**
+  He creates *Read 20 pages*, picks Do it and Every day. Money defaults to off and he leaves it off,
+  so this one runs on his word alone. **Climax:** had he switched money on *and* attached an
+  Auto-check, the screen would have told him then and there that the Auto-check's result stands and
+  an Appeal is the only way to overturn it — rather than letting him discover that on the day it
+  costs him 500,000 VND. **Resolution:** the commitment appears on tomorrow's list.
+  **Edge case:** he picks Avoid it. Every Auto-check greys out and the screen states plainly that
+  nothing can check this one and his morning answer is the record.
+
 ## 3. Glossary
 
 - **Commitment** — one thing the author has undertaken to do or abstain from, carrying a Kind, a
-  Cadence, a Verification Tier, and a flag for whether it carries the Penalty. Five exist in v1.
+  Cadence, any number of Auto-checks, and a flag for whether it carries the Penalty. The author
+  creates and edits these himself; five exist at the start.
 - **Kind** — *Do* (gym, morning exercise, TryHackMe), *Abstain* (no fap), or *Open-ended* (company
   work). Determines what "done" can even mean.
 - **Cadence** — *Daily*, *Weekly Quota* (N times per week), or *Daily Hours Quota* (N hours per day,
   accumulated). Determines when a Commitment can be judged failed.
-- **Verification Tier** — *Machine* (phone sensors or an external service confirm it), *Declared*
-  (the author states it and no one can check), or *Timer* (a Focus Session was run).
-- **Declaration** — the author's own statement about a Declared Commitment for a closed day. Requested
-  the following morning, blocking, and not optional.
+- **Auto-check** — an optional mechanism attached to a Commitment that files its Declaration
+  automatically: *Location with dwell*, *Phone movement*, *Timer*, or *Account elsewhere*. Zero or
+  more per Commitment. A Commitment with none is settled by the author's Declaration alone.
+- **Declaration** — the statement of whether a Commitment held on a closed day. Filed by an Auto-check
+  where one is attached and satisfied; otherwise requested from the author the following morning,
+  blocking, and not optional. An unanswered Declaration expires to a miss after 48 hours.
 - **Focus Session** — a timed working block against an Open-ended Commitment. Starts on a tap, banks
   its elapsed minutes when stopped. Carries no Penalty and performs no attention policing.
-- **Day Close** — the point at which a calendar day is judged: all its Declared Commitments answered
-  and its Machine-tier results final. Until Day Close a day has no verdict.
+- **Day Close** — the point at which a calendar day is judged: every Declaration for it filed, whether
+  by an Auto-check or by the author. Until Day Close a day has no verdict.
 - **Week Close** — the point at which a week is judged, settling Weekly Quota Commitments and any
   Held Penalties still outstanding.
 - **Failed Day** — a calendar day on which at least one Penalty-carrying Commitment was missed.
@@ -131,8 +150,9 @@ Anyone but the author and his Referee. No second doer, no second Referee, no pub
   the product.
 - **Held** — a Penalty that has been incurred but is suspended pending an Appeal. A Held Penalty
   never becomes owed on its own.
-- **Appeal** — the author's same-day contest of a Machine-tier miss, with evidence, ruled on by the
-  Referee.
+- **Appeal** — the author's same-day contest of an Auto-check miss on a penalty-carrying Commitment,
+  with evidence, ruled on by the Referee. Penalty-free Commitments have no Appeal; the author simply
+  corrects them (FR-2a).
 - **Referee** — the friend. Holds a separate account on the web surface. Rules on Appeals, receives
   collection instructions, marks Penalties Collected.
 - **Collected** — the Referee's confirmation that money physically changed hands. The only way a debt
@@ -148,18 +168,29 @@ Anyone but the author and his Referee. No second doer, no second Referee, no pub
 
 ### 4.1 Commitments
 
-**Description:** Five fixed Commitments, configured once. This is not a task manager — there is no
-capture, no inbox, no list to curate. Adding a sixth Commitment is a v2 concern.
+**Description:** The author creates and edits his own Commitments in the app. This is still not a task
+manager — there is no capture, no inbox, no projects — but the set is his to shape, because he cannot
+know in advance which commitments are worth staking money on.
 
-The v1 set:
+Every Commitment is **Declared by default**: the author states whether it held. Optional **Auto-checks**
+can be attached to a Commitment, and where one is attached and satisfied, it files the Declaration on
+the author's behalf and he is never asked. Auto-checks are helpers, not a separate class of
+Commitment.
 
-| Commitment | Kind | Cadence | Verification Tier | Penalty |
+The v1 set he starts from:
+
+| Commitment | Kind | Cadence | Auto-check | Penalty |
 |---|---|---|---|---|
-| No fap | Abstain | Daily | Declared | **Yes** |
-| Gym | Do | Weekly Quota — 3 | Machine (geofence + dwell) | **Yes** |
-| TryHackMe | Do | Daily | Machine (completed-room history) | **Yes** |
-| Morning exercise | Do | Daily | Machine (motion) | No |
+| No fap | Abstain | Daily | none possible | **Yes** |
+| Gym | Do | Weekly Quota — 3 | Location with dwell *(deferred — declared in v1)* | **Yes** |
+| TryHackMe | Do | Daily | Account elsewhere | **Yes** |
+| Morning exercise | Do | Daily | Phone movement *(deferred — declared in v1)* | No |
 | Company work | Open-ended | Daily Hours Quota — 3h | Timer | No |
+
+Two of the four Auto-checks need background sensor access that a web app cannot have, so in v1 gym
+and morning exercise are settled by Declaration like any other Commitment. This costs the author
+convenience, not stakes: the money, the Referee, and the settlement rules are untouched, which is
+only true because Auto-checks were made optional rather than a fixed tier.
 
 Two Commitments deliberately carry no Penalty. Morning exercise is already an established habit at
 07:30; money would add no motivation while adding a real risk — a phone left on the desk produces a
@@ -170,15 +201,31 @@ which verifies nothing and therefore cannot fairly carry money.
 **Functional Requirements:**
 
 #### FR-1: Commitment configuration
-The author can define a Commitment with a Kind, a Cadence, a Verification Tier, and a Penalty flag.
+The author can create, edit, and delete a Commitment from the phone, setting a Kind, a Cadence, a
+Penalty flag, and any number of Auto-checks. Realizes UJ-7.
 
 **Consequences (testable):**
-- A Commitment whose Verification Tier is Timer cannot have its Penalty flag set.
 - A Weekly Quota Commitment stores a target count and a week start day.
 - A Daily Hours Quota Commitment stores a target duration in minutes.
+- The Penalty flag defaults to off; enabling it is always a deliberate act.
+- A Commitment of Kind Abstain offers no Auto-check, and states why at the point of configuration.
+- Enabling both a Penalty and an Auto-check surfaces the FR-2a precedence rule before the Commitment
+  is saved, not on the day it first costs money.
 
-**Out of Scope:** creating, editing, or deleting Commitments from the phone during normal use; v1 may
-ship them as configuration.
+**Out of Scope:** sharing, assigning, or scheduling Commitments; anything resembling a project or a
+sub-task.
+
+#### FR-2a: Whose word settles a Commitment
+Where a Commitment carries a Penalty and has an Auto-check attached, the Auto-check's result stands
+and an Appeal (FR-14) is the only way to overturn it. Where a Commitment carries no Penalty, the
+author's Declaration overrides any Auto-check result and no Appeal exists.
+
+**Consequences (testable):**
+- A missed Auto-check on a penalty-free Commitment can be corrected by the author directly, with no
+  referee involvement and no hold.
+- A missed Auto-check on a penalty-carrying Commitment cannot be corrected by the author directly.
+- Removing the Penalty from a Commitment with a pending Appeal resolves that Appeal in the author's
+  favor rather than leaving it open.
 
 #### FR-2: Judging by Cadence
 The system judges each Commitment only at its own settlement point, never earlier.
@@ -228,39 +275,74 @@ Realizes UJ-6.
 When a Daily Hours Quota Commitment has accumulated no minutes by a configured hour, the system
 prompts the author to start a Focus Session. Realizes UJ-2.
 
-### 4.3 Machine Verification
+### 4.3 Auto-checks
 
-**Description:** Three Commitments confirm themselves with no action from the author. This tier exists
-to remove friction from work he already does, not to defeat a determined cheater. It catches false
-negatives through the Appeal path (§4.6) and accepts false positives by design — sitting in the gym
-doing nothing goes uncaught, consistent throughout: this product protects the author from himself,
-not from a fraudster.
+**Description:** An Auto-check files a Commitment's Declaration on the author's behalf. Attaching one
+is optional and per-Commitment; a Commitment with none simply asks the author each morning.
+
+Four are offered. Photographs are deliberately not among them: an old photo taken anywhere proves
+nothing, so evidence belongs to the Appeal path and never to verification.
+
+| Auto-check | What it observes | Fits |
+|---|---|---|
+| Location with dwell | Presence inside a configured geofence for a minimum duration | Places you must stay in |
+| Phone movement | Sustained motion within a configured window | Physical activity carrying the phone |
+| Timer | Minutes banked through Focus Sessions | Work measured by time |
+| Account elsewhere | Completion history on an external service | Anything with a public record |
+
+This exists to remove friction from work the author already does, not to defeat a determined cheater.
+It catches false negatives through the Appeal path (§4.6) and accepts false positives by design —
+sitting in the gym doing nothing goes uncaught, consistent throughout: this product protects the
+author from himself, not from a fraudster.
+
+**Nothing can observe an abstention.** No sensor and no service can confirm a thing that did not
+happen, so a Commitment of Kind Abstain offers no Auto-check at all — and the app says so when the
+Commitment is created, rather than letting the author believe he is covered.
 
 **Functional Requirements:**
 
-#### FR-6: Gym verification by geofence and dwell
-The system records a gym session when the phone remains inside a configured geofence for a minimum
-dwell duration. Realizes UJ-3.
+#### FR-6: Location Auto-check  *[DEFERRED — requires a native client]*
+The system records a session when the phone remains inside a configured geofence for a minimum dwell
+duration. Realizes UJ-3.
 
 **Consequences (testable):**
 - Entering and leaving inside the dwell threshold records nothing.
-- A recorded session increments the week's quota progress and generates no notification on the happy
+- A recorded session increments the Commitment's progress and generates no notification on the happy
   path.
+- The Commitment stores its own geofence and dwell minutes; these are not global settings.
 
-#### FR-7: Morning exercise verification by motion
-The system confirms the morning exercise Commitment from the phone's own motion data within a
-configured morning window.
+#### FR-7: Movement Auto-check  *[DEFERRED — requires a native client]*
+The system confirms a Commitment from the phone's own motion data within a configured window.
 
 **Consequences (testable):**
 - Confirmation requires sustained motion for at least the Commitment's target duration; scattered
   movement totaling that duration does not confirm it.
 - Motion outside the configured window does not count.
-- A miss here never produces a Penalty, since this Commitment does not carry one.
 
-#### FR-8: TryHackMe verification by completion history
-The system confirms the TryHackMe Commitment by reading completed-room history for the author's
-account. `[ASSUMPTION: this history is readable from outside TryHackMe. Unconfirmed since the brief;
-if it is not, this Commitment drops to the Declared tier and keeps its Penalty.]`
+#### FR-8: External account Auto-check
+The system confirms a Commitment by reading completion history from an external service the author
+has linked. `[ASSUMPTION: TryHackMe's completion history is readable from outside. Unconfirmed since
+the brief; if it is not, that Commitment simply runs with no Auto-check and keeps its Penalty, which
+under FR-2a means the author's Declaration settles it.]`
+
+**Consequences (testable):**
+- A service that cannot be reached is reported as unavailable and never as a miss.
+- An unavailable Auto-check falls through to asking the author, and never produces a Penalty on its
+  own.
+
+#### FR-8b: Auto-check availability
+An Auto-check that cannot run reports itself unavailable and falls through to the author's
+Declaration. It never reports a miss.
+
+**Consequences (testable):**
+- A revoked or downgraded location, motion, or notification permission makes every Auto-check
+  depending on it unavailable, not failing.
+- An unavailable Auto-check on a penalty-carrying Commitment does not invoke FR-2a precedence: with
+  no machine result to stand on, the author's Declaration settles the day and no Appeal is needed.
+- The author is told which Commitments are affected and what to restore, in plain language, at the
+  point the Auto-check would otherwise have run.
+- Availability is evaluated per Auto-check, not per Commitment; a Commitment with two Auto-checks
+  keeps the one that still works.
 
 ### 4.4 The Morning Declaration
 
@@ -279,20 +361,29 @@ accrues, and it is what §4.7 watches for.
 **Functional Requirements:**
 
 #### FR-9: Blocking morning Declaration
-For each Declared Commitment, the system requests a Declaration for the previous day at the author's
+For each Commitment whose Declaration was not filed by an Auto-check, the system requests one for the
+previous day at the author's
 first phone interaction after a configured morning hour, and the prompt is not dismissable without an
 answer. Realizes UJ-1.
 
 **Consequences (testable):**
 - Answering *held* closes the previous day clean for that Commitment and extends its Chain.
 - Answering *slipped* marks the previous day a Failed Day and resets that Chain to zero.
-- Declining to answer leaves the previous day open: no Penalty, no clearance, and the open
-  Declaration counts toward Silence.
+- Declining to answer leaves the day open, and the open Declaration counts toward Silence.
 - A Declaration can be answered late, and answering it late settles the day it belongs to.
+- **An unanswered Declaration expires 48 hours after it was first requested and settles as a miss.**
+  Silence must not be cheaper than honesty: if going quiet left a day permanently unresolved, the
+  cheapest possible response to a slip would be to stop answering, which is precisely the behavior
+  the product exists to prevent.
+- The silence intervention (FR-16) arrives on the morning of the second day, before the first
+  expiry — so it is the final warning rather than an epitaph, and acting on it still saves the day.
+- An expired day can be voided afterwards with a Grace Day (FR-17) from the Ledger, which is the
+  release valve for a genuinely unreachable phone.
 
 #### FR-10: Day Close
-A calendar day closes when all its Declared Commitments are answered and its Machine-tier results are
-final; at Day Close the system determines whether it is a Failed Day. Realizes UJ-1.
+A calendar day closes when every Declaration for it has been filed — by Auto-check, by the author, or
+by expiry under FR-9 — and at Day Close the system determines whether it is a Failed Day.
+Realizes UJ-1.
 
 **Consequences (testable):**
 - A Failed Day incurs exactly one Penalty regardless of how many Commitments were missed.
@@ -341,6 +432,11 @@ One rule is absolute: **a Held Penalty never converts to owed on its own.** If t
 because the Referee was busy, trust in the whole mechanism is gone permanently and immediately.
 Realizes UJ-3.
 
+That rule protects the author from *someone else's* inaction, and it must not be read as protecting
+him from his own. An unanswered Declaration expiring to a miss (FR-9) is a different category
+entirely: nobody else was ever going to answer it. Confusing the two is what would let silence
+become the cheapest way out of a slip.
+
 **Functional Requirements:**
 
 #### FR-13: Penalty accrual
@@ -354,8 +450,8 @@ UJ-5.
 - A Penalty is only presented to the Referee once it is owed — never while Held.
 
 #### FR-14: Same-day Appeal
-When a Machine-tier Commitment is judged missed, the author can submit an Appeal with evidence on the
-day the work was claimed. Realizes UJ-3.
+When an Auto-check on a penalty-carrying Commitment reports a miss, the author can submit an Appeal
+with evidence on the day the work was claimed. Realizes UJ-3.
 
 **Consequences (testable):**
 - Submitting an Appeal moves the associated Penalty to Held before it is ever presented as owed.
@@ -397,24 +493,31 @@ The author can spend a Grace Day to void one day's Penalty and preserve that day
 UJ-4.
 
 **Consequences (testable):**
-- Grace Days are limited per month, counted, and always visible in the intervention.
+- Grace Days are limited per month, counted, and always visible wherever they can be spent.
   `[ASSUMPTION: two per month. Never confirmed; the brief said only "limited and countable".]`
+- A Grace Day can be spent from the Day summary, from an owed row in the Ledger, and from the silence
+  intervention. It must never be reachable *only* through the intervention: that would require the
+  author to go quiet for two days before he could use his own allowance, rewarding the exact behavior
+  FR-16 exists to interrupt.
 - A Grace Day cannot be applied to a day already marked Collected.
 - Grace Days never accrue automatically and are never spent on the author's behalf.
 
 #### FR-18: Escalation to the Referee
-When Silence persists beyond the intervention, the system notifies the Referee that the author has
-gone quiet. `[ASSUMPTION: four days. Unconfirmed.]`
+When Silence persists beyond the intervention, the system emails the Referee that the author has gone
+quiet, and surfaces that state on the Referee's home. `[ASSUMPTION: four days. Unconfirmed.]`
 
 **Consequences (testable):**
-- The escalation states the number of days and nothing about which Commitments were missed.
+- The escalation states the number of days and nothing about which Commitments were missed, and names
+  no amount.
+- It asks the Referee for no action and adds nothing to his queues — it is the one message that
+  invites him to behave as a friend rather than process an item.
 - It fires once per Silence episode, not daily.
 - Any Declaration answered ends the episode and cancels further escalation.
 
 ### 4.8 The Referee Surface
 
 **Description:** A web app with its own account and login, deliberately quiet. In a good week the
-Referee does nothing at all — Machine-tier Commitments approve themselves and he is never involved.
+Referee does nothing at all — Auto-checked Commitments settle themselves and he is never involved.
 He is an appeals court, not a daily approver, because his attention is the scarcest resource in the
 system and the brief ranks his burnout as risk number one.
 
@@ -496,34 +599,43 @@ weeks at quota for Weekly Quota Commitments.
 
 - **Notification-first.** Restated because it governs every feature: a capability reachable only by
   opening the app unprompted is not a capability. Everything load-bearing pushes.
-- **Two surfaces, two jobs.** iOS for the doer, web for the Referee. The web surface must not be
-  designed as though it needs aggressive notification; web push is weak, particularly on iOS Safari
-  where it requires home-screen installation.
-- **Location privacy.** The gym geofence is the most sensitive data the product holds. Location is
+- **One installable web app, two roles.** v1 ships as a PWA installed to the home screen, serving the
+  doer and the Referee from one codebase; role is resolved server-side. A native iOS client was the
+  original plan and is deferred, not abandoned — see §7.2. The Referee's surface must not be designed
+  as though it needs aggressive notification: his channel is email.
+- **Location privacy.** Applies whenever the location Auto-check exists (deferred in v1). Location is
   used solely to evaluate dwell inside one configured geofence; no location history is retained
   beyond the session determination, and none is shown to the Referee.
 - **Evidence privacy.** Appeal evidence is visible to the Referee and to no one else.
 - **Money is never handled.** No payment integration, no balance the product can move, no stored
   instrument. The product records claims and confirmations between two people.
-- **Offline tolerance.** Machine verification and Focus Sessions must survive loss of connectivity
-  and reconcile when it returns; a missing network must never produce a Failed Day.
+- **Offline tolerance, and its one deliberate limit.** Observations submitted while offline — focus
+  sessions, Declarations, Appeals — queue locally and reconcile without duplicating when connectivity
+  returns. A network fault must never *invent* a miss that did not happen. The 48-hour Declaration
+  expiry is the deliberate exception: it runs on wall-clock time and is never extended for lost
+  connectivity, because the system cannot tell a phone with no signal from a person choosing not to
+  answer, and any extension would be gamed by airplane mode. A genuinely unreachable phone is
+  remedied afterwards by a Grace Day, which FR-9 already names as the release valve for exactly this.
 
 ## 6. Non-Goals
 
 - Not a task manager. No capture, no inbox, no projects, no curated list.
-- Not an anti-cheat system. False positives are accepted at every tier by design.
+- Not an anti-cheat system. False positives are accepted by design, in every Auto-check.
 - Not a payment product, and not a wallet, escrow, or ledger of transferable value.
 - Not a social product. No feed, no leaderboard, no second Referee, no user-to-user feature beyond the
   single doer–Referee pair.
 - Not a platform yet. The platform question is referee supply, and v1 does not attempt it.
-- Not Android, not a wearable integration, and specifically not the author's Huawei watch.
+- Not a wearable integration, and specifically not the author's Huawei watch. (Android is no longer
+  excluded by construction — a PWA runs there — but it is not a target and nothing is tested for it.)
 
 ## 7. MVP Scope
 
 ### 7.1 In Scope
 
-- The five Commitments in §4.1, configured once
-- Machine verification from the phone alone: geofence with dwell, motion, TryHackMe history
+- A PWA installed to the home screen, serving both roles from one codebase
+- Creating, editing and deleting Commitments in the app, starting from the five in §4.1
+- Two optional Auto-checks in v1 — timer and external account — each attachable per Commitment, with
+  FR-2a deciding whose word settles a dispute. The other two are specified and deferred (§7.2)
 - The blocking morning Declaration and Day Close
 - Focus Sessions with a daily hours quota
 - Flat 500,000 VND per Failed Day, with Held Penalties and same-day Appeals
@@ -533,13 +645,20 @@ weeks at quota for Weekly Quota Commitments.
 
 ### 7.2 Out of Scope for MVP
 
-- Financial-report research, VHM news tracking, and the horoscope agent build — no stated Cadence, no
-  verification path, and no Penalty possible. `[NOTE FOR PM: these come back cheaply once Focus
-  Sessions work, since they need nothing but a Commitment row each. Revisit at the first monthly
-  report.]`
+- Financial-report research, VHM news tracking, and the horoscope agent build — no stated Cadence and
+  no Penalty possible. `[NOTE FOR PM: now that the author can create Commitments himself and attach a
+  Timer Auto-check, these cost nothing to add. Left out of the starting set rather than out of the
+  product. Revisit at the first monthly report.]`
+- Photographs as an Auto-check — an old photo taken anywhere proves nothing, so evidence belongs to
+  the Appeal path only
+- **A native iOS client, and with it the location and movement Auto-checks (FR-6, FR-7) and an
+  alarm-grade morning gate.** Blocked on an Apple Developer account: a free Apple ID cannot sign the
+  push entitlement, and a web app cannot run in the background on iOS. Both FRs stay specified rather
+  than deleted, because the architecture makes the client a thin reporter — swapping it later touches
+  no settlement logic. `[NOTE FOR PM: revisit once the mechanism has proven itself for a month. The
+  99 USD is easy to justify then and hard to justify now.]`
 - A Penalty cap or stop-loss — considered and declined by the author
 - Attention policing inside a Focus Session
-- In-app Commitment editing
 - Public signup, App Store release, second user of any kind
 
 ## 8. Success Metrics
@@ -583,12 +702,13 @@ and comes back fast.
 1. **What does the uncapped Penalty do after three or four consecutive Failed Days?** The author
    declined a cap on affordability grounds, but the concern was motivational: at some run length,
    deleting the app becomes his most rational move. SM-C2 is the tripwire; no mitigation exists.
-2. **Is TryHackMe completion history readable from outside?** Unconfirmed since the brief. If not,
-   that Commitment moves to the Declared tier and the morning Declaration carries two questions
-   instead of one. A few hours of work to settle, and it should be settled before architecture.
+2. **Is TryHackMe completion history readable from outside?** Unconfirmed since the brief, and now the
+   *only* Auto-check in v1 that reaches outside the product. If it fails, v1 has one Auto-check left
+   (the timer) and every other Commitment is settled by Declaration. A few hours of work to settle,
+   and it is now the highest-value unknown in the document.
 3. **How many Grace Days per month, and do they carry over?** Assumed two, non-carrying.
-4. **What is the author's iOS/Swift experience?** Deferred to architecture by agreement, but v1 cannot
-   be sized without it. Ask it first.
+4. ~~What is the author's iOS/Swift experience?~~ **Resolved and superseded.** Competent, but moot:
+   v1 is a web app. The load-bearing skill turned out to be web, where he is proficient.
 5. **What is the product called?** "todoapp" is a placeholder.
 6. **No deadline has been set.**
 
@@ -603,3 +723,6 @@ and comes back fast.
   described pattern, never tested.
 - **§4.7 / FR-17** — Two Grace Days per month. Never confirmed.
 - **§4.7 / FR-18** — Escalation to the Referee at four days of Silence. Unconfirmed.
+- **§5 / §7.2** — That a home-screen PWA's Web Push is reliable enough to carry a product whose every
+  load-bearing capability is a notification. Verified as supported on iOS 16.4+; not yet verified in
+  the author's own hands, and the whole design rests on it. Test this before building anything else.

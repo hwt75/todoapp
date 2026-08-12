@@ -1,0 +1,37 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Today screen — option B (chosen)</title>
+<style>
+  :root {
+    --surface-2: #ffffff; --surface-1: #f1efe8;
+    --text-primary: #2c2c2a; --text-secondary: #5f5e5a; --text-muted: #888780;
+    --border: rgba(0,0,0,.12);
+    --bg-success: #eaf3de; --text-success: #3b6d11;
+    --bg-warning: #faeeda; --text-warning: #854f0b;
+    --bg-danger: #fcebeb; --text-danger: #a32d2d;
+    --radius: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  body { background: var(--surface-1); margin: 0; padding: 24px; display: flex; justify-content: center; }
+  .phone { width: 320px; background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 16px; padding: 16px; color: var(--text-primary); }
+  .row { border-top: 0.5px solid var(--border); padding: 11px 0; display: flex; justify-content: space-between; align-items: center; font-size: 15px; }
+  .row:last-of-type { border-bottom: 0.5px solid var(--border); }
+  .pill { font-size: 12px; padding: 2px 8px; border-radius: 10px; }
+  .ok { background: var(--bg-success); color: var(--text-success); }
+  .warn { background: var(--bg-warning); color: var(--text-warning); }
+  .muted { color: var(--text-muted); font-size: 12px; }
+  .debt { background: var(--bg-danger); border-radius: var(--radius); padding: 12px; margin-bottom: 14px; }
+  .debt p { margin: 0; color: var(--text-danger); }
+</style>
+<div class="phone">
+  <div class="debt">
+    <p style="font-size:12px">Owed since 1 June</p>
+    <p style="font-size:28px; font-weight:500">2,500,000</p>
+    <p style="font-size:12px">5 failed days &middot; uncollected</p>
+  </div>
+  <div class="row"><span style="color:var(--text-success)">&#10003; Morning exercise</span><span class="pill ok">12</span></div>
+  <div class="row"><span>No fap</span><span class="pill ok">4</span></div>
+  <div class="row"><span>TryHackMe</span><span class="muted">not yet</span></div>
+  <div class="row"><span>Gym</span><span class="pill warn">1/3 &middot; 3 days</span></div>
+  <div class="row"><span>Company work</span><span class="muted">0:50 / 3:00</span></div>
+</div>
