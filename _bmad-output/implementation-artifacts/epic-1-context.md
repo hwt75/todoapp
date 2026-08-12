@@ -1,0 +1,84 @@
+# Epic 1 Context: Prove it can reach him
+
+<!-- Compiled from planning artifacts. Edit freely. Regenerate with compile-epic-context if planning docs change. -->
+
+## Goal
+
+Establish, on the author's own iPhone, that this product is physically possible before anything is
+built on the assumption that it is. Every load-bearing capability in the product is a notification —
+the author has stated he does not open the app unless notified, and the design takes that literally.
+So the first thing built is not a feature but a proof: a bare installable web app that can push to a
+locked phone and keep doing so after a reboot. Alongside it, one external dependency is settled. This
+is the only epic whose valid outcome may be *stop*: if push is unreliable in his hands, everything
+downstream is built on sand, and learning that in a day is far cheaper than learning it in two months.
+
+## Stories
+
+- Story 1.1: An installable shell, and the tokens everything else is built from
+- Story 1.2: A push arrives on a locked phone and survives a reboot
+- Story 1.3: Settle whether TryHackMe can be read from outside
+
+## Requirements & Constraints
+
+- **A capability reachable only by opening the app unprompted is not a capability.** This governs
+  every later feature and is the reason this epic exists first.
+- The product ships as a single installable web app serving two roles from one codebase, with role
+  resolved server-side. It is not a native app; that path is blocked on an Apple Developer account,
+  since a free Apple ID cannot sign the push entitlement.
+- On iOS, push is delivered only to a web app installed to the home screen. Installation is therefore
+  a hard prerequisite for the primary user, and irrelevant for the second user, whose channel is email.
+- Proof means *in the author's hands*, not "the platform supports it": the notification must reach a
+  locked phone, be fully legible without opening anything, and still arrive after a reboot and an
+  idle period.
+- A failed proof is a valid, recorded outcome. Write up the finding and stop for a decision rather
+  than working around it.
+- One external service must be confirmed readable from a server with no browser session. Either a
+  repeatable request returns dated completion data, or the attempt is documented as impossible and the
+  product proceeds with one fewer automatic check. Record the answer where the open questions live.
+
+## Technical Decisions
+
+- **Stack:** Next.js 16 (App Router, TypeScript); Serwist for the service worker and PWA plumbing;
+  Supabase for Postgres, Auth, Storage and Edge Functions; `pg_cron` and `pg_net` for scheduling;
+  `web-push` with VAPID for delivery; Vercel for hosting.
+- **Migrations only.** Every schema and function change arrives as a numbered migration. Nothing is
+  edited in a dashboard.
+- **Row-level security from the first table.** Authorization lives in RLS, never in application code —
+  this binds from the very first table created, not from whenever auth feels relevant.
+- **The server is the sole judge.** Clients submit observations, never conclusions. Nothing in this
+  epic exercises settlement, but no client-side verdict logic may be introduced here either.
+- **Secrets:** VAPID private keys and service credentials live only in server environments. The client
+  holds the VAPID public key and nothing else.
+- **No literal visual values anywhere.** Every colour, radius, and spacing value resolves to a named
+  token. This is enforced from the first line of CSS, which is why tokens belong to this epic rather
+  than to the first screen.
+
+## UX & Interaction Patterns
+
+- **Four state colour families, one meaning each** — held, urgent, failed, neutral — with tint, ink,
+  and a dark-mode counterpart. A colour that means two things means nothing.
+- **Button fills sit one step darker than their tint families**, so a coloured area is legible as
+  pressable versus labelling without reading its text. The fills are mode-stable and need no dark
+  variant.
+- **Typography roles are restricted by contract:** the large `figure` role may be claimed by exactly
+  two elements in the whole product, and the serif `quoted` role by exactly one string. Do not spend
+  them here.
+- **Pill radius is reserved to non-interactive elements.** Nothing pressable is ever pill-shaped;
+  shape is what separates a state label from a control at a glance.
+- **Surfaces are flat** — 0.5px hairlines and a single tonal step, no shadows anywhere.
+- **No screen ever goes fully red**, in any state, on any surface.
+- Notification bodies are self-sufficient and fully legible on a lock screen. Never "You have an
+  update."
+- When the app is opened without being installed, it must say plainly that without installation there
+  is no push, and without push there is no product.
+
+## Cross-Story Dependencies
+
+- **Story 1.2 does not depend on Story 1.1's token layer.** Numbering is not build order: 1.2 needs
+  only a deployed app and a push subscription, and it is the story that decides whether the project
+  continues. Doing it first means a negative result costs no design work.
+- Story 1.3 is independent of both and can run in parallel.
+- **Epic 2 depends on both halves of this epic:** on 1.1 for tokens and the deployed shell, and on 1.2
+  for the delivery channel every later notification requirement assumes.
+- A negative result in 1.3 removes the external-account automatic check from Epic 4 and leaves the
+  timer as the only one, without affecting Epic 2 or Epic 3.
