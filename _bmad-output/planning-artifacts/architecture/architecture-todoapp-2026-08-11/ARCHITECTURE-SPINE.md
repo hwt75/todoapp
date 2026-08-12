@@ -227,6 +227,7 @@ graph TD
 | Config & secrets | VAPID keys and service credentials live only in the worker's environment. The client holds the VAPID public key and nothing else. |
 | Evidence storage | Appeal evidence goes to a private Storage bucket whose access policy derives from the same rule as the `appeal` row it belongs to (AD-7): the doer who submitted it and the referee ruling on it, nobody else. An object outlives its appeal only as long as the appeal is retained. |
 | Migrations | Every schema and function change is a numbered migration under `supabase/migrations/`. Nothing is edited in the dashboard. |
+| Testing | Vitest, run by `npm test`. Behaviour that depends on device or browser context — install state, permission state, platform capability — is extracted into a pure function and tested there, never left inside a component where only a real device can exercise it. Test files sit beside the code they cover. |
 
 ## Stack
 
@@ -238,6 +239,7 @@ graph TD
 | pg_cron | bundled with Supabase, all plans |
 | pg_net (wakes the outbox worker) | bundled with Supabase |
 | web-push (VAPID) | current |
+| Vitest | 4.x |
 | Vercel (hosting) | — |
 
 Verified current as of 2026-08-11. The code owns these once it exists.
