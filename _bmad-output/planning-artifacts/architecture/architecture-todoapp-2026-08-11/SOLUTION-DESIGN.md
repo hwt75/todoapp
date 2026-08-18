@@ -148,13 +148,18 @@ decision that keeps this project legally and operationally simple.
 
 The sequence matters more than usual, because one unverified assumption sits underneath everything.
 
-1. **Prove Web Push on the author's own iPhone.** Install a bare PWA to the home screen, subscribe,
-   send a push from a server, lock the phone, and confirm it arrives and survives a reboot. Nothing
-   else is worth building until this works in his hands. It is a day's work and it is the single
-   riskiest assumption in the document.
-2. **Confirm TryHackMe completion history is externally readable.** It is now the only Auto-check
-   that reaches outside the product. If it fails, v1 has one Auto-check left and every commitment is
-   declared — still a working product, but worth knowing before designing around it.
+1. ~~**Prove Web Push on the author's own iPhone.**~~ **DONE 2026-08-18 — it works.** Four sends,
+   all `201`, all delivered: to a locked phone, after a reboot, through an offline window (queued and
+   delivered on reconnect), and after 3h 42m with the app untouched. No subscription was invalidated.
+   The riskiest assumption in the document is now a verified fact, and the design token layer and
+   Epic 2 — both held back against a negative result — are unblocked. Evidence:
+   `_bmad-output/implementation-artifacts/story-1-2-findings.md`.
+2. ~~**Confirm TryHackMe completion history is externally readable.**~~ **DONE 2026-08-18 — it is
+   not.** Every path on the site answers a sessionless request with a Vercel bot challenge, the
+   official API is Enterprise-plan-gated, and the only reachable surface carries no dates and was 45
+   days stale. FR-8 has no target: the timer is v1's only Auto-check and every other Commitment is
+   settled by Declaration, which FR-8b was already written for. Evidence:
+   `_bmad-output/implementation-artifacts/story-1-3-findings.md`.
 3. **Schema, RLS, and the event log.** The invariants that are expensive to retrofit.
 4. **Settlement functions and the cron schedule**, with the outbox and its worker — the mechanism,
    before any screen exists.

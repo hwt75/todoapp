@@ -1,8 +1,8 @@
 ---
 title: 'Story 1.2 findings — does a push reach a locked phone, and survive a reboot?'
 story_key: '1-2-a-push-arrives-on-a-locked-phone-and-survives-a-reboot'
-status: 'awaiting-device-runs'
-verdict: 'not-yet-determined'
+status: 'complete'
+verdict: 'viable'
 ---
 
 # Story 1.2 findings
@@ -20,10 +20,9 @@ design takes that literally. If the answer is no, every capability downstream is
 
 ## Status
 
-**Sends 1 and 2 passed. The idle-hour test remains.** The subscription survived a reboot and still
-delivers to a locked phone. One send in between was accepted and never arrived, which is recorded
-below as row 2a — it is not a failure of the reboot test, but it is the most consequential thing
-this story has turned up so far.
+**Complete. All three conditions passed, 2026-08-18.** The channel is proven on the author's own
+iPhone: a push reaches it locked, survives a reboot, survives an offline window, and still arrives
+after nearly four hours of the app being untouched. Story 1.2 answers yes.
 
 ### Acceptance criterion 1 — met, 2026-08-18
 
@@ -64,9 +63,10 @@ recorded honestly is the most valuable row this table can hold.
 | 1 | 17:16:08 | `201` | (empty) | **Yes** | Yes | **Yes** | Immediate |
 | 2a | 17:21:37 | `201` | (empty) | **Yes — delayed** | Yes | **Yes** | After reboot, device still offline; delivered on reconnect |
 | 2b | 17:22:58 | `201` | (empty) | **Yes** | Yes | **Yes** | After reboot, network restored |
+| 3 | 21:05:25 | `201` | (empty) | **Yes** | Yes | **Yes** | After **3h 42m** idle, app untouched |
 
-Both 2a and 2b were on the lock screen together, each showing its own send time.
-| 3 | | | | | | | After ≥1h idle, app untouched |
+Rows 2a and 2b ended up on the lock screen together, each showing its own send time — which is the
+only reason the delay could be told apart from a duplicate.
 
 **Arrived?** means a notification appeared on the phone, and its body matched the send time printed
 by the CLI. A notification left over from an earlier send is not an arrival.
@@ -120,9 +120,40 @@ handled:
 > viable" or "it is not" — and do not hedge. The value of this story is a clear answer, and a hedged
 > one costs more than a negative._
 
-**Answer:** _not yet determined_
+**Answer: the delivery channel is viable.** The product is physically possible. Build on it.
 
-**Evidence:** _reference the rows above_
+Stated without hedging, as this section demands: on the author's own iPhone, an installed web app
+receives a Web Push while the phone is locked, the notification is legible without unlocking, and it
+keeps arriving after a restart and after the app has been genuinely abandoned for hours.
+
+**Evidence — four sends, every one accepted and every one delivered:**
+
+| Condition tested | Row | Result |
+|---|---|---|
+| Reaches a locked phone at all | 1 | Arrived, legible without unlocking |
+| Subscription survives a reboot | 2a, 2b | No `404`/`410`; both arrived |
+| Survives an offline window | 2a | Queued and delivered on reconnect — late, not lost |
+| Survives a genuinely idle app | 3 | Arrived after **3h 42m** untouched |
+
+Row 3 is the one that mattered most, and it was tested well past its own bar: the requirement was one
+hour and it got three hours forty-two minutes, with the app never opened. That is the state this
+product will spend almost all of its life in — the author does not open the app unless notified, and
+the design takes that literally. It held.
+
+No send returned anything but `201`. No subscription was invalidated. Nothing had to be worked
+around, and the story's escalation path was never needed.
+
+**What this unlocks.** Epic 1's purpose was to find out whether to continue, and the answer is yes.
+The design token layer held back as Story 1.1's remaining half can now be built — it was deferred
+precisely so a negative result here would cost no design work, and that insurance has now expired
+unused. Epic 2 depends on this channel for every notification requirement it assumes, and is
+unblocked.
+
+**What it still does not prove.** These pushes were sent by a local CLI, not through the production
+path. A positive result proves Apple delivers to an installed web app on this device; it does not
+prove the outbox, Edge Function worker and `pg_cron` schedule in AD-3. That stronger proof is
+recorded in `deferred-work.md` and is the next thing to build — now worth building, which was the
+whole question.
 
 ## If the answer is no
 
