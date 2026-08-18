@@ -20,9 +20,24 @@ design takes that literally. If the answer is no, every capability downstream is
 
 ## Status
 
-**The code is complete and verified as far as a machine can verify it.** What remains is the part
-only the author can do: deploy, install, subscribe, lock, reboot, wait. Until the table below has
-three recorded sends, this story is not done and nothing should be built on the channel.
+**Sends 1 and 2 passed. The idle-hour test remains.** The subscription survived a reboot and still
+delivers to a locked phone. One send in between was accepted and never arrived, which is recorded
+below as row 2a — it is not a failure of the reboot test, but it is the most consequential thing
+this story has turned up so far.
+
+### Acceptance criterion 1 — met, 2026-08-18
+
+> Given the app is launched from its home-screen icon and permission is granted, when the probe is
+> used, then a subscription is produced and can be saved for the CLI.
+
+The subscription's endpoint host is `web.push.apple.com`, which is worth stating plainly: it is
+Apple's own push service, issued to an installed web app. Permission was granted, the service worker
+registered on the device, and `pushManager.subscribe` succeeded against the VAPID public key. That
+rules out a whole class of failure — manifest, install state, service worker registration, key
+mismatch — before a single send. Whatever the sends show now is about **delivery**, not setup.
+
+Key lengths were checked against the spec (`p256dh` 87 chars, `auth` 22) so a truncated paste could
+not be mistaken later for a delivery failure.
 
 Procedure: [`README.md` → Proving push reaches the phone](../../README.md#proving-push-reaches-the-phone-story-12).
 
@@ -33,25 +48,69 @@ iOS push behaviour has changed between versions.
 
 | | |
 |---|---|
-| Device | _(e.g. iPhone 14 Pro)_ |
-| iOS version | _(exact, including point release)_ |
-| Deployed URL | _(the Vercel URL the app was installed from)_ |
-| Install date | _(when the home-screen app was added)_ |
-| Subscription endpoint host | _(host only — never paste the full endpoint, it identifies the device)_ |
+| Device | _(to fill: e.g. iPhone 14 Pro)_ |
+| iOS version | _(to fill: exact, including point release)_ |
+| Deployed URL | _(to fill: the Vercel URL the app was installed from)_ |
+| Install date | 2026-08-18 |
+| Subscription endpoint host | `web.push.apple.com` |
 
 ## Sends
 
 One row per run of `npm run push`. Record the status **verbatim**, whichever way it goes — a failure
 recorded honestly is the most valuable row this table can hold.
 
-| # | Sent at | Status | Body returned | Arrived? | Locked? | Legible on lock screen? | Notes |
+| # | Sent at | Status | Body | Arrived? | Locked? | Legible locked? | Condition |
 |---|---|---|---|---|---|---|---|
-| 1 | | | | | | | Immediate, phone locked |
-| 2 | | | | | | | After a reboot |
+| 1 | 17:16:08 | `201` | (empty) | **Yes** | Yes | **Yes** | Immediate |
+| 2a | 17:21:37 | `201` | (empty) | **No — never appeared** | Yes | — | After reboot, device likely still offline |
+| 2b | 17:22:58 | `201` | (empty) | **Yes** | Yes | **Yes** | After reboot, network restored |
 | 3 | | | | | | | After ≥1h idle, app untouched |
 
 **Arrived?** means a notification appeared on the phone, and its body matched the send time printed
 by the CLI. A notification left over from an earlier send is not an arrival.
+
+**Row 1, 2026-08-18.** `201 Created` from `web.push.apple.com`, empty body, which is the success
+shape for Apple's push service. The notification appeared on the locked phone and its body was
+legible without unlocking — the specific thing the product depends on, since the author has stated
+he does not open the app unless notified. Row 1 cannot be a stale leftover: it was the first push
+ever sent to this subscription, so there was nothing prior to mistake it for.
+
+What row 1 does **not** establish: that the subscription survives a reboot, or that iOS keeps
+delivering once the app has been genuinely idle. Those are rows 2 and 3, and they are the rows that
+have historically broken this kind of channel.
+
+**Rows 2a and 2b, 2026-08-18 — the reboot survived, and a notification was lost.** Both sends
+returned `201`. Neither returned `404` or `410`, so **the subscription is not invalidated by a
+reboot** — that is the reboot question answered, and answered positively.
+
+But 2a never appeared on the phone, while 2b, sent 81 seconds later, arrived immediately and
+legibly. The author's reading is that the device had not yet rejoined Wi-Fi at 17:21:37. That
+explanation fits, and it carries a consequence bigger than the row itself:
+
+> **A push sent while the device is offline was not delayed. It was lost.**
+
+2a did not arrive late, and it did not arrive alongside 2b. It never arrived at all. Whether the
+cause is APNs discarding it, or retaining only the most recent notification per device and letting
+2b displace it, is not established here — but the observable behaviour is the same either way, and
+it is the behaviour the product has to survive.
+
+**Why this matters more than it looks.** The premise of this product is that every load-bearing
+capability is a notification, and that the author does not open the app unless notified. A delivery
+path that silently drops a notification when the phone is off the network is therefore not a
+delivery path — it is a delivery path *most of the time*, which for a Failed Day that costs money is
+not the same thing at all. A phone is offline every night in a tunnel, on a plane, on bad signal,
+and for several minutes after every reboot.
+
+**What this obliges the deferred outbox work to do** (AD-3, recorded in `deferred-work.md`):
+
+- A send that returns `201` **must not** be treated as delivered. `201` means accepted by Apple, and
+  row 2a proves those are different things.
+- The outbox needs delivery to be **acknowledged by the device or the user**, not assumed from the
+  status code — otherwise a Failed Day can be settled against a notification the author never saw.
+- Anything time-critical needs re-sending until it is acted on, not sending once and trusting it.
+
+This was found by accident, one minute after a reboot. It would have been found much more expensively
+after the outbox was built on the assumption that `201` meant delivered.
 
 ## Verdict
 
