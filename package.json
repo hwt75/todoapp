@@ -12,7 +12,10 @@
     "start": "next start",
     "test": "vitest run",
     "icons": "node scripts/generate-icons.mjs",
-    "push": "node --env-file=.env scripts/send-push.mjs"
+    "push": "node --env-file=.env scripts/send-push.mjs",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "next": "^16.3.0",
@@ -26,6 +29,10 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/web-push": "^3.6.4",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.6",
     "typescript": "^5.6.0",
     "vitest": "^4.1.10",
     "web-push": "^3.6.7"

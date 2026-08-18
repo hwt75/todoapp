@@ -34,7 +34,7 @@ The order matters, and each step has a way of failing quietly.
    tab and notification work fails in ways that look like broken code rather than a wrong launch.
 4. When notification work exists, grant permission **from inside the installed app**.
 
-If *Add to Home Screen* is not offered, the manifest or the icon set is the cause — iOS needs valid
+If _Add to Home Screen_ is not offered, the manifest or the icon set is the cause — iOS needs valid
 raster icons at declared sizes and `display: standalone` before it will offer installation.
 
 ## Proving push reaches the phone (Story 1.2)
@@ -87,11 +87,11 @@ Reads `.env` and `.push-subscription.json`, sends one push, and prints the statu
 three times, and **lock the phone before each one** — a notification seen on an unlocked, foregrounded
 phone proves nothing about the case the product depends on.
 
-| # | When | What it answers |
-|---|---|---|
-| 1 | Immediately after subscribing, phone locked | Does a push reach a locked phone at all? |
-| 2 | After rebooting the phone and unlocking it once | Does the subscription survive a reboot? |
-| 3 | After at least **one hour** of the app untouched | Does iOS keep delivering once the app is truly idle? |
+| #   | When                                             | What it answers                                      |
+| --- | ------------------------------------------------ | ---------------------------------------------------- |
+| 1   | Immediately after subscribing, phone locked      | Does a push reach a locked phone at all?             |
+| 2   | After rebooting the phone and unlocking it once  | Does the subscription survive a reboot?              |
+| 3   | After at least **one hour** of the app untouched | Does iOS keep delivering once the app is truly idle? |
 
 Send 3 is the one worth being patient about. An hour is the minimum; longer is better, and overnight
 is the most honest version of the question. Do not open the app during the wait — opening it is what

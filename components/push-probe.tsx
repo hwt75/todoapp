@@ -109,7 +109,9 @@ export function PushProbe({ installState }: { installState: InstallState }) {
 
       {state.kind === 'subscribed' && (
         <>
-          <p>Save this to `.push-subscription.json` in the project root, then run the send script.</p>
+          <p>
+            Save this to `.push-subscription.json` in the project root, then run the send script.
+          </p>
           <textarea readOnly rows={12} cols={60} value={state.json} />
         </>
       )}

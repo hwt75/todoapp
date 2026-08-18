@@ -9,6 +9,13 @@ export default function Home() {
 
   useEffect(() => {
     try {
+      // The lint rule below is right, and the proper fix is useSyncExternalStore,
+      // which would also re-check on display-mode change and bfcache restore.
+      // Deliberately not done yet: this value gates whether the push probe will
+      // subscribe at all, and rewriting it days before a one-shot device test
+      // would risk breaking that test in a way that looks like an iOS failure.
+      // Recorded in deferred-work.md; do it once the channel is proven.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setInstallState(resolveInstallState(readInstallSignals()));
     } catch {
       // Fail toward showing the instruction. Being told to install when already

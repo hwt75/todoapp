@@ -1,0 +1,42 @@
+# Runs the checks that used to run only when someone remembered.
+#
+# The build is included, not just the tests: this project's riskiest failure is a
+# service worker that does not compile or does not get emitted, and that is
+# invisible to Vitest. `npm run build` is what proves /sw.js exists at all.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Test
+        run: npm test
+
+      # No VAPID key is set here on purpose. The build must succeed without one —
+      # the key is a deploy-time value, and a build that needs a secret to compile
+      # would mean the secret had leaked into the bundle.
+      - name: Build
+        run: npm run build
+
+      - name: Service worker was emitted
+        run: test -f public/sw.js || (echo "public/sw.js missing — the push channel would be dead" && exit 1)

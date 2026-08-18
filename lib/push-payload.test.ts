@@ -34,8 +34,13 @@ describe('resolvePushContent', () => {
   // on a lock screen, so a missing title must never cost us a present body.
   describe('falls back per field', () => {
     it('keeps a good body when the title is missing', () => {
-      const result = resolvePushContent(JSON.stringify({ body: 'The day closed. You missed one.' }));
-      expect(result).toEqual({ title: PUSH_FALLBACK.title, body: 'The day closed. You missed one.' });
+      const result = resolvePushContent(
+        JSON.stringify({ body: 'The day closed. You missed one.' }),
+      );
+      expect(result).toEqual({
+        title: PUSH_FALLBACK.title,
+        body: 'The day closed. You missed one.',
+      });
     });
 
     it('keeps a good title when the body is missing', () => {
