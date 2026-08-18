@@ -6,6 +6,7 @@
 
 import { defaultCache } from '@serwist/next/worker';
 import { Serwist, type PrecacheEntry, type SerwistGlobalConfig } from 'serwist';
+import { resolvePushContent } from '@/lib/push-payload';
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -28,33 +29,16 @@ const serwist = new Serwist({
 
 serwist.addEventListeners();
 
-interface PushPayload {
-  title?: unknown;
-  body?: unknown;
-}
-
 /**
  * Turns a push into a visible notification, always.
  *
- * The subscription is made with `userVisibleOnly`, which is a promise to show
- * something for every push received. A push that shows nothing is a broken
- * promise the browser may answer by dropping the subscription — and that would
- * look exactly like the delivery failure this story exists to detect. So a
- * malformed payload still shows a notification, saying so in the body.
+ * What to show is decided by `resolvePushContent`, which is a pure function so
+ * it can be tested without a device — see `lib/push-payload.ts`. This function
+ * is only the plumbing around it, and that split is deliberate: a rule that can
+ * only be checked by rebooting a phone is a rule nobody checks.
  */
 async function showPush(data: PushMessageData | null): Promise<void> {
-  let title = 'todoapp';
-  let body = 'A push arrived, but its payload could not be read as JSON.';
-
-  try {
-    const payload = data?.json() as PushPayload | null;
-    if (typeof payload?.title === 'string' && payload.title) title = payload.title;
-    if (typeof payload?.body === 'string' && payload.body) body = payload.body;
-  } catch {
-    // Deliberately swallowed. The fallback text above is the finding: the push
-    // arrived — which is the question this story asks — and the payload is the
-    // separate, lesser problem.
-  }
+  const { title, body } = resolvePushContent(data?.text());
 
   await self.registration.showNotification(title, {
     body,
