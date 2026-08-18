@@ -38,3 +38,10 @@ Thumbs.db
 
 # BMAD — per-user config (team config in _bmad/config.toml stays tracked)
 _bmad/config.user.toml
+
+# Story 1.2 — a real device push endpoint, never committed
+.push-subscription.json
+
+# Serwist build output
+public/sw.js
+public/sw.js.map

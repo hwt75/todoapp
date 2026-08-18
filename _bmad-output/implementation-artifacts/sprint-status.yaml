@@ -37,7 +37,7 @@ story_location: F:\claude\todoapp\_bmad-output\implementation-artifacts
 development_status:
   epic-1: in-progress
   1-1-an-installable-shell-and-the-tokens-everything-else-is-built: review
-  1-2-a-push-arrives-on-a-locked-phone-and-survives-a-reboot: backlog
+  1-2-a-push-arrives-on-a-locked-phone-and-survives-a-reboot: in-progress
   1-3-settle-whether-tryhackme-can-be-read-from-outside: backlog
   epic-1-retrospective: optional
 

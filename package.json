@@ -8,21 +8,26 @@
   "scripts": {
     "dev": "next dev",
     "prebuild": "node scripts/generate-icons.mjs",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "test": "vitest run",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "push": "node --env-file=.env scripts/send-push.mjs"
   },
   "dependencies": {
     "next": "^16.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "serwist": "^9.5.12"
   },
   "devDependencies": {
+    "@serwist/next": "^9.5.12",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/web-push": "^3.6.4",
     "typescript": "^5.6.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "web-push": "^3.6.7"
   }
 }

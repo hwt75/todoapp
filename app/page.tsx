@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { PushProbe } from '@/components/push-probe';
 import { readInstallSignals, resolveInstallState, type InstallState } from '@/lib/install-state';
 
 export default function Home() {
@@ -36,9 +37,9 @@ export default function Home() {
         </section>
       )}
 
-      {installState === 'installed' && (
-        <p>Launched from the home screen. Notifications are not set up yet.</p>
-      )}
+      {installState === 'installed' && <p>Launched from the home screen.</p>}
+
+      <PushProbe installState={installState} />
     </main>
   );
 }

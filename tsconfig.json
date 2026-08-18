@@ -4,7 +4,8 @@
     "lib": [
       "dom",
       "dom.iterable",
-      "esnext"
+      "esnext",
+      "webworker"
     ],
     "allowJs": false,
     "skipLibCheck": true,
@@ -37,6 +38,7 @@
   ],
   "exclude": [
     "node_modules",
+    "public/sw.js",
     "scripts/**/*.mjs"
   ]
 }
