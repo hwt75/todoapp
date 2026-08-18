@@ -62,8 +62,10 @@ recorded honestly is the most valuable row this table can hold.
 | # | Sent at | Status | Body | Arrived? | Locked? | Legible locked? | Condition |
 |---|---|---|---|---|---|---|---|
 | 1 | 17:16:08 | `201` | (empty) | **Yes** | Yes | **Yes** | Immediate |
-| 2a | 17:21:37 | `201` | (empty) | **No — never appeared** | Yes | — | After reboot, device likely still offline |
+| 2a | 17:21:37 | `201` | (empty) | **Yes — delayed** | Yes | **Yes** | After reboot, device still offline; delivered on reconnect |
 | 2b | 17:22:58 | `201` | (empty) | **Yes** | Yes | **Yes** | After reboot, network restored |
+
+Both 2a and 2b were on the lock screen together, each showing its own send time.
 | 3 | | | | | | | After ≥1h idle, app untouched |
 
 **Arrived?** means a notification appeared on the phone, and its body matched the send time printed
@@ -79,38 +81,38 @@ What row 1 does **not** establish: that the subscription survives a reboot, or t
 delivering once the app has been genuinely idle. Those are rows 2 and 3, and they are the rows that
 have historically broken this kind of channel.
 
-**Rows 2a and 2b, 2026-08-18 — the reboot survived, and a notification was lost.** Both sends
-returned `201`. Neither returned `404` or `410`, so **the subscription is not invalidated by a
-reboot** — that is the reboot question answered, and answered positively.
+**Rows 2a and 2b, 2026-08-18 — the reboot survived, and so did an offline send.** Both returned
+`201`, neither returned `404` or `410`, and **both arrived**, each legible on the lock screen with
+its own send time.
 
-But 2a never appeared on the phone, while 2b, sent 81 seconds later, arrived immediately and
-legibly. The author's reading is that the device had not yet rejoined Wi-Fi at 17:21:37. That
-explanation fits, and it carries a consequence bigger than the row itself:
+The interesting part is 2a. It was sent 81 seconds before 2b, at a moment when the phone had just
+rebooted and had not yet rejoined Wi-Fi, and it was **not visible when first checked**. It arrived
+afterwards, once the device was back on the network, and ended up on the lock screen alongside 2b.
 
-> **A push sent while the device is offline was not delayed. It was lost.**
+> **A push sent while the device was offline was queued and delivered on reconnect. It was late, not
+> lost.**
 
-2a did not arrive late, and it did not arrive alongside 2b. It never arrived at all. Whether the
-cause is APNs discarding it, or retaining only the most recent notification per device and letting
-2b displace it, is not established here — but the observable behaviour is the same either way, and
-it is the behaviour the product has to survive.
+That is store-and-forward working the way the product needs it to. It is the single most reassuring
+thing in this file, because "offline" is not an edge case for a phone — it is every night, every
+tunnel, every flight, and several minutes after every restart.
 
-**Why this matters more than it looks.** The premise of this product is that every load-bearing
-capability is a notification, and that the author does not open the app unless notified. A delivery
-path that silently drops a notification when the phone is off the network is therefore not a
-delivery path — it is a delivery path *most of the time*, which for a Failed Day that costs money is
-not the same thing at all. A phone is offline every night in a tunnel, on a plane, on bad signal,
-and for several minutes after every reboot.
+**A correction is recorded here on purpose.** When 2a was first checked and nothing was on the
+screen, this file briefly recorded it as lost, and drew a large architectural conclusion from that:
+that `201` could not be trusted and the deferred outbox would need device-level delivery
+acknowledgement. **That conclusion was wrong and has been removed.** The evidence for it was a
+notification that had simply not arrived *yet*. It is kept in the history rather than quietly
+deleted, because the mistake is instructive: on a channel that can deliver late, "I checked and it
+wasn't there" is not the same observation as "it never came", and the difference between those two
+readings was an entire piece of infrastructure.
 
-**What this obliges the deferred outbox work to do** (AD-3, recorded in `deferred-work.md`):
+**What it does still oblige** — a much smaller thing than what was first written, and it is already
+handled:
 
-- A send that returns `201` **must not** be treated as delivered. `201` means accepted by Apple, and
-  row 2a proves those are different things.
-- The outbox needs delivery to be **acknowledged by the device or the user**, not assumed from the
-  status code — otherwise a Failed Day can be settled against a notification the author never saw.
-- Anything time-critical needs re-sending until it is acted on, not sending once and trusting it.
-
-This was found by accident, one minute after a reboot. It would have been found much more expensively
-after the outbox was built on the assumption that `201` meant delivered.
+- Notifications can arrive **materially later than they were sent**, so a notification body must
+  carry its own timestamp and never say "now" or rely on the moment of arrival. `send-push.mjs`
+  already puts the send time in the body, which is the only reason this delay was diagnosable at
+  all rather than looking like a duplicate.
+- Nothing may be settled on the assumption that a notification arrived *at* the time it was sent.
 
 ## Verdict
 
