@@ -321,9 +321,13 @@ The system confirms a Commitment from the phone's own motion data within a confi
 
 #### FR-8: External account Auto-check
 The system confirms a Commitment by reading completion history from an external service the author
-has linked. `[ASSUMPTION: TryHackMe's completion history is readable from outside. Unconfirmed since
-the brief; if it is not, that Commitment simply runs with no Auto-check and keeps its Penalty, which
-under FR-2a means the author's Declaration settles it.]`
+has linked. `[RESOLVED 2026-08-18 by Story 1.3 — NEGATIVE. TryHackMe's completion history is NOT
+readable from outside: every path on the site answers a sessionless request with a Vercel bot
+challenge, the only official API is Enterprise-plan-gated, and the one reachable surface (the badge
+PNG) carries no dates and was 45 days stale. The TryHackMe Commitment therefore runs with no
+Auto-check and keeps its Penalty, which under FR-2a means the author's Declaration settles it. FR-8
+has no target in v1 and the timer (FR-7) is the only Auto-check. See
+`_bmad-output/implementation-artifacts/story-1-3-findings.md`.]`
 
 **Consequences (testable):**
 - A service that cannot be reached is reported as unavailable and never as a miss.
@@ -702,10 +706,14 @@ and comes back fast.
 1. **What does the uncapped Penalty do after three or four consecutive Failed Days?** The author
    declined a cap on affordability grounds, but the concern was motivational: at some run length,
    deleting the app becomes his most rational move. SM-C2 is the tripwire; no mitigation exists.
-2. **Is TryHackMe completion history readable from outside?** Unconfirmed since the brief, and now the
-   *only* Auto-check in v1 that reaches outside the product. If it fails, v1 has one Auto-check left
-   (the timer) and every other Commitment is settled by Declaration. A few hours of work to settle,
-   and it is now the highest-value unknown in the document.
+2. ~~Is TryHackMe completion history readable from outside?~~ **Resolved 2026-08-18 by Story 1.3 —
+   no.** A sessionless server request is met with a Vercel bot challenge on every path, including
+   `robots.txt`; the official API is restricted to Enterprise plans; and the only reachable surface,
+   the badge PNG, has no dates and was 45 days stale when tested. Reaching the JSON would mean
+   defeating the challenge, which is both out of bounds and a foundation that would fail silently
+   the moment it was retuned. **Consequence:** FR-8 has no target, the timer is v1's only Auto-check,
+   and every other Commitment is settled by Declaration — the outcome FR-8b was already written for.
+   Full evidence in `_bmad-output/implementation-artifacts/story-1-3-findings.md`.
 3. **How many Grace Days per month, and do they carry over?** Assumed two, non-carrying.
 4. ~~What is the author's iOS/Swift experience?~~ **Resolved and superseded.** Competent, but moot:
    v1 is a web app. The load-bearing skill turned out to be web, where he is proficient.
@@ -714,7 +722,8 @@ and comes back fast.
 
 ## 10. Assumptions Index
 
-- **§4.3 / FR-8** — TryHackMe completion history is externally readable. Unconfirmed.
+- ~~**§4.3 / FR-8** — TryHackMe completion history is externally readable.~~ **Disproved
+  2026-08-18 by Story 1.3.** It is not externally readable; FR-8 has no target in v1.
 - **§4.4 / FR-10** — Withholding mid-day knowledge that a day is already lost is the right counter to
   the flat Penalty's motivational cliff. Untested.
 - **§4.6 / FR-15** — A daily-Cadence Appeal has until the end of the following day to be ruled on.
