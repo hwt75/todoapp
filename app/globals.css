@@ -239,3 +239,48 @@ ul {
   margin: 0 0 var(--space-3);
   padding-left: var(--space-4);
 }
+
+/* Today lays itself out so the debt block is seen first and heard last. The DOM order is
+   heading, rows, figure — which is the reading order — and `order` moves the figure above
+   the rows visually. A screen reader follows the DOM; the eye follows the layout. */
+.today {
+  display: flex;
+  flex-direction: column;
+}
+
+.today-rows {
+  order: 2;
+}
+
+.debt-block {
+  order: 1;
+}
+
+/* The only large coloured area in the product, and the only use of the figure role until
+   Epic 3's timer claims the other one. */
+.debt-block-tap {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: var(--failed-tint);
+  color: var(--failed-ink);
+  border-radius: var(--radius-default);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.debt-block-label {
+  display: block;
+  font-size: var(--type-label);
+  font-weight: var(--weight-regular);
+}
+
+.debt-block-figure {
+  display: block;
+  font-size: var(--type-figure);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--type-figure-tracking);
+  /* Scales with Dynamic Type like everything else — an easy thing to exempt and wrong to. */
+  line-height: 1.1;
+}

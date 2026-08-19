@@ -189,12 +189,24 @@ describe('structural rules the stylesheet cannot state about itself', () => {
     expect(light.hairline).toBe('0.5px');
   });
 
-  it('spends neither rationed type role', () => {
-    // `figure` may be claimed by exactly two elements in the finished product and
-    // `quoted` by exactly one string. Neither is on this shell.
+  it('spends the rationed type roles no faster than the budget allows', () => {
+    // `figure` may be claimed by exactly two elements in the finished product — the debt
+    // total and Epic 3's focus timer — and `quoted` by exactly one string, in the referee's
+    // collection message. The rule is a budget, not a ban, and this is what stops the third
+    // claimant arriving unnoticed.
     expect(light['type-figure'], 'the figure role must be defined').toBeDefined();
     expect(light['font-quoted'], 'the quoted role must be defined').toBeDefined();
-    expect(GLOBALS).not.toMatch(/type-figure|font-quoted/);
+
+    const figureUses = GLOBALS.match(/--type-figure/g) ?? [];
+    expect(
+      figureUses.length,
+      'the figure role is spent by the debt block (2.6); the only other claimant allowed is ' +
+        "Epic 3's focus timer",
+    ).toBeLessThanOrEqual(2);
+
+    // Nothing has earned the serif yet. A second serif string deletes the signal the first
+    // one carries.
+    expect(GLOBALS).not.toMatch(/font-quoted/);
   });
 
   it('keeps literal colours out of the base stylesheet', () => {

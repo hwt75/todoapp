@@ -6,6 +6,7 @@ import { MorningGate } from '@/components/morning-gate';
 import { PushProbe } from '@/components/push-probe';
 import { SignIn } from '@/components/sign-in';
 import { Today } from '@/components/today';
+import { Ledger } from '@/components/ledger';
 import { readInstallSignals, resolveInstallState, type InstallState } from '@/lib/install-state';
 import { useGate } from '@/lib/use-gate';
 
@@ -13,6 +14,7 @@ export default function Home() {
   const [installState, setInstallState] = useState<InstallState>('unknown');
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const gate = useGate(ownerId);
+  const [showLedger, setShowLedger] = useState(false);
 
   useEffect(() => {
     try {
@@ -52,7 +54,12 @@ export default function Home() {
 
   return (
     <main>
-      {ownerId && <Today />}
+      {ownerId &&
+        (showLedger ? (
+          <Ledger onClose={() => setShowLedger(false)} />
+        ) : (
+          <Today onOpenLedger={() => setShowLedger(true)} />
+        ))}
 
       {/* Server-rendered so it survives a JavaScript failure. Hidden before
           hydration on an installed launch by the display-mode rule in the layout;

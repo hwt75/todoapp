@@ -2,7 +2,7 @@
 title: 'Story 2.6 — A failed day costs money, and I can see every one'
 type: 'feature'
 created: '2026-08-19'
-status: 'awaiting-approval'
+status: 'approved'
 baseline_commit: '7af4335'
 review_loop_iteration: 0
 story_key: '2-6-a-failed-day-costs-money-and-i-can-see-every-one'
@@ -13,7 +13,7 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-> **NOT YET APPROVED.** This story spends one of the two `figure` roles the whole product is allowed,
+> **APPROVED 2026-08-19 by hwt75.** This story spends one of the two `figure` roles the whole product is allowed,
 > and it is the first to write money. It also decides what a ledger row *is*, which is not obvious
 > from the acceptance criteria. Read *What a ledger row is* and *What this product will never do with
 > money* before the task list.
@@ -142,6 +142,24 @@ chose that knowingly, against advice, and the design executes it rather than sof
 - Given the whole codebase, then there is no payment integration and no code path that moves value.
 
 ## Design Notes
+
+**Verified against the live project and in a browser on 2026-08-19**, with a test account deleted
+afterwards. Three days were settled: one where a single penalty-carrying commitment slipped, one
+clean, and one where **both** slipped. That third day is the one that matters — `missed_count` 2,
+**one** penalty, 500,000₫. FR-13 holds where it is easiest to get wrong.
+
+The debt block reads `1.000.000₫` at 34px against a 15px body, sits in the `failed` tint, and is the
+only large coloured area on the screen. Its DOM position is *after* the commitment rows while its
+drawn position is *above* them, so a screen reader announces the rows first and the eye still meets
+the figure first — the accessibility-order rule recorded in Story 2.3's spec, finally actionable and
+now true. Every row background on both Today and the Ledger computes to `rgba(0, 0, 0, 0)`; on a
+screen that is structurally a list of failures, nothing is tinted but the pills.
+
+**A test had to be loosened, correctly.** `design-tokens.test.ts` asserted the `figure` role was
+never referenced. It is now, legitimately — this story spends one of its two allowed claimants. The
+assertion became a budget rather than a ban: at most two uses of `--type-figure`, and still zero of
+`--font-quoted`, which nothing has earned. A rule that says "never" when it means "twice" fails the
+first time it is obeyed.
 
 **Why the penalty references the settlement rather than the day.** A day is a date; a settlement is
 the decision that closed it, with the subject and the missed count attached. Referencing the decision
