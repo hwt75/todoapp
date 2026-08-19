@@ -147,6 +147,42 @@ describe('no policy is left open', () => {
   );
 });
 
+describe('a column grant is not decoration', () => {
+  // Found the expensive way. `grant update (col)` ADDS a column privilege; it does not
+  // remove a table-wide UPDATE already granted, and Supabase grants one by default. The
+  // first version of the morning-hour migration therefore let a signed-in account set its
+  // own `role` — the exact escalation AD-12 exists to prevent, since a referee rules on
+  // appeals. The Supabase advisor did not flag it; only trying it did.
+  const allSql = migrations.map((m) => stripComments(m.sql)).join('\n');
+
+  const columnGrants = [
+    ...allSql.matchAll(/grant\s+update\s*\(\s*\w+\s*\)\s+on\s+(?:table\s+)?public\.(\w+)/gi),
+  ].map((m) => m[1]);
+
+  it('finds the column grants to check', () => {
+    expect(columnGrants.length).toBeGreaterThan(0);
+  });
+
+  it.each(columnGrants.map((table) => [table]))(
+    'public.%s revokes table-wide UPDATE before granting a column',
+    (table) => {
+      // Plain string matching rather than a regex built in a template literal: `\s` in a
+      // template literal is an escape for the letter s, so the obvious version silently
+      // matches nothing and the guard passes while guarding nothing.
+      const sql = allSql.toLowerCase();
+      const revoked =
+        sql.includes(`revoke update on table public.${table} from`) ||
+        sql.includes(`revoke update on public.${table} from`);
+
+      expect(
+        revoked,
+        `public.${table} grants UPDATE on a column without revoking the table-wide grant ` +
+          'behind it, so the column restriction does nothing',
+      ).toBe(true);
+    },
+  );
+});
+
 describe('functions cannot be hijacked through search_path', () => {
   // A SECURITY DEFINER function that resolves names through a caller-controlled
   // search_path is a privilege escalation. Supabase's own advisor flags it, but the
