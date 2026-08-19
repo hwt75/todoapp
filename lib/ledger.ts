@@ -13,7 +13,7 @@
 
 import { PENALTY_DONG, totalOwed } from './money';
 
-export type DayVerdict = 'clean' | 'failed';
+export type DayVerdict = 'clean' | 'failed' | 'expired';
 export type PenaltyState = 'owed';
 
 /** The rows as they come back from the database, before folding. */
@@ -92,8 +92,17 @@ export function outstandingTotal(rows: readonly LedgerRow[]): number {
  * reads as missing data.
  */
 export function ledgerPillLabel(row: LedgerRow): string {
+  // `Expired` is distinguishable from `Owed` on purpose. What he did and what he failed to
+  // say are different facts about him, and a record that merges them tells him he admitted
+  // something he never said.
+  if (row.verdict === 'expired') return 'Expired';
   if (row.verdict === 'clean') return 'Clean';
   return row.state === 'owed' ? 'Owed' : 'Failed';
+}
+
+/** Whether a row's colour should come from the failed family. Expired costs the same. */
+export function isFailedFamily(row: LedgerRow): boolean {
+  return row.verdict !== 'clean';
 }
 
 /** How much one failed day costs, for anywhere that needs to say it before it has happened. */

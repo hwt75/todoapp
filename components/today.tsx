@@ -32,7 +32,10 @@ export function Today({ onOpenLedger }: { onOpenLedger: () => void }) {
       const supabase = createClient();
       const [{ data, error }, { data: penalties }] = await Promise.all([
         supabase.from('commitment').select(SELECT).is('archived_at', null).order('created_at'),
-        supabase.from('penalty').select('amount_dong').eq('state', 'owed'),
+        // `penalty_current`, not `penalty`. A penalty attached to a superseded verdict is
+        // history rather than debt — it stays in the table so the trace survives and stops
+        // counting (AD-9). Reading the base table would charge him for a day he took back.
+        supabase.from('penalty_current').select('amount_dong').eq('state', 'owed'),
       ]);
 
       if (cancelled) return;

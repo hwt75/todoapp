@@ -2,7 +2,7 @@
 title: 'Story 2.7 — Silence is not a way out'
 type: 'feature'
 created: '2026-08-19'
-status: 'awaiting-approval'
+status: 'approved'
 baseline_commit: '428110d'
 review_loop_iteration: 0
 story_key: '2-7-silence-is-not-a-way-out'
@@ -12,9 +12,8 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-> **NOT YET APPROVED.** This story contains a real collision between two architecture decisions, and
-> resolving it one way or the other changes what the ledger means. Read *AD-5 and the fifth
-> acceptance criterion* before anything else.
+> **APPROVED 2026-08-19 by hwt75** — the supersession reading below, not the simpler
+> expiry-is-final alternative. Frozen from here.
 
 ## Intent
 
@@ -129,6 +128,30 @@ which is a recorded act with a count, rather than a clock that quietly stretches
 - Given any of this, then no settlement or penalty row is ever updated in place.
 
 ## Design Notes
+
+**Verified against the live project on 2026-08-19.** A day left entirely unanswered settled
+`expired` with one penalty. An answer tapped inside the deadline and inserted days later superseded
+it: two settlement rows in history and one that counts, one penalty in history and none that counts,
+and the current verdict `clean`. The trace of why a penalty appeared and then vanished survives
+exactly as AD-9 requires.
+
+**A branch of the rule we agreed turns out to be unreachable, and that is worth knowing.** The
+supersession test is "answered before the deadline", with the intent that an answer genuinely given
+after it leaves the expiry standing. It cannot happen. The `for_day` trigger derives the day as
+`answered_at - 1 day`, so a tap always lands on `D+1` while the deadline is on `D+3` — a margin of at
+least 24 hours, whatever the morning hour, measured rather than reasoned. Structurally, **a day older
+than yesterday cannot be answered at all**, which means silence past two days can only end in an
+expiry.
+
+That is the intended shape of FR-9 rather than a defect, but it makes the discriminator
+correct-by-construction rather than discriminating. The check stays: it is the rule, not the current
+arithmetic, and a catch-up surface would make it live overnight. It is pinned by a test so the
+property is noticed if it ever stops holding.
+
+**One thing nearly shipped wrong.** The client was still reading `penalty` and `settlement` rather
+than the folded views, so a superseded expiry would have kept charging him for a day he had taken
+back. Both surfaces now read `penalty_current` and `settlement_current`, and a check confirms no
+component touches a base table.
 
 **Why an expired day costs the same as an admitted one.** It is tempting to charge less for silence
 than for an admitted slip, or more. Both are wrong: less makes silence cheaper than honesty, which is

@@ -124,4 +124,27 @@ describe('what a pill says', () => {
   it('says Clean for a day that held', () => {
     expect(ledgerPillLabel(buildLedger([cleanDay], [], [])[0])).toBe('Clean');
   });
+
+  it('says Expired for a day that closed on the clock, never Owed', () => {
+    // What he did and what he failed to say are different facts. A record that calls
+    // silence an admission is telling him he said something he never said.
+    const expiredDay = { period: '2026-08-14', verdict: 'expired' as const, missed_count: 1 };
+    const itsPenalty = { period: '2026-08-14', amount_dong: PENALTY_DONG, state: 'owed' as const };
+    const row = buildLedger([expiredDay], [itsPenalty], [])[0];
+
+    expect(ledgerPillLabel(row)).toBe('Expired');
+    expect(ledgerPillLabel(row)).not.toBe('Owed');
+  });
+
+  it('charges an expired day exactly what an admitted one costs', () => {
+    // Cheaper would make silence cheaper than honesty, which is the failure the story is
+    // named after. Dearer would punish being unreachable.
+    const expiredDay = { period: '2026-08-14', verdict: 'expired' as const, missed_count: 1 };
+    const rows = buildLedger(
+      [expiredDay, failedDay],
+      [{ period: '2026-08-14', amount_dong: PENALTY_DONG, state: 'owed' }, penalty],
+      misses,
+    );
+    expect(rows.map((r) => r.amountDong)).toEqual([PENALTY_DONG, PENALTY_DONG]);
+  });
 });

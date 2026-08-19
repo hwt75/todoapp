@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { buildLedger, ledgerPillLabel, type LedgerRow } from '@/lib/ledger';
+import { buildLedger, isFailedFamily, ledgerPillLabel, type LedgerRow } from '@/lib/ledger';
 import { formatDong } from '@/lib/money';
 
 type View =
@@ -28,8 +28,10 @@ export function Ledger({ onClose }: { onClose: () => void }) {
 
       const [{ data: settlements, error }, { data: penalties }, { data: misses }] =
         await Promise.all([
-          supabase.from('settlement').select('period,verdict,missed_count'),
-          supabase.from('penalty').select('amount_dong,state,settlement:settlement_id(period)'),
+          supabase.from('settlement_current').select('period,verdict,missed_count'),
+          supabase
+            .from('penalty_current')
+            .select('amount_dong,state,settlement:settlement_id(period)'),
           supabase
             .from('declaration')
             .select('for_day,commitment:commitment_id(name,carries_penalty)')
@@ -97,20 +99,24 @@ export function Ledger({ onClose }: { onClose: () => void }) {
             aria-label={
               row.verdict === 'clean'
                 ? `${row.day}, clean`
-                : `${row.day}, owed ${formatDong(row.amountDong ?? 0)}, for ${row.missed.join(' and ')}`
+                : row.verdict === 'expired'
+                  ? `${row.day}, expired unanswered, owed ${formatDong(row.amountDong ?? 0)}`
+                  : `${row.day}, owed ${formatDong(row.amountDong ?? 0)}, for ${row.missed.join(' and ')}`
             }
           >
             <div className="row-main">
               <div className="row-name">{row.day}</div>
               <div className="row-muted" aria-hidden="true">
-                {row.verdict === 'clean'
-                  ? 'Everything held'
-                  : `${row.missed.join(' · ')}${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`}
+                {row.verdict === 'expired'
+                  ? `Went unanswered${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`
+                  : row.verdict === 'clean'
+                    ? 'Everything held'
+                    : `${row.missed.join(' · ')}${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`}
               </div>
             </div>
             {/* The pill carries the colour. The row never does. */}
             <span
-              className={`pill ${row.verdict === 'clean' ? 'pill-held' : 'pill-failed'}`}
+              className={`pill ${isFailedFamily(row) ? 'pill-failed' : 'pill-held'}`}
               aria-hidden="true"
             >
               {ledgerPillLabel(row)}
