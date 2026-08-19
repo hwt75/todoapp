@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { dayInQuestion, questionFor, type OwedCommitment } from '@/lib/declaration';
-import { enqueue, flush, type QueuedDeclaration } from '@/lib/offline-queue';
+import { enqueue, flush, removeFromQueue, type QueuedDeclaration } from '@/lib/offline-queue';
+import { classifyWriteError, dayRolledOver, shouldRetry } from '@/lib/declaration-submit';
 
 type Sending =
   { kind: 'idle' } | { kind: 'sending' } | { kind: 'queued' } | { kind: 'failed'; reason: string };
@@ -50,43 +51,78 @@ export function MorningGate({
   async function answer(value: 'held' | 'slipped') {
     setSending({ kind: 'sending' });
 
-    // Both generated at the moment of the tap, not at send time (AD-4, AD-6). An answer
-    // given in a tunnel is dated when it was given, and a retry reuses this key so the
-    // server refuses the second rather than recording it twice.
-    const queued: QueuedDeclaration = {
-      idempotencyKey: crypto.randomUUID(),
-      ownerId,
-      commitmentId: commitment.id,
-      answer: value,
-      answeredAt: new Date().toISOString(),
-    };
+    // Everything below can throw — a client built without its environment, a blocked
+    // localStorage, a missing crypto in a non-secure context. Unhandled, the state stays
+    // `sending`, both controls stay disabled, and because the gate is deliberately the only
+    // thing on screen the app becomes a dead page with two greyed buttons. Blocking by
+    // having nothing else to offer must never become blocking by being broken.
+    try {
+      const tappedAt = new Date();
 
-    enqueue(window.localStorage, queued);
+      // The question was drawn from the instant this screen loaded; the database derives
+      // the day from the instant of the tap. Across local midnight those disagree, and the
+      // answer would land on a day he was never asked about while the day he *was* asked
+      // about stayed open forever. The client must not fix that by sending a date — AD-6
+      // gives the server that job — so it notices and asks again.
+      if (dayRolledOver(day, tappedAt)) {
+        setSending({
+          kind: 'failed',
+          reason:
+            'The day turned over while this was open, so this answer would have been filed ' +
+            'against the wrong one. Reopen the app and the question will be asked again for ' +
+            'the right day.',
+        });
+        return;
+      }
 
-    const outcome = await flush(window.localStorage, async (pending) => {
-      const { error } = await createClient().from('declaration').insert({
-        owner_id: pending.ownerId,
-        commitment_id: pending.commitmentId,
-        idempotency_key: pending.idempotencyKey,
-        answer: pending.answer,
-        answered_at: pending.answeredAt,
+      const queued: QueuedDeclaration = {
+        idempotencyKey: crypto.randomUUID(),
+        ownerId,
+        commitmentId: commitment.id,
+        answer: value,
+        answeredAt: tappedAt.toISOString(),
+      };
+
+      enqueue(window.localStorage, queued);
+
+      let rejection: string | null = null;
+
+      const outcome = await flush(window.localStorage, async (pending) => {
+        const { error } = await createClient().from('declaration').insert({
+          owner_id: pending.ownerId,
+          commitment_id: pending.commitmentId,
+          idempotency_key: pending.idempotencyKey,
+          answer: pending.answer,
+          answered_at: pending.answeredAt,
+        });
+
+        const result = classifyWriteError(error);
+
+        // A refusal is permanent. Keeping it queued would retry forever against a rule that
+        // will never accept it, while the author is told it is safely saved.
+        if (result === 'rejected' && pending.idempotencyKey === queued.idempotencyKey) {
+          rejection = error?.message ?? 'The server refused this answer.';
+        }
+        if (result === 'rejected') {
+          removeFromQueue(window.localStorage, pending.idempotencyKey);
+        }
+
+        return shouldRetry(result) ? 'failed' : 'sent';
       });
 
-      if (!error) return 'sent';
-      // 23505 is the unique constraint: this answer is already recorded, which is success
-      // arriving out of order rather than a failure.
-      return error.code === '23505' ? 'duplicate' : 'failed';
-    });
+      if (rejection) {
+        // Not advanced past the question: nothing was recorded, so he has not answered.
+        setSending({ kind: 'failed', reason: rejection });
+        return;
+      }
 
-    if (outcome.kept.includes(queued.idempotencyKey)) {
-      // Held, not lost. He answered; the network did not cooperate; the answer is safe and
-      // will go when there is signal. Saying otherwise would make him answer twice.
-      setSending({ kind: 'queued' });
-    } else {
-      setSending({ kind: 'idle' });
+      setSending(
+        outcome.kept.includes(queued.idempotencyKey) ? { kind: 'queued' } : { kind: 'idle' },
+      );
+      onAnswered(commitment.id);
+    } catch (error) {
+      setSending({ kind: 'failed', reason: String(error) });
     }
-
-    onAnswered(commitment.id);
   }
 
   return (

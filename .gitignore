@@ -45,3 +45,6 @@ _bmad/config.user.toml
 # Serwist build output
 public/sw.js
 public/sw.js.map
+
+# Supabase CLI scratch — machine-local, rewritten on link and on version check
+supabase/.temp/
