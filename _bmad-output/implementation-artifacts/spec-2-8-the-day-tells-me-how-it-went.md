@@ -2,7 +2,7 @@
 title: 'Story 2.8 — The day tells me how it went'
 type: 'feature'
 created: '2026-08-19'
-status: 'awaiting-approval'
+status: 'approved'
 baseline_commit: '24ac9a3'
 review_loop_iteration: 0
 story_key: '2-8-the-day-tells-me-how-it-went'
@@ -12,9 +12,8 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-> **NOT YET APPROVED.** The specified copy names two things that do not exist yet, and the message
-> collides with a payload rule Story 2.4a introduced. Both are below, with what I propose. Read
-> *What the specified copy asks for that is not built* and *The self-dating collision* first.
+> **APPROVED 2026-08-19 by hwt75** — all three: the copy minus the chain and quota clauses, the
+> widened self-dating rule, and no summary for an expired day. Frozen from here.
 
 ## Intent
 
@@ -139,6 +138,25 @@ quietly, and `payloadProblems` will accept either form.
 - Given the body, then it names the day it is about and passes `payloadProblems`.
 
 ## Design Notes
+
+**Verified against the live project on 2026-08-19.** A failed day produced exactly one summary:
+*"Two of three on Monday. That's 500.000₫. No fap held though. Start with TryHackMe tomorrow."* —
+91 characters, under the lock-screen ceiling, count once, amount once, something that held named,
+one commitment to start with, and nothing itemised. The clean and nothing-held shapes were checked
+too; the second offers a starting point without claiming anything survived. An expired day settled
+`expired` and enqueued **zero** rows.
+
+**The two copies drifted within minutes.** The copy rules live in `lib/summary.ts` as tested
+functions and in `public.day_summary_body` as the thing settlement actually calls, because settlement
+runs in Postgres. `to_char`'s group separator follows the database's `lc_numeric`, so the SQL rendered
+`500,000₫` while `formatDong` renders the Vietnamese `500.000₫` — and the one the author would have
+read on his lock screen was the wrong one. Fixed by making the separator explicit; the seam itself is
+recorded in `deferred-work.md`, because a rule in two languages will drift again.
+
+**A test disagreed with its own checker, and the checker was wrong.** `summaryProblems` flagged the
+suggestion as an itemised miss. But *"Start with Gym tomorrow"* when Gym was missed today is the
+correct sentence — the rule is never to *list* the misses, not never to name one as a place to begin.
+The suggestion is now exempt, which is the rule stated properly rather than a loophole.
 
 **Why nothing is sent for an expired day.** It is tempting to summarise anyway — the data is there.
 But a message that says "one of five today, start with X tomorrow" about a day he never answered is

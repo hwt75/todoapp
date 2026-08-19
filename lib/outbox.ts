@@ -50,14 +50,36 @@ export function payloadProblems(payload: PushPayload): string[] {
   // The finding's other half: the reader has to be able to tell a fresh delivery from one
   // that has been sitting on the lock screen. That is only possible if the time is visible
   // without opening anything.
-  if (!bodyStatesItsTime(payload)) {
+  if (!bodyIsSelfDating(payload)) {
     problems.push(
-      'The body does not state the time it was sent, so a notification left on the lock ' +
-        'screen cannot be told from a new one.',
+      'The body carries neither the time nor the day it is about, so a notification left ' +
+        'on the lock screen cannot be told from a new one.',
     );
   }
 
   return problems;
+}
+
+/**
+ * Whether the body carries enough of its own timestamp to be told from a stale copy.
+ *
+ * Widened in Story 2.8. The original rule required a clock time, which is right for a
+ * message about a *moment* — a reminder read an hour late must not be mistaken for a new
+ * one. It is wrong for a message about a *day*: a summary in the coach register cannot say
+ * "Four of five today. (21:00)" without sounding like a machine, and the voice is
+ * load-bearing here.
+ *
+ * So the unit is whatever the message is about. A time, or a named weekday, either will do.
+ */
+export function bodyIsSelfDating(payload: PushPayload): boolean {
+  return bodyStatesItsTime(payload) || bodyNamesADay(payload);
+}
+
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+/** True when the body names a weekday, which dates a daily message unambiguously. */
+export function bodyNamesADay(payload: PushPayload): boolean {
+  return WEEKDAYS.some((day) => payload.body.includes(day));
 }
 
 /** True when the body contains the hour and minute of `sent_at`, in 24-hour form. */

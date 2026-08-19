@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { bodyStatesItsTime, buildPayload, payloadProblems, type PushPayload } from './outbox';
+import {
+  bodyIsSelfDating,
+  bodyNamesADay,
+  bodyStatesItsTime,
+  buildPayload,
+  payloadProblems,
+  type PushPayload,
+} from './outbox';
 
 const AT = new Date(2026, 7, 19, 7, 30, 0);
 
@@ -35,9 +42,24 @@ describe('a payload that would lie by the time it is read', () => {
     },
   );
 
-  it('is refused when the body carries no time at all', () => {
+  it('is refused when the body carries neither a time nor a day', () => {
     const bad = payload({ body: 'Yesterday is still unanswered.' });
     expect(payloadProblems(bad).join(' ')).toContain('cannot be told from a new one');
+  });
+
+  it('accepts a message about a day that names the day instead of the minute', () => {
+    // Story 2.8. A summary in the coach register cannot carry a clock time without
+    // sounding like a machine, and "Four of five on Tuesday" read the next morning is
+    // unambiguous — which is what the rule was always for.
+    const summary = payload({ body: 'Four of five on Tuesday. Start with Gym tomorrow.' });
+    expect(bodyNamesADay(summary)).toBe(true);
+    expect(bodyIsSelfDating(summary)).toBe(true);
+    expect(payloadProblems(summary)).toEqual([]);
+  });
+
+  it('still refuses a body that dates itself by neither', () => {
+    const undated = payload({ body: 'Four of five. Start with Gym tomorrow.' });
+    expect(bodyIsSelfDating(undated)).toBe(false);
   });
 
   it('is refused for a body that carries the wrong time', () => {
