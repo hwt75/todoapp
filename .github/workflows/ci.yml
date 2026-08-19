@@ -9,6 +9,9 @@ on:
   push:
     branches: ['**']
   pull_request:
+  # So a run can be retried without an empty commit — GitHub refuses to retry some
+  # failed runs, and the only other way back to a green signal is polluting history.
+  workflow_dispatch:
 
 jobs:
   check:
