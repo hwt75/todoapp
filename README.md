@@ -143,10 +143,21 @@ Both are one-time, and both are in the Supabase dashboard.
    every policy built on it **denies**. That is the correct direction to fail, but read paths
    will look broken rather than open.
 
-2. **Authentication → Emails → Magic Link** — the template must include `{{ .Token }}`, the
-   six-digit code. The default template sends only a link, and on iOS a link tapped in Mail
-   opens Safari, not the installed home-screen app — signing you into the browser while the
-   app that receives push stays signed out.
+2. **Authentication → Sign In / Providers → Email → Confirm email: off.** Sign-in is email
+   and password, and no email is sent at any point.
+
+   That is not the first choice. An emailed six-digit code would be better, but Supabase
+   refuses to let the email template be edited without custom SMTP, so `{{ .Token }}` cannot
+   be added and the code never reaches the message. A magic link is worse still: on iOS a
+   link tapped in Mail opens Safari, not the installed home-screen app, so it signs you into
+   the browser and leaves the one surface that can receive push signed out.
+
+   With two users and no email in the loop, the cost is that a mistyped address goes
+   unnoticed and a forgotten password is reset from the dashboard. Both are survivable here
+   and neither would be in a product with strangers signing up.
+
+   **Custom SMTP is still coming.** The referee's channel is email, so Epic 4 and Epic 5 need
+   it regardless. It was not made a prerequisite for signing in.
 
 ### Applying migrations
 

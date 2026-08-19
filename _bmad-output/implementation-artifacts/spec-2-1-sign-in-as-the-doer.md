@@ -134,10 +134,27 @@ whoever writes the next migration to remember.
 
 ## Design Notes
 
-**Email confirmation is on** (`mailer_autoconfirm: false`, verified against the live project), and
+**Email confirmation was turned off, and this is the record of that.** The frozen block lists
+it under *Ask First*; it was asked on 2026-08-19 and agreed. The trigger was discovering that
+Supabase will not permit editing the email template without custom SMTP — so the emailed
+six-digit code this spec originally assumed cannot reach the message at all. The three options
+were put to the author: password with confirmation off, custom SMTP now, or password with
+confirmation kept. He chose the first. Custom SMTP remains necessary later, because the
+referee's channel is email (Epic 4 and 5); it was simply not made a prerequisite for signing in.
+
+**Superseded — email confirmation was on** (`mailer_autoconfirm: false`, verified against the live project), and
 email is the only enabled provider. For one author signing in on his own phone that is a small extra
 step, not a problem — but it means the first sign-in needs a reachable inbox, and it is worth knowing
 before wondering why nothing happens.
+
+**Verified end to end against the live project on 2026-08-19**, using a throwaway account that
+was deleted afterwards (`auth.users` and `public.profile` both back to zero rows). The trigger
+created the profile with role `doer`; the access-token hook stamped `app_role: "doer"` into the
+JWT; `role_from_token()` and `role_from_table()` both returned `doer` for a real session; the
+profile read returned exactly one row. Self-promotion to `referee` changed nothing, a
+self-`INSERT` was refused `403` by the policy, and a self-`DELETE` removed nothing. That last one
+returns `204` while leaving the row intact, which reads as success and is not — worth knowing
+before a later story reads a delete's status code as proof.
 
 **Applying the migration is the author's step**, the same way deploying and installing were. The CLI
 runs through `npx supabase` and needs either a login or a database password, neither of which belongs
