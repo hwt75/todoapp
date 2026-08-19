@@ -34,7 +34,8 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
   evidence: Raised by review. Only the legacy-iOS branch needs browser APIs — the CSS display-mode rule now covers the modern path without JavaScript. This is the first component in the codebase and sets a precedent worth getting right, but splitting it now would be shaping a convention around a page that exists only to be replaced.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-installable-shell.md`
-  summary: theme-color has no dark-mode variant and viewportFit:'cover' has no safe-area insets.
+  summary: "[DONE 2026-08-19] theme-color has no dark-mode variant and viewportFit:'cover' has no safe-area insets."
+  resolution: Both closed by the design token layer, which is where this entry said they belonged. `app/layout.tsx` now emits two `theme-color` metas keyed on `prefers-color-scheme`, verified in a browser as `#F1EFE8` light and `#1C1C1E` dark; `app/globals.css` insets the body with `max(var(--space-4), env(safe-area-inset-*))` on all four sides.
   evidence: Raised by review. Both are real: on an iPhone in dark mode the standalone status bar is a light band, and edge-to-edge with no env(safe-area-inset-*) padding puts content under the notch. Deferred deliberately to the design token layer — the remaining half of Story 1.1 — rather than hand-placing values this shell has no system for.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-push-arrives-on-locked-phone.md`

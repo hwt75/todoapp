@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { METADATA_COLORS } from '@/lib/design-tokens';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -12,8 +13,8 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: '/',
     scope: '/',
     display: 'standalone',
-    background_color: '#F1EFE8',
-    theme_color: '#F1EFE8',
+    background_color: METADATA_COLORS.surfaceBase,
+    theme_color: METADATA_COLORS.surfaceBase,
     icons: [
       { src: '/icons/icon-180.png', sizes: '180x180', type: 'image/png' },
       { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },

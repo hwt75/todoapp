@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import { METADATA_COLORS } from '@/lib/design-tokens';
+import './globals.css';
 
 export const metadata: Metadata = {
   title: 'todoapp',
@@ -18,7 +20,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#F1EFE8',
+  // Two entries, not one. A single light theme-colour leaves the iOS status bar a bright
+  // band above a dark app — the dark-mode gap recorded in deferred-work.md, which was
+  // assigned to this token layer rather than hand-patched onto the shell.
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: METADATA_COLORS.surfaceBase },
+    { media: '(prefers-color-scheme: dark)', color: METADATA_COLORS.surfaceBaseDark },
+  ],
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',

@@ -1,0 +1,96 @@
+/*
+ * Base element styles, consuming the tokens and adding nothing of its own.
+ *
+ * This is deliberately not a design. It stops the shell looking browser-default —
+ * Times New Roman on white, link blue — without spending component work on a page
+ * that Epic 2's Today screen replaces. Components are specified in DESIGN.md and get
+ * built when there is a screen for them to sit in.
+ */
+
+@import './tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* Stops iOS enlarging text on rotation, which would break the type ramp. It does not
+     disable the user's own text-size setting — the sizes are in rem for that. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-base);
+  color: var(--text-primary);
+  font-family: var(--font-system);
+  font-size: var(--type-body);
+  font-weight: var(--weight-regular);
+  line-height: 1.5;
+  /* Edge-to-edge is declared in the viewport, so the content has to inset itself out
+     from under the notch and the home indicator. */
+  padding: max(var(--space-4), env(safe-area-inset-top))
+    max(var(--space-4), env(safe-area-inset-right)) max(var(--space-4), env(safe-area-inset-bottom))
+    max(var(--space-4), env(safe-area-inset-left));
+}
+
+h1 {
+  font-size: var(--type-screen-title);
+  font-weight: var(--weight-medium);
+  margin: 0 0 var(--space-4);
+}
+
+h2 {
+  font-size: var(--type-label);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-2);
+}
+
+p {
+  margin: 0 0 var(--space-3);
+}
+
+/* Sections are separated by hairlines rather than cards. Nine tinted rectangles stacked
+   vertically would read as an alert panel; a rule keeps the page calm. */
+section + section {
+  border-top: var(--hairline) solid var(--border);
+  padding-top: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+/* The one control on this page reports nothing about the user, so it is not a
+   self-declaration control and may carry the action fill. Every control by which the
+   user answers for themselves must be outline-only — DESIGN.md calls that the
+   load-bearing rule of the system, and it lands when Epic 2 builds the morning gate. */
+button {
+  font-family: inherit;
+  font-size: var(--type-body);
+  font-weight: var(--weight-medium);
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  border-radius: var(--radius-default);
+  background: var(--action-fill);
+  color: var(--action-ink);
+  /* 44px is the stated minimum touch target. */
+  min-height: 44px;
+}
+
+button:disabled {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  border: var(--hairline) solid var(--border);
+}
+
+textarea {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--type-caption);
+  color: var(--text-secondary);
+  background: var(--surface-sunken);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-default);
+  padding: var(--space-3);
+}

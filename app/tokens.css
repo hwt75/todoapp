@@ -1,0 +1,112 @@
+/*
+ * The design tokens. Every colour, radius and spacing value in this product resolves
+ * to a name declared here — a literal hex or px value anywhere else is a defect, and
+ * `lib/design-tokens.test.ts` enforces that rather than trusting review to catch it.
+ *
+ * Values come from DESIGN.md's frontmatter, which stays the source of truth. That file
+ * is a human-owned artifact: this one implements it and must not extend it. The test
+ * suite parses both and fails on drift, naming the token and both values.
+ *
+ * Dark mode is a declared set, not an inversion. Every surface, text and state family
+ * carries its own dark counterpart because an inverted warm palette goes muddy, and
+ * because the state families have to keep meaning the same thing in the dark.
+ */
+
+:root {
+  /* Surfaces — one tonal step, sunken inside card. This is the whole elevation system;
+     there are no shadows anywhere in this product. */
+  --surface-base: #f1efe8;
+  --surface-card: #ffffff;
+  --surface-sunken: #f7f6f2;
+
+  /* Text */
+  --text-primary: #2c2c2a;
+  --text-secondary: #5f5e5a;
+  --text-muted: #888780;
+
+  /* Borders — hairlines do the layering work that shadows would elsewhere. */
+  --border: #dcdad2;
+  --border-strong: #b4b2a9;
+
+  /* State families. Four, each with exactly one meaning — a colour that means two
+     things means nothing. Held is the only one that reads as good, so it stays scarce.
+     Urgent is explicitly not failure: "sort this out" and "you lost this" demand
+     opposite responses and must be distinguishable at a glance. */
+  --held-tint: #eaf3de;
+  --held-ink: #3b6d11;
+  --urgent-tint: #faeeda;
+  --urgent-ink: #854f0b;
+  --failed-tint: #fcebeb;
+  --failed-ink: #a32d2d;
+
+  /* Button fills sit one step darker than their tint families, so a coloured area
+     reads as pressable rather than labelling before its text is read. They carry
+     their own background, which is why they are mode-stable and appear once only —
+     a dark counterpart for either would break that and is a test failure. */
+  --action-fill: #97c459;
+  --action-ink: #173404;
+  --destructive-fill: #f09595;
+  --destructive-ink: #501313;
+
+  /* Shape. Pill is reserved to status pills — nothing pressable is ever pill-shaped,
+     because that silhouette is what separates a state label from a control. */
+  --radius-default: 8px;
+  --radius-card: 12px;
+  --radius-pill: 9999px;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-card-pad: 16px;
+  --space-row-pad: 11px;
+
+  /* Type. The platform owns the ramp: the system face, two weights, nothing bold and
+     nothing uppercase. Sizes are in rem so the user's own text-size setting scales
+     them instead of being overridden. */
+  --font-system:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-quoted: ui-serif, Georgia, Cambria, 'Times New Roman', serif;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+
+  --type-screen-title: 1.0625rem;
+  --type-body: 0.9375rem;
+  --type-label: 0.8125rem;
+  --type-caption: 0.6875rem;
+  --type-figure: 2.125rem;
+  --type-figure-tracking: -0.5px;
+
+  /* Hairline. 0.5px rather than 1px on purpose — at 1px a list of rows starts reading
+     as a table, and this is meant to be quiet. */
+  --hairline: 0.5px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-base: #1c1c1e;
+    --surface-card: #2c2c2e;
+    --surface-sunken: #242426;
+
+    --text-primary: #f2f2f0;
+    --text-secondary: #a0a09a;
+    --text-muted: #6e6e68;
+
+    --border: #3a3a3c;
+    --border-strong: #545456;
+
+    --held-tint: #173404;
+    --held-ink: #c0dd97;
+    --urgent-tint: #412402;
+    --urgent-ink: #fac775;
+    --failed-tint: #501313;
+    --failed-ink: #f7c1c1;
+
+    /* --action-fill, --action-ink, --destructive-fill and --destructive-ink are
+       deliberately absent. They are mode-stable by construction; redefining them here
+       would be the defect, not the omission. */
+  }
+}
