@@ -106,17 +106,15 @@ button:disabled {
 }
 
 /* Pill radius is reserved to non-interactive status labels, so nothing pressable is ever
-   pill-shaped. This is what lets a state label be told from a control before it is read. */
+   pill-shaped. That silhouette is what lets a state label be told from a control before
+   either is read. One class per state family, and never a button fill — a pill wearing a
+   fill would read as pressable. */
 .pill {
   display: inline-block;
   border-radius: var(--radius-pill);
   padding: 2px var(--space-2);
   font-size: var(--type-label);
-}
-
-.pill-held {
-  background: var(--held-tint);
-  color: var(--held-ink);
+  white-space: nowrap;
 }
 
 .pill-neutral {
@@ -125,12 +123,44 @@ button:disabled {
   border: var(--hairline) solid var(--border);
 }
 
-/* Commitment rows are separated by hairlines, not cards. Nine tinted rectangles stacked
-   vertically would read as an alert panel; a rule keeps the page calm and lets the row's
-   pill carry whatever colour there is. */
+.pill-held {
+  background: var(--held-tint);
+  color: var(--held-ink);
+}
+
+.pill-urgent {
+  background: var(--urgent-tint);
+  color: var(--urgent-ink);
+}
+
+.pill-failed {
+  background: var(--failed-tint);
+  color: var(--failed-ink);
+}
+
+/* Commitment rows are separated by hairlines, not cards, and the row itself is never
+   tinted — colour belongs to the pill. Nine tinted rectangles stacked vertically would
+   read as an alert panel, which is the artifact this product exists to avoid.
+
+   No height, no max-height, no nowrap, no overflow hidden: Dynamic Type has to be able to
+   grow a row, and a fixed height is how that promise gets broken at the largest sizes. */
 .row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
   border-top: var(--hairline) solid var(--border);
   padding: var(--space-row-pad) 0;
+}
+
+.row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.row-name {
+  font-weight: var(--weight-medium);
+  /* Wraps rather than truncating: a name the author chose is not disposable. */
+  overflow-wrap: anywhere;
 }
 
 .row-muted {

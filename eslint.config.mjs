@@ -9,6 +9,17 @@ const config = [
   // Last, so it wins: turns off every rule Prettier owns. Formatting is settled
   // by the formatter, never argued about a second time by the linter.
   prettier,
+  {
+    rules: {
+      // A leading underscore is how this codebase says "required by the signature,
+      // deliberately unused" — `stateToday(_commitment)` takes an argument it will need
+      // the moment settlement exists, so the signature is stable before the body is.
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+    },
+  },
 ];
 
 export default config;

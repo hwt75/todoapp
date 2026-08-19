@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { PushProbe } from '@/components/push-probe';
 import { SignIn } from '@/components/sign-in';
 import { CommitmentList } from '@/components/commitment-list';
+import { Today } from '@/components/today';
 import { readInstallSignals, resolveInstallState, type InstallState } from '@/lib/install-state';
 
 export default function Home() {
@@ -29,8 +30,6 @@ export default function Home() {
 
   return (
     <main>
-      <h1>todoapp</h1>
-
       {/* Server-rendered so it survives a JavaScript failure. Hidden before
           hydration on an installed launch by the display-mode rule in the layout;
           the JS check below then covers legacy iOS, which reports standalone only
@@ -48,6 +47,10 @@ export default function Home() {
       )}
 
       {installState === 'installed' && <p>Launched from the home screen.</p>}
+
+      {/* Today first. The install hint and the push probe are Epic 1 apparatus and still
+          the only way to subscribe, but they are no longer what this screen is about. */}
+      {ownerId && <Today />}
 
       <SignIn onAccountChange={setOwnerId} />
 

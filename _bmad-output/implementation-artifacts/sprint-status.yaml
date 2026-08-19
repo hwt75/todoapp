@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-19-2026 16:40
+last_updated: 08-19-2026 14:34
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -44,7 +44,7 @@ development_status:
   epic-2: in-progress
   2-1-sign-in-as-the-doer: review
   2-2-create-and-edit-a-commitment: review
-  2-3-see-today-and-the-row-and-pill-everything-else-reuses: ready-for-dev
+  2-3-see-today-and-the-row-and-pill-everything-else-reuses: review
   2-4-answer-for-yesterday: backlog
   2-5-the-day-closes-on-its-own: backlog
   2-6-a-failed-day-costs-money-and-i-can-see-every-one: backlog
@@ -89,7 +89,7 @@ action_items:
     action: "Adopt a commit-subject convention carrying the sprint-status story key
       so per-story attribution works"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-08-18.md"
   - id: "epic-1-retro-item-3-record-the-renegotiation-of-spec-1-2-fro"
     epic: 1

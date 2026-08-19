@@ -203,8 +203,11 @@ export function CommitmentList({ ownerId }: { ownerId: string }) {
         <div className="row" key={row.id}>
           <div>
             <strong>{row.name}</strong>{' '}
-            {/* The pill carries whatever colour there is; the row itself stays neutral. */}
-            {row.carries_penalty && <span className="pill pill-neutral">costs money</span>}
+            {/* Plain text, not a pill. A pill carries *state* — a chain count, a quota
+                position, a ledger outcome — and "costs money" is configuration. Spending
+                the pill vocabulary on a setting would blunt it where it has to be read at
+                a glance. */}
+            {row.carries_penalty && <span className="row-muted"> · costs money</span>}
           </div>
           <div className="row-muted">{describe(row)}</div>
           <button type="button" onClick={() => setView({ kind: 'edit', row })}>

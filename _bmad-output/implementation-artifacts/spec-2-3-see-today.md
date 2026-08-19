@@ -2,7 +2,7 @@
 title: 'Story 2.3 — See today, and the row and pill everything else reuses'
 type: 'feature'
 created: '2026-08-19'
-status: 'awaiting-approval'
+status: 'approved'
 baseline_commit: '1a8aee1'
 review_loop_iteration: 0
 story_key: '2-3-see-today-and-the-row-and-pill-everything-else-reuses'
@@ -13,8 +13,8 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-> **NOT YET APPROVED.** One decision below decides how much of this story is real and how much is
-> scaffolding for stories that do not exist yet. Read *What is honest to show today* first.
+> **APPROVED 2026-08-19 by hwt75** — including *What is honest to show today*: neutral `Not yet`
+> only, the five-state model built and tested, and no code that produces the other four. Frozen.
 
 ## Intent
 
@@ -123,6 +123,22 @@ produces those states. Today emits `not yet` and nothing else, and a test assert
 - Given the component library, then all five states render, and Today produces only `not yet`.
 
 ## Design Notes
+
+**Verified in a real browser on 2026-08-19**, signed in as a throwaway account with three
+commitments, deleted afterwards with all three tables back to zero. Today is the first heading and
+the first content. Each row announces one label — "No fap, not yet done today, missing this costs
+money" — rather than making a listener assemble it. Pills read `Not yet`, are `aria-hidden` so the
+state is not heard twice, carry the pill radius, and have no pointer cursor. The row's computed
+background is transparent in both modes.
+
+At an emulated largest Dynamic Type the rows grew from 66px to 146px and from 89px to 287px with
+**nothing clipped, nothing overflowing the viewport, and no control under 44px**. In dark mode all
+four families render distinctly with their declared dark tint and ink.
+
+**One misuse found and fixed while verifying.** Story 2.2's settings list was spending a pill on
+`costs money`. A pill carries *state* — a chain count, a quota position, a ledger outcome — and that
+is configuration. Spending the pill vocabulary on a setting blunts it exactly where it has to be read
+at a glance, so the settings list now says it in plain muted text.
 
 **Why the accessibility-order rule is noted but not yet actionable.** `EXPERIENCE.md` requires that on
 Today the commitment rows be read before the debt block, deliberately differing from the visual order,
