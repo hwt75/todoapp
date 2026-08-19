@@ -124,6 +124,22 @@ The push proof left two findings that are constraints here, not trivia:
 
 ## Design Notes
 
+**Proven end to end on 2026-08-19, on the author's own device.** A row was enqueued and then left
+alone. `pg_cron` woke the worker on its own schedule; the worker returned
+`{"ok":true,"claimed":1,"sent":1,"dead":0,"failed":0,"retrying":0}`; the row moved to `sent` with one
+attempt, a stamped `sent_at` and no error; and the author confirmed the notification arrived on his
+phone with the body it was given. The two ticks either side of it claimed nothing, which is the
+empty-queue no-op the matrix asks for.
+
+**Nobody ran a command.** That is the whole difference from Story 1.2, which proved Apple would
+deliver but proved it with a CLI typed by hand. This proves the machine sends by itself.
+
+The order the failures came in is worth keeping: the worker refused to run with no VAPID key and
+returned `500`; the cron job failed nine times in nine minutes naming the missing Vault secrets; and
+only once both were configured did a tick succeed. Every stage of not-being-ready announced itself,
+which is what AD-3 asks for when it warns that a queue with no consumer looks exactly like a working
+system.
+
 **Why the worker is an Edge Function and settlement is not.** The author already chose plpgsql for
 settlement because a pass must either complete or roll back entirely, with no HTTP hop where a job
 can die after writing money. The same reasoning excludes Postgres from signing VAPID payloads and

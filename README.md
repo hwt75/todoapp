@@ -83,6 +83,11 @@ why — read the refusal literally; each one names a different mistake.
 npm run push
 ```
 
+**This is now a diagnostic, not the delivery path.** The product sends through the outbox and its
+worker (see _The outbox, and the two secrets it needs_). The CLI is kept because when a notification
+does not arrive it is the one tool that separates "Apple or the subscription" from "the outbox or the
+worker" — it talks to the push service directly, with nothing in between.
+
 Reads `.env` and `.push-subscription.json`, sends one push, and prints the status verbatim. Run it
 three times, and **lock the phone before each one** — a notification seen on an unlocked, foregrounded
 phone proves nothing about the case the product depends on.
