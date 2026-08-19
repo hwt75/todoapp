@@ -2,7 +2,7 @@
 title: 'Story 2.4a — The outbox, its worker, and its own schedule'
 type: 'feature'
 created: '2026-08-19'
-status: 'awaiting-approval'
+status: 'approved'
 baseline_commit: '2dfa71a'
 review_loop_iteration: 0
 story_key: '2-4a-the-outbox-and-its-worker'
@@ -13,10 +13,9 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-> **NOT YET APPROVED.** This story exists because the author chose to build the delivery mechanism
-> before the screen that depends on it. `SOLUTION-DESIGN.md` sequences it the same way — the outbox
-> and its worker are step 4, the doer's surfaces step 5 — so this corrects an ordering I proposed
-> wrongly, not a change of plan.
+> **APPROVED 2026-08-19 by hwt75.** This story exists because the author chose to build the delivery
+> mechanism before the screen that depends on it. `SOLUTION-DESIGN.md` sequences it the same way, so
+> this corrected an ordering I proposed wrongly rather than changing the plan.
 
 ## Intent
 

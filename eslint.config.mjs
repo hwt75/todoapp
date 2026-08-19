@@ -3,7 +3,17 @@ import nextTypeScript from 'eslint-config-next/typescript';
 import prettier from 'eslint-config-prettier';
 
 const config = [
-  { ignores: ['.next/**', 'public/sw.js', 'public/sw.js.map'] },
+  {
+    ignores: [
+      '.next/**',
+      'public/sw.js',
+      'public/sw.js.map',
+      // Deno, not Node: `npm:` specifiers and Deno globals that this config's parser and
+      // this project's tsconfig are both right to reject. It is type-checked by the
+      // Supabase deploy, not here.
+      'supabase/functions/**',
+    ],
+  },
   ...nextCoreWebVitals,
   ...nextTypeScript,
   // Last, so it wins: turns off every rule Prettier owns. Formatting is settled

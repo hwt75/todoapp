@@ -179,6 +179,50 @@ There is deliberately no delete policy on `commitment` — removal is an update.
 The cost is honest: a commitment created by mistake and deleted a minute later leaves a row behind
 forever. That is the cheaper of the two mistakes.
 
+### The outbox, and the two secrets it needs
+
+Settlement never sends anything. It writes the verdict and the work-to-send in one
+transaction, so a pass that rolls back takes the notification with it. A worker drains the
+queue on **its own** `pg_cron` schedule — not settlement's, because a queue whose only
+consumer is triggered by its producer looks exactly like a working system right up until
+the producer stops.
+
+Until both secrets below exist, the cron job **fails every minute on purpose** and says why
+in `cron.job_run_details`. That is the intended state: a silent no-op here would be the
+exact failure the design warns about.
+
+**1. The worker's VAPID keys.** These live in the Edge Function's own environment and
+nowhere else — not this repo, not a migration, not a Vercel variable.
+
+```bash
+npx supabase secrets set --project-ref hxzalpnlrunctbajgtkv VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:you@example.com
+```
+
+Use the same pair as `.env`. A different public key means the browser subscribed to one
+server and the worker signs as another, and the push service refuses with `403`.
+
+**2. What lets `pg_cron` call the worker.** Two Vault secrets, set once from the SQL editor:
+
+```sql
+select vault.create_secret('<your service_role key>', 'outbox_worker_key', 'Authorizes the outbox cron job');
+select vault.create_secret('https://hxzalpnlrunctbajgtkv.supabase.co', 'project_url', 'Base URL for the outbox worker');
+```
+
+The service-role key is read at call time and never written into a migration. It is still
+the key that bypasses every policy — it belongs in Vault and in the function's environment,
+and nowhere a person can read it by opening a file.
+
+### Watching the queue
+
+```sql
+select status, count(*) from public.outbox group by status;
+select status, return_message, start_time from cron.job_run_details order by start_time desc limit 5;
+```
+
+A row marked `sent` means the push service accepted it. It does **not** mean the author saw
+it — Story 1.2 established that those are different things, and it is why every payload
+carries its own timestamp and no notification describes the present.
+
 ### The key that must never be here
 
 `service_role` (newer projects call it `secret`) bypasses every policy in

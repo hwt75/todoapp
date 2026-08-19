@@ -16,3 +16,6 @@ _bmad-output/
 
 # Vendored BMAD skill definitions — not ours to restyle.
 .claude/skills/
+
+# Deno source, formatted by its own toolchain
+supabase/functions/

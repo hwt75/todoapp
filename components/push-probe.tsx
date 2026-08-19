@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import type { InstallState } from '@/lib/install-state';
+import { createClient } from '@/lib/supabase/client';
 
 type ProbeState =
   | { kind: 'idle' }
   | { kind: 'working' }
-  | { kind: 'subscribed'; json: string }
+  | { kind: 'subscribed'; json: string; savedToDatabase: boolean }
   | { kind: 'refused'; reason: string };
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -46,7 +47,13 @@ async function serviceWorkerReady(): Promise<ServiceWorkerRegistration> {
  * from a browser tab silently fails to receive anything. Diagnosing that from
  * the symptoms costs hours; refusing up front costs a sentence.
  */
-export function PushProbe({ installState }: { installState: InstallState }) {
+export function PushProbe({
+  installState,
+  ownerId,
+}: {
+  installState: InstallState;
+  ownerId: string | null;
+}) {
   const [state, setState] = useState<ProbeState>({ kind: 'idle' });
 
   async function subscribe() {
@@ -87,7 +94,38 @@ export function PushProbe({ installState }: { installState: InstallState }) {
         applicationServerKey: VAPID_PUBLIC_KEY,
       });
 
-      setState({ kind: 'subscribed', json: JSON.stringify(subscription.toJSON(), null, 2) });
+      const json = subscription.toJSON();
+      const keys = json.keys ?? {};
+
+      // Signed in: the endpoint belongs in the database, where the worker can reach it.
+      // Signed out: fall back to showing it for `npm run push`, which is still the only
+      // channel that has actually been seen to deliver. The fallback goes when the worker
+      // has been watched doing the job, not before.
+      if (ownerId) {
+        const { error } = await createClient().from('push_subscription').upsert(
+          {
+            owner_id: ownerId,
+            endpoint: json.endpoint,
+            p256dh: keys.p256dh,
+            auth: keys.auth,
+            // Re-subscribing a device that had been marked dead should bring it back.
+            dead_at: null,
+            dead_reason: null,
+          },
+          { onConflict: 'endpoint' },
+        );
+
+        if (error) {
+          setState({ kind: 'refused', reason: `Subscribed, but not saved: ${error.message}` });
+          return;
+        }
+      }
+
+      setState({
+        kind: 'subscribed',
+        json: JSON.stringify(json, null, 2),
+        savedToDatabase: Boolean(ownerId),
+      });
     } catch (error) {
       // Verbatim, never a friendly summary: the exact failure is the finding.
       setState({ kind: 'refused', reason: String(error) });

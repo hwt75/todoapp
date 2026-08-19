@@ -56,7 +56,7 @@ export default function Home() {
 
       {ownerId && <CommitmentList ownerId={ownerId} />}
 
-      <PushProbe installState={installState} />
+      <PushProbe installState={installState} ownerId={ownerId} />
     </main>
   );
 }
