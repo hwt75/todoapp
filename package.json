@@ -12,7 +12,7 @@
     "start": "next start",
     "test": "vitest run",
     "icons": "node scripts/generate-icons.mjs",
-    "push": "node --env-file=.env scripts/send-push.mjs",
+    "push": "node scripts/send-push.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
