@@ -7,6 +7,7 @@ import { PushProbe } from '@/components/push-probe';
 import { SignIn } from '@/components/sign-in';
 import { Today } from '@/components/today';
 import { Ledger } from '@/components/ledger';
+import { ChainsDetail } from '@/components/chains-detail';
 import { readInstallSignals, resolveInstallState, type InstallState } from '@/lib/install-state';
 import { useGate } from '@/lib/use-gate';
 
@@ -15,6 +16,7 @@ export default function Home() {
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const gate = useGate(ownerId);
   const [showLedger, setShowLedger] = useState(false);
+  const [chainOf, setChainOf] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     try {
@@ -55,10 +57,19 @@ export default function Home() {
   return (
     <main>
       {ownerId &&
-        (showLedger ? (
+        (chainOf ? (
+          <ChainsDetail
+            commitmentId={chainOf.id}
+            name={chainOf.name}
+            onClose={() => setChainOf(null)}
+          />
+        ) : showLedger ? (
           <Ledger onClose={() => setShowLedger(false)} />
         ) : (
-          <Today onOpenLedger={() => setShowLedger(true)} />
+          <Today
+            onOpenLedger={() => setShowLedger(true)}
+            onOpenChain={(c) => setChainOf({ id: c.id, name: c.name })}
+          />
         ))}
 
       {/* Server-rendered so it survives a JavaScript failure. Hidden before

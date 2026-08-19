@@ -168,6 +168,48 @@ button:disabled {
   font-size: var(--type-label);
 }
 
+/* The chain, beside the pill and never inside it, and never coloured.
+
+   DESIGN.md rations the `held` family deliberately — it is the only one that reads as good
+   and it stays scarce so it keeps meaning something. A green chain on every row would make
+   the entire screen that colour, which is the same failure as a wall of red with the sign
+   flipped. So the chain carries no tint at all; it is secondary text that happens to be the
+   most durable number on the screen. */
+.row-chain {
+  color: var(--text-secondary);
+  font-size: var(--type-label);
+  white-space: nowrap;
+}
+
+/* A row that opens the Chains detail is a control, so it says so — but it must not become a
+   button in appearance. It keeps the row's hairline separation and left alignment, takes no
+   fill, and no radius: the pill silhouette stays reserved to things that cannot be pressed. */
+.row-open {
+  width: 100%;
+  background: none;
+  border: 0;
+  border-top: var(--hairline) solid var(--border);
+  border-radius: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* Current and longest, one line, never separable. A reset read against zero says you have
+   nothing; read against a record it says you have done better than this and you did it
+   yourself. That is the only reason this surface is worth opening on a bad day.
+
+   Not the `figure` role, though it is the number this screen is about. DESIGN.md reserves
+   that size for exactly two things — the debt total and a running focus timer — and the
+   second is still unbuilt. Spending it here would take a slot from Epic 3 and, worse, would
+   put the chain at the same weight as the money, which is the comparison this product spends
+   most of its design budget refusing to make. */
+.chain-pair {
+  font-size: var(--type-screen-title);
+  font-weight: var(--weight-medium);
+}
+
 textarea {
   width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

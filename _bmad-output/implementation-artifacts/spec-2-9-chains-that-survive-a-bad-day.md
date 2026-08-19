@@ -2,7 +2,7 @@
 title: 'Story 2.9 — Chains that survive a bad day'
 type: 'feature'
 created: '2026-08-19'
-status: 'awaiting-approval'
+status: 'approved'
 baseline_commit: '932e3e5'
 review_loop_iteration: 0
 story_key: '2-9-chains-that-survive-a-bad-day'
@@ -12,8 +12,7 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-> **NOT YET APPROVED.** Five decisions below, four of them consequential and one of them a
-> contradiction inside the specification itself. Read *Decisions* before anything else.
+> **APPROVED 2026-08-19 by hwt75** — all five. Frozen from here.
 
 ## Intent
 
@@ -205,3 +204,63 @@ warmer sentence.
   resets and the others extend
 - Settle an expired day; confirm the chain breaks and the longest is unchanged
 - Edit a commitment's cadence; confirm no past outcome moves
+
+## Verification record
+
+**Verified against the live project on 2026-08-19.** Five days seeded for a three-commitment
+account: three clean, one where Gym alone slipped, one clean again.
+
+```
+Gym        current 1  longest 3
+No fap     current 5  longest 5
+TryHackMe  current 5  longest 5
+```
+
+The failed day reset one chain and left two at five. That is the story, and it is the first
+time the product can tell the difference between one miss and a collapse.
+
+The summary for the failed day: *"Two of three on Thursday. That's 500.000₫. No fap held
+though — day 4. Start with Gym tomorrow."* — 95 characters. It names the chain that survived
+and never mentions the three-day chain that broke in the same breath.
+
+**Silence broke all three chains and the record survived.** An expired day settled `expired`,
+wrote three `unanswered` outcomes, sent no summary, and left the longest chains at 3, 5 and 5 —
+which is exactly the property D4 argued for: a reset that is read against a record.
+
+**A day not owed cost nothing.** Archiving one commitment produced no outcome row for it and
+left its chain untouched.
+
+**A correction moved the chain with it.** Superseding the expired settlement with a clean one
+(AD-9, a new row rather than an edit) took the three chains to 3/3, 7/7 and 6/6 — the gap
+closed, the history rewritten only by a correction that is itself recorded.
+
+**Re-running settlement produced no duplicate outcomes**, and the gate said *"Day 7 is waiting.
+1 commitment is unanswered for 2026-08-18, as of 17:29."* With two outstanding it said nothing
+about chains at all, which is D5 holding.
+
+Test account deleted, every table at zero, advisor clean.
+
+## What went wrong, and what it cost
+
+**`min(uuid)` does not exist.** The gate's chain clause used it to find the single outstanding
+commitment. The migration applied cleanly and the function only failed when it was actually
+called — which in production is a `pg_cron` job at 07:30, the one place nobody is watching.
+Caught here only because the verification called it by hand. This is the third time a migration
+has applied cleanly and been wrong: the `CASE`-to-enum cast in `settle_day`, the column grant
+that granted nothing, and now this. **Applying is not passing.**
+
+**The survivor was being chosen arbitrarily.** Story 2.8 picked the surviving commitment by
+`created_at` because nothing counted chains and one survivor was as good as another. Seeing real
+data made it obvious: a day where a three-day chain and a seven-day chain both survived was
+naming whichever was created first. Now the longest chain wins, ties fall back to `created_at`
+so a re-run says the same sentence. This is what the story was for, and it was not in the spec.
+
+**The chain nearly took the `figure` type role.** DESIGN.md reserves that size for exactly two
+things — the debt total and a running focus timer — and the second is unbuilt, so the slot was
+free. Taking it would have put the chain at the same visual weight as the money, which is the
+comparison this product spends most of its design budget refusing to make.
+
+**No signed-in UI verification.** The chain on the row and the Chains detail were verified by
+build and by their data path, not by being looked at with real data in a browser. Signing in
+requires entering a password, which is not something to do here; the surfaces should be checked
+on the author's own account the next time it has settled days behind it.

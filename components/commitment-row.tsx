@@ -1,4 +1,5 @@
 import { StatusPill } from '@/components/status-pill';
+import { chainLabel } from '@/lib/chain';
 import { CADENCE_LABELS, type CommitmentCadence } from '@/lib/commitment';
 import { rowLabel, type CommitmentState } from '@/lib/commitment-state';
 
@@ -39,23 +40,55 @@ function target(commitment: RowCommitment): string {
 export function CommitmentRow({
   commitment,
   state,
+  chainDays = 0,
+  onOpen,
 }: {
   commitment: RowCommitment;
   state: CommitmentState;
+  /** Days this commitment has held. Zero shows nothing at all — never `day 0`. */
+  chainDays?: number;
+  /** Opens the Chains detail. Without it the row stays a group rather than a control. */
+  onOpen?: (commitment: RowCommitment) => void;
 }) {
-  return (
-    <div
-      className="row"
-      role="group"
-      aria-label={rowLabel(commitment.name, state, commitment.carries_penalty)}
-    >
+  const label = rowLabel(commitment.name, state, commitment.carries_penalty, chainDays);
+  const chain = chainLabel(chainDays);
+
+  const inside = (
+    <>
       <div className="row-main">
         <div className="row-name">{commitment.name}</div>
         <div className="row-muted" aria-hidden="true">
           {target(commitment)}
         </div>
       </div>
+      {/* The chain sits beside the pill and never inside it, and never carries a colour.
+          DESIGN.md rations the `held` family on purpose; a green chain on every row makes
+          the whole screen the colour that is supposed to mean something. */}
+      {chain && (
+        <div className="row-chain" aria-hidden="true">
+          {chain}
+        </div>
+      )}
       <StatusPill state={state} />
-    </div>
+    </>
+  );
+
+  if (!onOpen) {
+    return (
+      <div className="row" role="group" aria-label={label}>
+        {inside}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="row row-open"
+      aria-label={label}
+      onClick={() => onOpen(commitment)}
+    >
+      {inside}
+    </button>
   );
 }

@@ -11,6 +11,7 @@
  * `stateToday` returns nothing else.
  */
 
+import { chainSpoken } from './chain';
 import type { CommitmentCadence } from './commitment';
 
 export type CommitmentState = 'not_yet' | 'held' | 'missed' | 'appealing' | 'waived';
@@ -43,8 +44,11 @@ export const STATE_PRESENTATION: Record<CommitmentState, StatePresentation> = {
   // tinted as one.
   not_yet: { family: 'neutral', label: 'Not yet', spoken: 'not yet done today' },
 
-  // The only family that reads as good, which is why it stays scarce. Story 2.9 replaces
-  // this label with the chain count.
+  // The only family that reads as good, which is why it stays scarce. An earlier note here
+  // said Story 2.9 would replace this label with the chain count. It did not, and could not:
+  // `EXPERIENCE.md` § Component Patterns puts the chain inside the pill on the `held` state,
+  // but no row is ever `held` today — FR-10 forbids a mid-day verdict — so a chain living
+  // there would never render on any row, ever. The chain is its own element beside the pill.
   held: { family: 'held', label: 'Held', spoken: 'held' },
 
   missed: { family: 'failed', label: 'Missed', spoken: 'missed' },
@@ -82,8 +86,17 @@ export function stateToday(_commitment: { cadence: CommitmentCadence }): Commitm
  * VoiceOver announcing "Gym" and then "Not yet" as separate elements makes the user
  * assemble the sentence themselves, every row, every morning.
  */
-export function rowLabel(name: string, state: CommitmentState, costsMoney: boolean): string {
+export function rowLabel(
+  name: string,
+  state: CommitmentState,
+  costsMoney: boolean,
+  chainDays = 0,
+): string {
+  // Name, state, then chain — the order `EXPERIENCE.md` § Accessibility specifies, and the
+  // order they matter in. The chain is history; it must not arrive before what today is.
   const parts = [name, STATE_PRESENTATION[state].spoken];
+  const chain = chainSpoken(chainDays);
+  if (chain) parts.push(chain);
   if (costsMoney) parts.push('missing this costs money');
   return parts.join(', ');
 }

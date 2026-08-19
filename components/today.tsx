@@ -9,7 +9,7 @@ import { totalOwed } from '@/lib/money';
 
 type View =
   | { kind: 'loading' }
-  | { kind: 'ready'; rows: RowCommitment[]; owedDong: number }
+  | { kind: 'ready'; rows: RowCommitment[]; owedDong: number; chains: Record<string, number> }
   | { kind: 'failed'; reason: string };
 
 const SELECT = 'id,name,cadence,carries_penalty,weekly_target,daily_minutes_target';
@@ -22,7 +22,13 @@ const SELECT = 'id,name,cadence,carries_penalty,weekly_target,daily_minutes_targ
  * it says nothing it cannot support: until settlement exists, every commitment is
  * honestly `not yet` and no row claims otherwise.
  */
-export function Today({ onOpenLedger }: { onOpenLedger: () => void }) {
+export function Today({
+  onOpenLedger,
+  onOpenChain,
+}: {
+  onOpenLedger: () => void;
+  onOpenChain: (commitment: RowCommitment) => void;
+}) {
   const [view, setView] = useState<View>({ kind: 'loading' });
 
   useEffect(() => {
@@ -30,12 +36,16 @@ export function Today({ onOpenLedger }: { onOpenLedger: () => void }) {
 
     async function load() {
       const supabase = createClient();
-      const [{ data, error }, { data: penalties }] = await Promise.all([
+      const [{ data, error }, { data: penalties }, { data: chains }] = await Promise.all([
         supabase.from('commitment').select(SELECT).is('archived_at', null).order('created_at'),
         // `penalty_current`, not `penalty`. A penalty attached to a superseded verdict is
         // history rather than debt — it stays in the table so the trace survives and stops
         // counting (AD-9). Reading the base table would charge him for a day he took back.
         supabase.from('penalty_current').select('amount_dong').eq('state', 'owed'),
+        // Derived in one place — `chain_current` — rather than counted here. A second
+        // implementation of the chain rule would drift, and this one would drift silently
+        // because a wrong chain still looks like a number.
+        supabase.from('chain_current').select('commitment_id,current_days'),
       ]);
 
       if (cancelled) return;
@@ -47,6 +57,9 @@ export function Today({ onOpenLedger }: { onOpenLedger: () => void }) {
         kind: 'ready',
         rows: (data ?? []) as RowCommitment[],
         owedDong: totalOwed((penalties ?? []).map((p) => p.amount_dong as number)),
+        chains: Object.fromEntries(
+          (chains ?? []).map((c) => [c.commitment_id as string, c.current_days as number]),
+        ),
       });
     }
 
@@ -84,7 +97,13 @@ export function Today({ onOpenLedger }: { onOpenLedger: () => void }) {
         <>
           <div className="today-rows">
             {view.rows.map((row) => (
-              <CommitmentRow key={row.id} commitment={row} state={stateToday(row)} />
+              <CommitmentRow
+                key={row.id}
+                commitment={row}
+                state={stateToday(row)}
+                chainDays={view.chains[row.id] ?? 0}
+                onOpen={onOpenChain}
+              />
             ))}
           </div>
 
