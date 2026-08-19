@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { PushProbe } from '@/components/push-probe';
+import { SignIn } from '@/components/sign-in';
 import { readInstallSignals, resolveInstallState, type InstallState } from '@/lib/install-state';
 
 export default function Home() {
@@ -45,6 +46,8 @@ export default function Home() {
       )}
 
       {installState === 'installed' && <p>Launched from the home screen.</p>}
+
+      <SignIn />
 
       <PushProbe installState={installState} />
     </main>

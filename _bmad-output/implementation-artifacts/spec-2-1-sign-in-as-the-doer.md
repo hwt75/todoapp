@@ -2,7 +2,7 @@
 title: 'Story 2.1 — Sign in as the doer'
 type: 'feature'
 created: '2026-08-19'
-status: 'awaiting-approval'
+status: 'approved'
 baseline_commit: '62c653b'
 review_loop_iteration: 0
 story_key: '2-1-sign-in-as-the-doer'
@@ -12,7 +12,9 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-> **NOT YET APPROVED.** Drafted, not agreed. Read the Role resolution note below before
+> **APPROVED 2026-08-19 by hwt75.** Frozen from here — it does not move without a recorded renegotiation.
+>
+> _Originally drafted unapproved:_ Read the Role resolution note below before
 > approving — it records a decision you made and a tension it creates with this story's own
 > acceptance criteria, and that is the part worth your attention rather than the task list.
 

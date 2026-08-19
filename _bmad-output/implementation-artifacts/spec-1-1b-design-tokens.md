@@ -2,7 +2,7 @@
 title: 'Story 1.1 (tokens) — The design tokens everything else is built from'
 type: 'feature'
 created: '2026-08-19'
-status: 'awaiting-approval'
+status: 'approved'
 baseline_commit: 'db2a9f5'
 review_loop_iteration: 0
 story_key: '1-1-an-installable-shell-and-the-tokens-everything-else-is-built'
@@ -13,7 +13,9 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-> **NOT YET APPROVED.** This block was drafted, not agreed. Epic 1's retrospective found that spec
+> **APPROVED 2026-08-19 by hwt75.** Frozen from here — it does not move without a recorded renegotiation.
+>
+> _Originally drafted unapproved:_ Epic 1's retrospective found that spec
 > 1.2's frozen Intent was rewritten with no recorded renegotiation (F3), so this one starts
 > explicitly unapproved and `status: awaiting-approval`. Read it, change what is wrong, then mark it
 > approved — after which it does not move without you.

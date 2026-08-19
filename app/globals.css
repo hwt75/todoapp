@@ -94,3 +94,23 @@ textarea {
   border-radius: var(--radius-default);
   padding: var(--space-3);
 }
+
+/* Text inputs. Outline only, like every neutral control — a coloured input would be
+   reading as pressable when it is a place to type. */
+input {
+  display: block;
+  width: 100%;
+  margin-bottom: var(--space-3);
+  font-family: inherit;
+  font-size: var(--type-body);
+  color: var(--text-primary);
+  background: var(--surface-card);
+  border: var(--hairline) solid var(--border-strong);
+  border-radius: var(--radius-default);
+  padding: var(--space-3);
+  min-height: 44px;
+}
+
+input::placeholder {
+  color: var(--text-muted);
+}
