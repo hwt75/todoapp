@@ -13,10 +13,10 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-> **NOT YET APPROVED.** Half of this story's gate needs infrastructure that does not exist, and one
-> of its acceptance criteria describes a capability a web app cannot have. Both are named below
-> rather than quietly delivered as something smaller. Read *What this story cannot honestly build*
-> before the task list.
+> **NOT YET APPROVED — revised 2026-08-19 after Story 2.4a.** The first draft said half this gate
+> was blocked on infrastructure that did not exist. It exists now and has been seen to deliver, so
+> that section is replaced rather than left standing as a false constraint. One limitation remains
+> and is still named below.
 
 ## Intent
 
@@ -29,29 +29,36 @@ answered on the days it is easy and skipped on the days it matters.
 held, it is recorded with the instant he tapped, and settlement folds it in later (2.5). The gate
 that asks him blocks the app by having nothing else to offer, never by trapping him.
 
-## What this story cannot honestly build
+## The gate now has both legs
 
-**1. The push half of the gate needs the outbox, which is deferred.** `EXPERIENCE.md` is explicit
-that the gate is *two* mechanisms — a push that re-delivers until answered, plus a launch modal —
-and that neither alone is sufficient: the push reaches him at 07:30 when he is not thinking about the
-app, and the modal is what remains when the push was swiped away.
+Story 2.4a built the outbox, its worker and its own `pg_cron` schedule, and a notification has
+reached the author's phone with nobody running a command. So this story can build the gate as
+`EXPERIENCE.md` designed it rather than as half of it:
 
-Scheduled, repeating delivery requires the transactional outbox, the Edge Function worker and the
-`pg_cron` schedule of AD-3, all recorded in `deferred-work.md` and none of them built. Story 1.2
-proved the channel with a local CLI precisely so this infrastructure could be built *after* the
-channel was known to work — and it now is.
+- **The push**, enqueued after the configured morning hour for every account with an unanswered
+  declaration, re-delivered on a schedule until it is answered. It reaches him at 07:30 when he is
+  not thinking about the app.
+- **The launch modal**, which is what remains when the push was swiped away.
 
-So this story builds the modal half completely and the push half not at all. **The gate is therefore
-weaker than designed until the outbox lands**, and that is a real gap rather than a rounding error:
-a modal only asks once he opens the app, and not opening the app is the author's documented failure
-mode. The proposal is to build the outbox as Story 2.4b immediately after this, before Epic 2 relies
-on any notification.
+Neither is relied on alone, which was the whole point of the design and the thing the first draft
+could not honour.
 
-**2. "First phone interaction" is not available to a web app.** FR-9 asks for the prompt at the
-author's first phone interaction after a configured hour. A PWA cannot observe phone interaction; it
-observes being opened. The move to a web app already closed two of the four mechanisms once open here,
-and this is the residue of that. The gate triggers on app open, and the push — once it exists — is
-what covers the case where he does not open it.
+**What the push may say.** A reminder is enqueued while a declaration is outstanding and read at a
+time the sender cannot know — Story 2.4a's payload rules already forbid a body that describes the
+present, and this is the case they were written for. "Yesterday is unanswered as of 07:30" survives
+being read at 09:00; "you still have not answered" does not.
+
+**Re-delivery must not become nagging.** The dedupe key carries the day and the delivery slot, so a
+morning produces one notification per slot and never a queue of identical ones. Answering stops the
+next one; nothing cancels one already accepted by Apple, and it will say the time it was sent.
+
+## What this story still cannot build
+
+**"First phone interaction" is not available to a web app.** FR-9 asks for the prompt at the author's
+first phone interaction after a configured hour. A PWA cannot observe phone interaction; it observes
+being opened, and it can be pushed to. The move to a web app already closed two of the four
+mechanisms once open here, and this is the residue of that. The push is what now covers the case
+where he does not open the app — which is the case that matters, and is why 2.4a came first.
 
 ## Boundaries & Constraints
 
@@ -121,6 +128,9 @@ what covers the case where he does not open it.
   preserved.
 - [ ] `components/morning-gate.tsx` -- the blocking surface, two identical neutral controls, and the
   accessibility contract: two focusable elements, no rotor capture, app always closable.
+- [ ] `supabase/migrations/<ts>_gate_reminder.sql` -- the `pg_cron` job that enqueues a reminder for
+  each account with an outstanding declaration after its morning hour, deduped per day and slot so a
+  morning produces one notification per slot rather than a queue of identical ones.
 - [ ] `components/settings.tsx` -- the morning hour, alongside notification permission state.
 - [ ] `app/page.tsx` -- the gate takes precedence over Today when a declaration is outstanding.
 
@@ -135,6 +145,8 @@ what covers the case where he does not open it.
   tap, and the day it answers for was derived by the server.
 - Given the same key submitted twice, then one row exists.
 - Given no answer, then no penalty, verdict or chain is written by this story at all.
+- Given an outstanding declaration and the morning hour passing, then exactly one reminder is
+  enqueued per slot, its body states the time it was sent, and answering stops the next one.
 
 ## Design Notes
 
