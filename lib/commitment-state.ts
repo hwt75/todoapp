@@ -61,10 +61,16 @@ export const STATE_PRESENTATION: Record<CommitmentState, StatePresentation> = {
 /**
  * The state a commitment is in today.
  *
- * Deliberately returns `not_yet` for everything. Settlement owns every derived value
- * (AD-8) and does not exist yet, so any other answer would be invented rather than
- * computed. The signature takes the commitment so that the story adding settlement
- * changes this function's body and nothing that calls it.
+ * Still returns `not_yet` for everything, and now for a different reason than when it was
+ * written. Settlement exists as of Story 2.5 — but it closes a day *after* that day has
+ * ended, and this screen shows *today*. A day still in progress has no verdict by
+ * construction, so there is nothing for this function to read.
+ *
+ * That is also FR-10 holding: nothing may announce mid-day that the day is already lost,
+ * and a screen that could show a verdict for today would be the first thing to break it.
+ *
+ * The settled verdicts become visible in the Ledger (Story 2.6), which is a list of days
+ * that have ended. Not here.
  */
 export function stateToday(_commitment: { cadence: CommitmentCadence }): CommitmentState {
   return 'not_yet';

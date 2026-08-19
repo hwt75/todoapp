@@ -2,7 +2,7 @@
 title: 'Story 2.5 — The day closes on its own'
 type: 'feature'
 created: '2026-08-19'
-status: 'awaiting-approval'
+status: 'approved'
 baseline_commit: '542624f'
 review_loop_iteration: 0
 story_key: '2-5-the-day-closes-on-its-own'
@@ -12,7 +12,7 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-> **NOT YET APPROVED.** This is the first story that writes a verdict — the thing money will later
+> **APPROVED 2026-08-19 by hwt75.** This is the first story that writes a verdict — the thing money will later
 > attach to, in a ledger AD-9 makes append-only. Two rules below exist to stop a development mistake
 > becoming a real charge, and one of them changes how every future settlement function is written.
 > Read *The rules that outlive this story* first.
@@ -129,6 +129,30 @@ a settled verdict never becomes visible on a day still in progress.
 - Given this story, then no row is ever written to `outbox`.
 
 ## Design Notes
+
+**Verified against the live project on 2026-08-19, and the best evidence was accidental.** Two test
+accounts were prepared with a completed day — one with a penalty-carrying commitment slipped, one
+where only a penalty-free commitment slipped — and before any manual run, the `pg_cron` job settled
+both at 09:15 on its own. The first account was `failed` with `missed_count` 1; the second `clean`
+with 0, because a penalty-free miss costs nothing by design. Three manual passes afterwards each
+returned 0, which is AD-5's no-op holding.
+
+Both AD-16 guards were exercised and both refused: a call with no schedule marker and no override,
+and an override against an account flagged `is_live_doer`. FR-10 was checked directly — `outbox` is
+empty and settlement enqueued nothing at all.
+
+**A type error that applied cleanly and failed later.** `settle_day`'s `CASE` expression resolves to
+`text`, and Postgres will not implicitly cast that to an enum on insert. A plain literal in the same
+position is fine, which is why `kind` worked and `verdict` did not — and why the migration applied
+without complaint and only broke when a pass had a real day to settle. Fixed by an explicit cast in a
+follow-up migration.
+
+**The UI tasks in this spec turned out to be nothing, and that is the honest outcome.** The task list
+asked `stateToday` to learn to read a settled verdict. It cannot usefully: settlement closes a day
+*after* it has ended, and Today shows *today*, so a day on that screen has no verdict by construction.
+Forcing a change would have produced code that never runs. `stateToday` keeps returning `not_yet` and
+now carries a comment saying why, so a later reader does not think it was forgotten. The verdicts
+become visible in the Ledger, which is Story 2.6 — a list of days that have ended.
 
 **Why the "who owes an answer" query is factored out now.** It already exists twice — once in
 `lib/declaration.ts` for the client and once inside `enqueue_gate_reminders`. A third copy inside
