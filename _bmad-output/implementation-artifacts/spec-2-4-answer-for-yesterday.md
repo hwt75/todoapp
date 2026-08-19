@@ -2,7 +2,7 @@
 title: 'Story 2.4 — Answer for yesterday'
 type: 'feature'
 created: '2026-08-19'
-status: 'awaiting-approval'
+status: 'approved'
 baseline_commit: '71e1995'
 review_loop_iteration: 0
 story_key: '2-4-answer-for-yesterday'
@@ -13,7 +13,7 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-> **NOT YET APPROVED — revised 2026-08-19 after Story 2.4a.** The first draft said half this gate
+> **APPROVED 2026-08-19 by hwt75, revised after Story 2.4a.** The first draft said half this gate
 > was blocked on infrastructure that did not exist. It exists now and has been seen to deliver, so
 > that section is replaced rather than left standing as a false constraint. One limitation remains
 > and is still named below.
@@ -149,6 +149,32 @@ where he does not open the app — which is the case that matters, and is why 2.
   enqueued per slot, its body states the time it was sent, and answering stops the next one.
 
 ## Design Notes
+
+**Verified in a browser and against the live project on 2026-08-19.** With two declarations
+outstanding, the gate was the entire screen: exactly **two focusable elements**, both `It held` and
+`I slipped` with identical computed background, border, weight, size and padding and neither carrying
+a fill class; no `role="dialog"`, no `aria-modal`, no focus trap; and no Today, no install hint, no
+push probe rendered behind it. Answering advanced to the next commitment, and the wording changed
+with the cadence — "Did No fap hold on 2026-08-18?" for the daily one, "Did you do Gym on
+2026-08-18?" for the weekly, because "held" would imply a week FR-2 has not judged yet.
+
+Both answers landed with `for_day` derived by the trigger from the tap instant, the offline queue
+emptied itself, and `enqueue_gate_reminders()` returned 0 once the answers existed — answering stops
+the next reminder. The reminder itself was checked separately: it enqueued one row keyed
+`gate-{owner}-{day}-{slot}`, said "2 commitments are unanswered for 2026-08-18, as of 15:54", counted
+2 rather than 3 because the hours-quota commitment is measured rather than declared, and returned 0
+on a second call in the same hour.
+
+**Two things the browser found that reading would not have.** The push probe and the install hint
+were still rendered while the gate was up, so the gate was blocking without offering nothing —
+`page.tsx` now returns the gate as the whole screen rather than rendering it alongside. And the first
+attempt to set `morning_hour = 0` to "always open the gate" enqueued nothing, which was the slot cap
+working correctly and my test setup being wrong.
+
+**One wrinkle left for Story 2.5.** After answering, Today still shows `Not yet` for the commitment
+just declared. That is honest — settlement has not run, and Story 2.3 deliberately refuses to display
+a state nothing computed — but it will read as the answer having been ignored until 2.5 closes the
+day. Worth doing soon rather than eventually.
 
 **Why the day is derived by trigger rather than a generated column.** `timestamptz at time zone
 'Asia/Ho_Chi_Minh'` is `STABLE`, not `IMMUTABLE` — timezone rules can change — so Postgres will not

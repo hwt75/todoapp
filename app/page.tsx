@@ -1,15 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { CommitmentList } from '@/components/commitment-list';
+import { MorningGate } from '@/components/morning-gate';
 import { PushProbe } from '@/components/push-probe';
 import { SignIn } from '@/components/sign-in';
-import { CommitmentList } from '@/components/commitment-list';
 import { Today } from '@/components/today';
 import { readInstallSignals, resolveInstallState, type InstallState } from '@/lib/install-state';
+import { useGate } from '@/lib/use-gate';
 
 export default function Home() {
   const [installState, setInstallState] = useState<InstallState>('unknown');
   const [ownerId, setOwnerId] = useState<string | null>(null);
+  const gate = useGate(ownerId);
 
   useEffect(() => {
     try {
@@ -28,8 +31,29 @@ export default function Home() {
     }
   }, []);
 
+  // The gate is the entire screen, and that is how it blocks. Not a focus trap, not an
+  // aria-modal, not an intercepted back gesture — there is simply nothing else rendered.
+  // The app still closes, the notification is still dismissable, and a screen reader's
+  // rotor still moves freely, because nothing is holding it. That distinction is the
+  // accessibility review's one `high` finding: blocking the app must never become locking
+  // the device.
+  if (ownerId && gate.owing.length > 0) {
+    return (
+      <main>
+        <MorningGate
+          ownerId={ownerId}
+          owing={gate.owing}
+          now={gate.now}
+          onAnswered={gate.markAnswered}
+        />
+      </main>
+    );
+  }
+
   return (
     <main>
+      {ownerId && <Today />}
+
       {/* Server-rendered so it survives a JavaScript failure. Hidden before
           hydration on an installed launch by the display-mode rule in the layout;
           the JS check below then covers legacy iOS, which reports standalone only
@@ -45,12 +69,6 @@ export default function Home() {
           <p>Share button, then &ldquo;Add to Home Screen&rdquo;, then open it from its icon.</p>
         </section>
       )}
-
-      {installState === 'installed' && <p>Launched from the home screen.</p>}
-
-      {/* Today first. The install hint and the push probe are Epic 1 apparatus and still
-          the only way to subscribe, but they are no longer what this screen is about. */}
-      {ownerId && <Today />}
 
       <SignIn onAccountChange={setOwnerId} />
 
