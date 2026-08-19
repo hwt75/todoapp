@@ -97,7 +97,12 @@ export function PushProbe({ installState }: { installState: InstallState }) {
   return (
     <section>
       <h2>Push probe</h2>
-      <button type="button" onClick={subscribe} disabled={state.kind === 'working'}>
+      <button
+        type="button"
+        className="action"
+        onClick={subscribe}
+        disabled={state.kind === 'working'}
+      >
         {state.kind === 'working' ? 'Working…' : 'Subscribe this device'}
       </button>
 

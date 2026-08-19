@@ -2,7 +2,7 @@
 title: 'Story 2.2 — Create and edit a commitment'
 type: 'feature'
 created: '2026-08-19'
-status: 'awaiting-approval'
+status: 'approved'
 baseline_commit: '51c9cb5'
 review_loop_iteration: 0
 story_key: '2-2-create-and-edit-a-commitment'
@@ -13,9 +13,8 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-> **NOT YET APPROVED.** Two decisions below are expensive to reverse and are flagged in place:
-> what "delete" means once a commitment has history, and whether an Auto-check table belongs to
-> this story at all. Read those before the task list.
+> **APPROVED 2026-08-19 by hwt75** — both decisions below: archive rather than remove, and no
+> Auto-check table in this story. Frozen from here.
 
 ## Intent
 
@@ -129,6 +128,22 @@ of code that does not exist.
   archived rather than removed.
 
 ## Design Notes
+
+**Verified end to end against the live project on 2026-08-19**, with two throwaway accounts deleted
+afterwards (`auth.users`, `profile` and `commitment` all back to zero). One commitment of each
+cadence inserted; a weekly quota missing its target refused by `commitment_weekly_quota_targets`;
+a repeated idempotency key refused by the unique constraint, and accepted as a silent no-op once the
+insert goes through `on_conflict=idempotency_key` with `resolution=ignore-duplicates`; a write for
+another account's `owner_id` refused `42501` by policy; account B saw none of account A's rows and
+could not rename one — the PATCH affected zero rows and the name was unchanged. Archive removed the
+row from the active list while leaving it in the table.
+
+**Two false alarms during that verification, both worth recording.** A `PATCH` sent without `-X
+PATCH` is a `POST`, so `curl -d` silently tested the insert policy instead of the update policy and
+produced a `42501` that looked like a broken update rule. Earlier, an `UPDATE` without a `WHERE`
+clause was rejected by PostgREST before RLS ever ran. Both looked like authorization defects and
+neither was. The lesson is the same one Story 1.2 recorded about a late push: a failure observed is
+not yet a failure understood.
 
 **Minutes, not hours, at rest.** The Cadence is called Daily Hours Quota and the UI will say hours,
 but the stored unit is minutes. One unit at rest means no rounding decision is ever made twice, and

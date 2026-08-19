@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 import { PushProbe } from '@/components/push-probe';
 import { SignIn } from '@/components/sign-in';
+import { CommitmentList } from '@/components/commitment-list';
 import { readInstallSignals, resolveInstallState, type InstallState } from '@/lib/install-state';
 
 export default function Home() {
   const [installState, setInstallState] = useState<InstallState>('unknown');
+  const [ownerId, setOwnerId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -47,7 +49,9 @@ export default function Home() {
 
       {installState === 'installed' && <p>Launched from the home screen.</p>}
 
-      <SignIn />
+      <SignIn onAccountChange={setOwnerId} />
+
+      {ownerId && <CommitmentList ownerId={ownerId} />}
 
       <PushProbe installState={installState} />
     </main>

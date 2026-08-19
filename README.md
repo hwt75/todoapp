@@ -169,6 +169,16 @@ npx supabase db push
 After any schema change, run the security advisor. It caught two real holes in the first
 migration within seconds of it being applied, neither of which was visible by reading the SQL.
 
+### Delete means archive
+
+A commitment is referenced by every declaration, failed day and penalty that ever touched it, so
+removing the row would break those references or silently rewrite the author's own history. The
+button says Delete and the row gets `archived_at`; every list filters on `archived_at is null`.
+There is deliberately no delete policy on `commitment` — removal is an update.
+
+The cost is honest: a commitment created by mistake and deleted a minute later leaves a row behind
+forever. That is the cheaper of the two mistakes.
+
 ### The key that must never be here
 
 `service_role` (newer projects call it `secret`) bypasses every policy in

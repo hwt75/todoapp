@@ -27,7 +27,7 @@ type Stage =
  * The role shown here is read from the profile table through RLS, and is display only.
  * Every access decision is made by a policy in `supabase/migrations` (AD-7).
  */
-export function SignIn() {
+export function SignIn({ onAccountChange }: { onAccountChange?: (userId: string | null) => void }) {
   const [stage, setStage] = useState<Stage>({ kind: 'loading' });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,6 +45,7 @@ export function SignIn() {
 
       if (error || !data.user) {
         setStage({ kind: 'signed-out' });
+        onAccountChange?.(null);
         return;
       }
 
@@ -56,13 +57,14 @@ export function SignIn() {
         email: data.user.email ?? '(no email)',
         role: (profile?.role as AppRole | undefined) ?? null,
       });
+      onAccountChange?.(data.user.id);
     }
 
     void restore();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [onAccountChange]);
 
   async function readRole(fallbackEmail: string) {
     const supabase = createClient();
@@ -110,12 +112,14 @@ export function SignIn() {
     }
 
     setPassword('');
+    onAccountChange?.(data.user.id);
     await readRole(data.user.email ?? email);
   }
 
   async function signOut() {
     await createClient().auth.signOut();
     setPassword('');
+    onAccountChange?.(null);
     setStage({ kind: 'signed-out' });
   }
 
@@ -147,7 +151,12 @@ export function SignIn() {
             onChange={(event) => setPassword(event.target.value)}
           />
 
-          <button type="button" onClick={() => submit('sign-in')} disabled={!canSubmit}>
+          <button
+            type="button"
+            className="action"
+            onClick={() => submit('sign-in')}
+            disabled={!canSubmit}
+          >
             Sign in
           </button>
           <button type="button" onClick={() => submit('create')} disabled={!canSubmit}>

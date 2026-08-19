@@ -61,27 +61,81 @@ section + section {
   margin-top: var(--space-4);
 }
 
-/* The one control on this page reports nothing about the user, so it is not a
-   self-declaration control and may carry the action fill. Every control by which the
-   user answers for themselves must be outline-only — DESIGN.md calls that the
-   load-bearing rule of the system, and it lands when Epic 2 builds the morning gate. */
+/* Buttons default to outline, and that is the load-bearing rule of the design system
+   rather than a stylistic preference. Every control by which the author reports on
+   himself must be visually identical to its alternative: tinting the honest answer green
+   and the costly one red taxes telling the truth, and nothing in this product can detect
+   a lie. A single false declaration destroys the mechanism in a way that losing money
+   does not.
+
+   So a fill is opt-in, at most one per card, and `.destructive` appears on exactly one
+   action in the whole product. */
 button {
   font-family: inherit;
   font-size: var(--type-body);
   font-weight: var(--weight-medium);
   padding: var(--space-3) var(--space-4);
-  border: none;
+  border: var(--hairline) solid var(--border-strong);
   border-radius: var(--radius-default);
-  background: var(--action-fill);
-  color: var(--action-ink);
+  background: transparent;
+  color: var(--text-primary);
   /* 44px is the stated minimum touch target. */
   min-height: 44px;
+  margin-right: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/* The screen's purpose, where it has one. Never a self-declaration control. */
+button.action {
+  border-color: transparent;
+  background: var(--action-fill);
+  color: var(--action-ink);
+}
+
+/* Deleting a commitment, and nothing else. Rarity is what preserves its force. */
+button.destructive {
+  border-color: transparent;
+  background: var(--destructive-fill);
+  color: var(--destructive-ink);
 }
 
 button:disabled {
   background: var(--surface-sunken);
   color: var(--text-muted);
+  border-color: var(--border);
+}
+
+/* Pill radius is reserved to non-interactive status labels, so nothing pressable is ever
+   pill-shaped. This is what lets a state label be told from a control before it is read. */
+.pill {
+  display: inline-block;
+  border-radius: var(--radius-pill);
+  padding: 2px var(--space-2);
+  font-size: var(--type-label);
+}
+
+.pill-held {
+  background: var(--held-tint);
+  color: var(--held-ink);
+}
+
+.pill-neutral {
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
   border: var(--hairline) solid var(--border);
+}
+
+/* Commitment rows are separated by hairlines, not cards. Nine tinted rectangles stacked
+   vertically would read as an alert panel; a rule keeps the page calm and lets the row's
+   pill carry whatever colour there is. */
+.row {
+  border-top: var(--hairline) solid var(--border);
+  padding: var(--space-row-pad) 0;
+}
+
+.row-muted {
+  color: var(--text-secondary);
+  font-size: var(--type-label);
 }
 
 textarea {
@@ -113,4 +167,45 @@ input {
 
 input::placeholder {
   color: var(--text-muted);
+}
+
+label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-size: var(--type-label);
+  color: var(--text-secondary);
+}
+
+select {
+  display: block;
+  width: 100%;
+  margin-bottom: var(--space-3);
+  font-family: inherit;
+  font-size: var(--type-body);
+  color: var(--text-primary);
+  background: var(--surface-card);
+  border: var(--hairline) solid var(--border-strong);
+  border-radius: var(--radius-default);
+  padding: var(--space-3);
+  min-height: 44px;
+}
+
+/* A checkbox sits inline with its own label, so it opts out of the block rules above. */
+input[type='checkbox'] {
+  display: inline;
+  width: auto;
+  min-height: 0;
+  margin: 0 var(--space-1) 0 0;
+}
+
+h3 {
+  font-size: var(--type-label);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+ul {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-4);
 }

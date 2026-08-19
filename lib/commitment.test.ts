@@ -1,0 +1,204 @@
+import { describe, expect, it } from 'vitest';
+import {
+  COMMITMENT_CADENCES,
+  COMMITMENT_KINDS,
+  EMPTY_DRAFT,
+  type CommitmentDraft,
+  autoChecksPossible,
+  draftProblems,
+  requiredTargets,
+  toRow,
+  withCadence,
+} from './commitment';
+
+function draft(overrides: Partial<CommitmentDraft> = {}): CommitmentDraft {
+  return { ...EMPTY_DRAFT, name: 'Gym', ...overrides };
+}
+
+describe('a blank commitment', () => {
+  it('does not carry money', () => {
+    // The one default worth a test of its own. Money is never opt-out.
+    expect(EMPTY_DRAFT.carriesPenalty).toBe(false);
+  });
+
+  it('starts with no targets set', () => {
+    expect(EMPTY_DRAFT.weeklyTarget).toBeNull();
+    expect(EMPTY_DRAFT.weekStartDay).toBeNull();
+    expect(EMPTY_DRAFT.dailyMinutesTarget).toBeNull();
+  });
+});
+
+describe('which targets a cadence needs', () => {
+  it.each([
+    ['daily', []],
+    ['weekly_quota', ['weeklyTarget', 'weekStartDay']],
+    ['daily_hours_quota', ['dailyMinutesTarget']],
+  ] as const)('%s', (cadence, expected) => {
+    expect(requiredTargets(cadence)).toEqual(expected);
+  });
+
+  it('covers every cadence, so a new one cannot be added without deciding', () => {
+    for (const cadence of COMMITMENT_CADENCES) {
+      expect(() => requiredTargets(cadence)).not.toThrow();
+    }
+  });
+});
+
+describe('auto-checks', () => {
+  it('are impossible for an abstention', () => {
+    // There is no sensor for a thing not done. The screen has to say so, not just grey
+    // the controls out.
+    expect(autoChecksPossible('abstain')).toBe(false);
+  });
+
+  it.each([['do'], ['open_ended']] as const)('are possible in principle for %s', (kind) => {
+    expect(autoChecksPossible(kind)).toBe(true);
+  });
+
+  it('has an answer for every kind', () => {
+    for (const kind of COMMITMENT_KINDS) {
+      expect(typeof autoChecksPossible(kind)).toBe('boolean');
+    }
+  });
+});
+
+describe('a draft the database would accept', () => {
+  it('daily, named', () => {
+    expect(draftProblems(draft())).toEqual([]);
+  });
+
+  it('weekly quota with both targets', () => {
+    expect(
+      draftProblems(draft({ cadence: 'weekly_quota', weeklyTarget: 3, weekStartDay: 1 })),
+    ).toEqual([]);
+  });
+
+  it('daily hours quota with minutes', () => {
+    expect(draftProblems(draft({ cadence: 'daily_hours_quota', dailyMinutesTarget: 180 }))).toEqual(
+      [],
+    );
+  });
+});
+
+describe('a draft the database would refuse', () => {
+  it.each([
+    ['a blank name', draft({ name: '   ' })],
+    ['weekly quota with no target', draft({ cadence: 'weekly_quota', weekStartDay: 1 })],
+    ['weekly quota with no week start', draft({ cadence: 'weekly_quota', weeklyTarget: 3 })],
+    ['weekly target of zero', draft({ cadence: 'weekly_quota', weeklyTarget: 0, weekStartDay: 1 })],
+    [
+      'weekly target of eight',
+      draft({ cadence: 'weekly_quota', weeklyTarget: 8, weekStartDay: 1 }),
+    ],
+    [
+      'a fractional weekly target',
+      draft({ cadence: 'weekly_quota', weeklyTarget: 2.5, weekStartDay: 1 }),
+    ],
+    ['a week start of zero', draft({ cadence: 'weekly_quota', weeklyTarget: 3, weekStartDay: 0 })],
+    ['a week start of eight', draft({ cadence: 'weekly_quota', weeklyTarget: 3, weekStartDay: 8 })],
+    ['hours quota with no minutes', draft({ cadence: 'daily_hours_quota' })],
+    ['zero minutes', draft({ cadence: 'daily_hours_quota', dailyMinutesTarget: 0 })],
+    ['negative minutes', draft({ cadence: 'daily_hours_quota', dailyMinutesTarget: -30 })],
+  ])('%s', (_label, bad) => {
+    expect(draftProblems(bad).length).toBeGreaterThan(0);
+  });
+
+  it('a target left over from another cadence', () => {
+    // The likeliest way to produce one: pick weekly, type a target, switch to daily.
+    const stale = draft({ cadence: 'daily', weeklyTarget: 3, weekStartDay: 1 });
+    expect(draftProblems(stale).length).toBeGreaterThan(0);
+  });
+});
+
+describe('switching cadence', () => {
+  it('clears the targets the previous cadence needed', () => {
+    const weekly = draft({ cadence: 'weekly_quota', weeklyTarget: 3, weekStartDay: 1 });
+    const daily = withCadence(weekly, 'daily');
+
+    expect(daily.weeklyTarget).toBeNull();
+    expect(daily.weekStartDay).toBeNull();
+    expect(draftProblems(daily)).toEqual([]);
+  });
+
+  it('keeps a target the new cadence still needs', () => {
+    const hours = draft({ cadence: 'daily_hours_quota', dailyMinutesTarget: 180 });
+    expect(withCadence(hours, 'daily_hours_quota').dailyMinutesTarget).toBe(180);
+  });
+
+  it('leaves the name and the money flag alone', () => {
+    const original = draft({ name: 'Company work', carriesPenalty: true });
+    const switched = withCadence(original, 'daily_hours_quota');
+    expect(switched.name).toBe('Company work');
+    expect(switched.carriesPenalty).toBe(true);
+  });
+});
+
+describe('the row that reaches the database', () => {
+  it('trims the name', () => {
+    const row = toRow(draft({ name: '  Gym  ' }), 'owner-1', 'key-1');
+    expect(row.name).toBe('Gym');
+  });
+
+  it('carries the owner and the idempotency key', () => {
+    const row = toRow(draft(), 'owner-1', 'key-1');
+    expect(row.owner_id).toBe('owner-1');
+    expect(row.idempotency_key).toBe('key-1');
+  });
+
+  it('uses the column names the migration declares', () => {
+    const row = toRow(
+      draft({ cadence: 'weekly_quota', weeklyTarget: 3, weekStartDay: 1 }),
+      'o',
+      'k',
+    );
+    expect(Object.keys(row).sort()).toEqual(
+      [
+        'carries_penalty',
+        'cadence',
+        'daily_minutes_target',
+        'idempotency_key',
+        'kind',
+        'name',
+        'owner_id',
+        'week_start_day',
+        'weekly_target',
+      ].sort(),
+    );
+  });
+});
+
+describe('the five starting commitments from the PRD', () => {
+  // If the shape cannot express the set the product ships with, the shape is wrong.
+  it.each([
+    ['No fap', draft({ name: 'No fap', kind: 'abstain', cadence: 'daily', carriesPenalty: true })],
+    [
+      'Gym',
+      draft({
+        name: 'Gym',
+        kind: 'do',
+        cadence: 'weekly_quota',
+        weeklyTarget: 3,
+        weekStartDay: 1,
+        carriesPenalty: true,
+      }),
+    ],
+    ['TryHackMe', draft({ name: 'TryHackMe', kind: 'do', cadence: 'daily', carriesPenalty: true })],
+    ['Morning exercise', draft({ name: 'Morning exercise', kind: 'do', cadence: 'daily' })],
+    [
+      'Company work',
+      draft({
+        name: 'Company work',
+        kind: 'open_ended',
+        cadence: 'daily_hours_quota',
+        dailyMinutesTarget: 180,
+      }),
+    ],
+  ])('%s is expressible and valid', (_name, commitment) => {
+    expect(draftProblems(commitment)).toEqual([]);
+  });
+
+  it('records three hours as 180 minutes, not 3', () => {
+    const work = draft({ cadence: 'daily_hours_quota', dailyMinutesTarget: 180 });
+    expect(toRow(work, 'o', 'k').daily_minutes_target).toBe(180);
+  });
+});
