@@ -2,7 +2,7 @@
 title: 'Story 3.2 — Know where the hours stand without opening anything'
 type: 'feature'
 created: '2026-08-20'
-status: 'ready-for-dev'
+status: 'done'
 baseline_commit: 'a400e52457601ec9ea67543ac5af15279072d0a9'
 review_loop_iteration: 0
 story_key: '3-2-know-where-the-hours-stand-without-opening-anything'
@@ -182,21 +182,21 @@ Height reuses `--space-2` (8px) rather than a new size token.
 
 **Execution:**
 
-- [ ] `EXPERIENCE.md` — add the progress-sentence template (`<name>, <banked> of <target>, as of
+- [x] `EXPERIENCE.md` — add the progress-sentence template (`<name>, <banked> of <target>, as of
       <time>.`) alongside the existing KF-2 example, per UX-DR26 (D2).
-- [ ] `supabase/migrations/20260820120000_a_prompt_reads_the_view_it_was_promised.sql` —
+- [x] `supabase/migrations/20260820120000_a_prompt_reads_the_view_it_was_promised.sql` —
       `focus_prompt_slots()`, `enqueue_focus_prompts()` (D1, D2), a small `minutes_as_clock(integer)`
       formatting helper mirroring `formatDuration`, cron registration, trailing revokes.
-- [ ] `supabase/tests/3-2-focus-prompt.sql` — the matrix's database rows: before/after the prompt
+- [x] `supabase/tests/3-2-focus-prompt.sql` — the matrix's database rows: before/after the prompt
       hour, the 22→23 cap, target-met silence, the four-slot bound, two commitments enqueuing
       independently, the retried-pass no-op, and an archived commitment excluded.
-- [ ] `lib/focus-session.ts` + test — a clamped-0-to-100 percentage helper alongside the existing
+- [x] `lib/focus-session.ts` + test — a clamped-0-to-100 percentage helper alongside the existing
       duration formatters.
-- [ ] `app/tokens.css` — `--motion-duration`, the first motion token, with a one-line comment naming
+- [x] `app/tokens.css` — `--motion-duration`, the first motion token, with a one-line comment naming
       what it is for and that nothing else in the product uses it yet.
-- [ ] `app/globals.css` — the bar's track/fill classes (D5) and the `prefers-reduced-motion` block
+- [x] `app/globals.css` — the bar's track/fill classes (D5) and the `prefers-reduced-motion` block
       that removes the transition (D4).
-- [ ] `components/focus-session.tsx` + test — the bar rendered beside `Banked today`, capped at 100%
+- [x] `components/focus-session.tsx` + test — the bar rendered beside `Banked today`, capped at 100%
       width when over target, and not a second announcement of the same number the row's
       `aria-label` already carries.
 
@@ -245,3 +245,105 @@ product does not have, the same objection Story 2.9 raised about naming a chain 
   and confirm a push arrives stating the target, not merely "start."
 - Enable Reduce Motion in iOS Settings, open the Focus Session screen with minutes already banked,
   and confirm the bar is simply present at its value rather than filling into place.
+
+## Verification record
+
+**Built and checked on 2026-08-20**, on the branch this spec was approved on.
+
+`npm test` — 581 passing across 30 files, up from 569. `npx tsc --noEmit`, `npm run lint` and
+`npm run format:check` all clean. All twelve files under `supabase/tests/` were re-run against a
+local stack and every one reports `PASS.`, including `2-2-commitment-rules.sql`'s untouched
+assertion that an hours quota is never declared. `supabase/tests/README.md`'s manifest table gained
+rows for `3-1-focus-session.sql` and this story's `3-2-focus-prompt.sql` — the first had shipped
+without one — closing a gap before a third story could leave it open too.
+
+**A three-layer review ran against the diff and found two real code defects — no `intent_gap`, no
+`bad_spec`.** One was severe: `commitment.name` is freeform text spliced directly into the
+notification body, and a name that happens to contain a phrase `push_body_is_sendable` refuses
+("right now", "just now", "currently", "at the moment") would have hit the table's own check
+constraint and raised an unhandled exception out of `enqueue_focus_prompts()` — a single statement,
+so every outbox row already enqueued that pass, for every doer account processed before the poisoned
+one, would have rolled back with it. One badly-named commitment could have silently broken the
+notification pipeline for the whole product, every hour, until renamed. Fixed by checking
+`push_body_is_sendable` before calling `outbox_enqueue` and skipping that one commitment, the same
+way every other disqualifying condition in the loop is already handled — and proven by a new step in
+`3-2-focus-prompt.sql` that poisons one commitment and confirms a second account, processed in the
+same call, still gets its row.
+
+The second was a fragile-but-currently-correct `NULL`/`coalesce` interaction: reading
+`focus_day_minutes` via `select ... into` left the target `NULL` on the zero-row case despite the
+`coalesce` inside the select list — verified directly against a live Postgres instance before asking
+for the fix — and the code only produced the right `"0:00"` output because `GREATEST` silently
+ignores `NULL` arguments and `continue when NULL` is treated as "don't skip." Both were accidents,
+not decisions. Rewritten as a scalar subquery so `coalesce` wraps the read directly; behavior is
+unchanged, but no longer depends on two unrelated NULL-propagation quirks nobody chose on purpose.
+
+**One finding evaluated and rejected.** A reviewer flagged `total !== null && percent !== null` in
+`components/focus-session.tsx` as redundant, since both derive from the identical `view.kind ===
+'ready'` gate. Checked before touching it: `total` and `percent` are two independently-computed
+`number | null` values, and TypeScript cannot infer that narrowing on one narrows the other — removing
+`percent !== null` would either fail `tsc` at the `${percent}%` template literal or require a type
+assertion, which is worse. Left as written.
+
+**One gap named rather than silently accepted, in `deferred-work.md`.** An account whose
+`morning_hour` is 21 or later gets fewer than the four hourly attempts every other account gets,
+because `focus_prompt_hour`'s cap at 23 (D1) interacts with the local-midnight boundary: the number
+of hours remaining in the calendar day shrinks as the derived prompt hour approaches it. This is a
+mechanical consequence of the already-approved cap — not a defect in the cap's own reasoning, which
+was specifically about not wrapping into the wrong day — and fixing the asymmetry (carrying a
+remaining-attempts count across midnight, or accepting fewer attempts as correct) is a design
+decision, not a patch.
+
+**Left for the author, because no file here can answer it.** Waiting past the prompt hour on the
+installed app with nothing banked, to confirm a push arrives stating the target; and enabling Reduce
+Motion in iOS Settings to confirm the quota bar is simply present at its value rather than filling
+into place. Both are why this story stays at `review` rather than moving itself to `done`.
+
+## Suggested Review Order
+
+**The reminder pipeline (D1, D2): one hourly pass, and the two defects review found in it**
+
+- The entry point: the whole pipeline's shape, copied from `enqueue_gate_reminders()`, and where
+  both review fixes landed.
+  [`20260820120000_a_prompt_reads_the_view_it_was_promised.sql:76`](../../supabase/migrations/20260820120000_a_prompt_reads_the_view_it_was_promised.sql#L76)
+
+- The severe fix: a freeform commitment name can trip `push_body_is_sendable`, and this is what
+  keeps one bad name from rolling back every account's row enqueued earlier the same pass.
+  [`20260820120000_a_prompt_reads_the_view_it_was_promised.sql:147`](../../supabase/migrations/20260820120000_a_prompt_reads_the_view_it_was_promised.sql#L147)
+
+- The NULL fix: a scalar subquery, not `select ... into`, because the view returns zero rows rather
+  than a null-`minutes` row when nothing is banked yet.
+  [`20260820120000_a_prompt_reads_the_view_it_was_promised.sql:122`](../../supabase/migrations/20260820120000_a_prompt_reads_the_view_it_was_promised.sql#L122)
+
+- D1's derivation on its own, checkable independent of the wall clock: three hours after
+  `morning_hour`, capped at 23 so a late hour never wraps into the wrong day.
+  [`20260820120000_a_prompt_reads_the_view_it_was_promised.sql:40`](../../supabase/migrations/20260820120000_a_prompt_reads_the_view_it_was_promised.sql#L40)
+
+- Proof both fixes hold together: a poisoned commitment is skipped, and a second account processed
+  in the same call still gets its row.
+  [`3-2-focus-prompt.sql:335`](../../supabase/tests/3-2-focus-prompt.sql#L335)
+
+**The bar (D4, D5): the product's first real motion, and the one media query that is all of Reduce
+Motion**
+
+- The clamped fraction the bar and the existing text total now share — one number, not two.
+  [`focus-session.ts:234`](../../lib/focus-session.ts#L234)
+
+- The transition and the token that drives it — the first duration this product has ever named.
+  [`globals.css:369`](../../app/globals.css#L369)
+
+- Where Reduce Motion actually lives: no JavaScript, one media query, nothing to fall out of sync
+  with the OS setting after first paint.
+  [`globals.css:381`](../../app/globals.css#L381)
+
+- The bar rendered beside the existing `Banked today` row, `aria-hidden` because the row's own
+  label already states the same fraction as text.
+  [`focus-session.tsx:373`](../../components/focus-session.tsx#L373)
+
+**Documentation kept in step with the code**
+
+- The new push template added to `EXPERIENCE.md` before being used, per UX-DR26.
+  [`EXPERIENCE.md`](../../_bmad-output/planning-artifacts/ux-designs/ux-todoapp-2026-08-11/EXPERIENCE.md)
+
+- The test manifest closing the gap Story 3.1 left open, one story before it could become two.
+  [`README.md:73`](../../supabase/tests/README.md#L73)

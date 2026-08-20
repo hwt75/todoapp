@@ -9,6 +9,7 @@ import {
   type QueuedFocusSession,
   type RunningSession,
   bankedAgainstTarget,
+  bankedPercent,
   clearRunning,
   elapsedLabel,
   elapsedSeconds,
@@ -305,6 +306,13 @@ export function FocusSession({
       ? bankedAgainstTarget(shownMinutes(view.bankedSeconds, waitingSeconds), view.targetMinutes)
       : null;
 
+  // Same numbers the text above derives from — AD-8's discipline in one screen: the bar and
+  // the total never compute their own, separate arithmetic.
+  const percent =
+    view.kind === 'ready'
+      ? bankedPercent(shownMinutes(view.bankedSeconds, waitingSeconds), view.targetMinutes)
+      : null;
+
   // The clock is offered unless this row provably cannot carry one. A failed read is not proof.
   const clockAvailable = view.kind === 'ready' || view.kind === 'unreadable';
 
@@ -362,10 +370,16 @@ export function FocusSession({
             </button>
           )}
 
-          {total !== null && (
+          {total !== null && percent !== null && (
             <div className="row" role="group" aria-label={`${FOCUS_COPY.banked}, ${total}`}>
               <div className="row-main">
                 <div className="row-name">{FOCUS_COPY.banked}</div>
+                {/* aria-hidden: the row's own aria-label above already states this fraction as
+                    text. A bar that spoke too would be a second announcement of the same
+                    number, not a second piece of information. */}
+                <div className="quota-bar" aria-hidden="true">
+                  <div className="quota-bar-fill" style={{ width: `${percent}%` }} />
+                </div>
               </div>
               <span className="row-muted" aria-hidden="true">
                 {total}

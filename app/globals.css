@@ -348,3 +348,38 @@ ul {
   font-variant-numeric: tabular-nums;
   margin: 0 0 var(--space-4);
 }
+
+/* The quota bar (Story 3.2, D4/D5) — the first fill this product has anywhere, sitting beside
+   the existing `Banked today` text rather than replacing it. `aria-hidden`: the row it lives in
+   already carries an `aria-label` stating the same fraction as text, and a bar that spoke too
+   would be a second announcement of the number the row already gives.
+
+   Track is `--surface-sunken`, the same tonal step every other sunken area in this product
+   uses. Fill is `--action-fill` — the bar fills with the colour of the button that deposits
+   the time. Radius is `--radius-default`, never `--radius-pill`: that silhouette is reserved
+   to non-interactive status labels, and a bar is neither a label nor pressable. */
+.quota-bar {
+  height: var(--space-2);
+  margin-top: var(--space-1);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-default);
+  overflow: hidden;
+}
+
+.quota-bar-fill {
+  height: 100%;
+  background: var(--action-fill);
+  border-radius: var(--radius-default);
+  /* D4: the only transition in the product, and only on this one property. */
+  transition: width var(--motion-duration) ease-out;
+}
+
+/* D4: Reduce Motion removes the transition outright rather than shortening it. The width still
+   updates on reload — nothing here is what draws the bar at its value, only what animates the
+   change to get there — and no JavaScript reads this media query, so there is nothing that can
+   fall out of sync with the OS setting after first paint. */
+@media (prefers-reduced-motion: reduce) {
+  .quota-bar-fill {
+    transition: none;
+  }
+}

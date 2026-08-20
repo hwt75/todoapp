@@ -83,6 +83,12 @@
   /* Hairline. 0.5px rather than 1px on purpose — at 1px a list of rows starts reading
      as a table, and this is meant to be quiet. */
   --hairline: 0.5px;
+
+  /* Motion. The first duration this product names — nothing else in it transitions or
+     animates. Only the quota bar (Story 3.2) reads this, and only when Reduce Motion is off;
+     `@media (prefers-reduced-motion: reduce)` removes the transition it drives entirely
+     rather than shortening it, so this value never has to be "fast enough to feel disabled". */
+  --motion-duration: 200ms;
 }
 
 @media (prefers-color-scheme: dark) {

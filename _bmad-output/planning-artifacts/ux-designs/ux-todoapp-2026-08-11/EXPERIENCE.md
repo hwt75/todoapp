@@ -236,6 +236,13 @@ taps, a Focus Session starts, and he works. **Climax:** fifty minutes later it b
 0:50 of 3:00 — no money involved, nothing policing where his attention went. **Resolution:** three
 more sessions meet the quota.
 
+*The prompt's literal template (Story 3.2, FR-5/FR-12), a configured hour after the fact rather
+than at 10:20 sharp: `<name>, <banked> of <target>, as of <time>.` — self-dated the same way
+every other push here is, so a copy sitting on the lock screen can be told from a new one.
+`Company work, 0:00 of 3:00, as of 10:20.` before the first session; `Company work, 0:50 of
+3:00, as of 12:40.` once something is banked. Nothing is sent once the target is met that day —
+this is the product's whole answer to a quota that succeeded.*
+
 **KF-3. Hoàng went to the gym and the phone says he did not.**
 *(Written against the location Auto-check, which v1 defers; the same flow runs today for the
 TryHackMe check. The beats are unchanged.)*

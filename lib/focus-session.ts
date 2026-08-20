@@ -220,6 +220,24 @@ export function bankedAgainstTarget(minutes: number, targetMinutes: number): str
 }
 
 /**
+ * The bar's fill, as a percentage clamped to the track it draws inside.
+ *
+ * `daily_minutes_target` is always positive on the one cadence that reaches this screen
+ * (`commitment_daily_hours_target` in `20260819150000_commitment.sql`), so this never divides
+ * by zero in practice — the zero-target guard exists so a bad read renders an empty bar rather
+ * than throwing on a screen whose clock and Stop control must still work.
+ *
+ * Capped at 100 rather than left to overflow: banked exceeding target is a real state (spec
+ * 3-2's matrix has 200 of 180) and the bar reads it as full, exactly as full as any other day
+ * that met its target. The text beside it, not the bar, is what still says `3:20 of 3:00`.
+ */
+export function bankedPercent(minutes: number, targetMinutes: number): number {
+  if (targetMinutes <= 0) return 0;
+  const ratio = (Math.max(0, minutes) / targetMinutes) * 100;
+  return Math.min(100, Math.max(0, ratio));
+}
+
+/**
  * What the screen may show while a stopped session is still queued.
  *
  * The database owns the day's total (AD-1) and this is the single exception, narrowly drawn: a

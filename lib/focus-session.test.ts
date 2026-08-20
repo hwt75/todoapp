@@ -5,6 +5,7 @@ import {
   type QueuedFocusSession,
   type RunningSession,
   bankedAgainstTarget,
+  bankedPercent,
   clearRunning,
   elapsedLabel,
   elapsedSeconds,
@@ -158,6 +159,29 @@ describe('how a duration reads', () => {
 
   it('states the day against the quota', () => {
     expect(bankedAgainstTarget(50, 180)).toBe('0:50 of 3:00');
+  });
+});
+
+describe("the bar's fraction", () => {
+  it('reads the same ratio the text does', () => {
+    expect(bankedPercent(50, 180)).toBeCloseTo((50 / 180) * 100);
+  });
+
+  it('caps at 100 when banked exceeds target, the same 200-of-180 the matrix names', () => {
+    // The text still reads the true number — 3:20 of 3:00 — this is only the bar's own fill.
+    expect(bankedPercent(200, 180)).toBe(100);
+  });
+
+  it('reads 100 exactly at the target, not a hair under from floating point', () => {
+    expect(bankedPercent(180, 180)).toBe(100);
+  });
+
+  it('never goes negative', () => {
+    expect(bankedPercent(-10, 180)).toBe(0);
+  });
+
+  it('renders an empty bar rather than dividing by zero for a target that cannot occur', () => {
+    expect(bankedPercent(50, 0)).toBe(0);
   });
 });
 

@@ -290,6 +290,43 @@ describe('banking', () => {
   });
 });
 
+describe('the bar', () => {
+  it('sits beside the banked total, reflecting the same fraction the text reads', async () => {
+    bankedSeconds = 3000; // 50 of 180
+    const { container } = render(view());
+    await screen.findByRole('group', { name: 'Banked today, 0:50 of 3:00' });
+
+    const fill = container.querySelector('.quota-bar-fill');
+    expect(fill).toHaveStyle({ width: `${(50 / 180) * 100}%` });
+  });
+
+  it('caps visually at 100% when banked exceeds target, while the text keeps the true number', async () => {
+    bankedSeconds = 200 * 60; // 200 of 180 — the matrix's own over-target row
+    const { container } = render(view());
+    await screen.findByRole('group', { name: 'Banked today, 3:20 of 3:00' });
+
+    const fill = container.querySelector('.quota-bar-fill');
+    expect(fill).toHaveStyle({ width: '100%' });
+  });
+
+  it('is hidden from assistive tech, since the row already announces the same number as text', async () => {
+    bankedSeconds = 3000;
+    const { container } = render(view());
+    await screen.findByRole('group', { name: 'Banked today, 0:50 of 3:00' });
+
+    expect(container.querySelector('.quota-bar')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('is absent when the total itself could not be read', async () => {
+    bankedError = { message: 'Failed to fetch' };
+    alreadyRunning();
+    const { container } = render(view());
+    await screen.findByText(FOCUS_COPY.stillRuns);
+
+    expect(container.querySelector('.quota-bar')).toBeNull();
+  });
+});
+
 describe('without a network', () => {
   beforeEach(() => {
     // No SQLSTATE: the server never reached a decision, so this is worth retrying.
