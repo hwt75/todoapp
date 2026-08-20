@@ -71,6 +71,25 @@ describe('a row reads as one sentence', () => {
   it.each(COMMITMENT_STATES.map((state) => [state]))('is non-empty for %s', (state) => {
     expect(rowLabel('Gym', state, false).length).toBeGreaterThan('Gym'.length);
   });
+
+  it('replaces the state-derived sentence with the override when one is given', () => {
+    // Spec 3-3, D3: a live quota position is not one of the five settled states, so a row
+    // showing it must not fall back to "not yet done today" while the pill beside it reads
+    // "1/3 · 3 days".
+    expect(rowLabel('Gym', 'not_yet', false, 0, '1 of 3 this week, 3 days left')).toBe(
+      'Gym, 1 of 3 this week, 3 days left',
+    );
+  });
+
+  it('still puts the chain and the money clause after an override, in the same order', () => {
+    expect(rowLabel('Gym', 'not_yet', true, 12, '1 of 3 this week, 3 days left')).toBe(
+      'Gym, 1 of 3 this week, 3 days left, holding 12 days, missing this costs money',
+    );
+  });
+
+  it('leaves every existing caller unaffected — omitting the override keeps the old wording', () => {
+    expect(rowLabel('Gym', 'not_yet', false)).toBe('Gym, not yet done today');
+  });
 });
 
 describe('the stylesheet keeps pills out of the button fills', () => {

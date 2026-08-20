@@ -2,7 +2,7 @@
 title: 'Story 3.3 — A weekly quota that counts down'
 type: 'feature'
 created: '2026-08-20'
-status: 'ready-for-dev'
+status: 'done'
 baseline_commit: '397da780862a06753855fa53094f2dcaa487cb8f'
 review_loop_iteration: 0
 story_key: '3-3-a-weekly-quota-that-counts-down'
@@ -194,3 +194,86 @@ reminder from one source.
 
 - Open Today with a Weekly Quota commitment mid-week and confirm the pill's colour is legibly distinct
   from a Failed Day's ledger entry, side by side.
+
+## Verification record
+
+**Built and checked on 2026-08-20**, on the branch this spec was approved on.
+
+`npm test` — 616 passing across 32 files, up from 581. `npx tsc --noEmit`, `npm run lint` and
+`npm run format:check` all clean. All thirteen files under `supabase/tests/` were re-run against a
+freshly reset local stack and every one reports `PASS.`, including the new
+`3-3-weekly-quota-progress.sql`.
+
+**One real permission defect found and fixed during implementation, verified by removing the fix and
+watching it break again.** `week_days_remaining` is called from inside `weekly_quota_progress`, a
+`security_invoker` view — which runs under the *caller's own* privileges, not the view owner's. The
+function's default grant had been revoked (matching every other pure helper in this codebase), so the
+first real read as `authenticated` failed with `permission denied for function
+week_days_remaining` rather than an empty, RLS-scoped result. Fixed with an explicit
+`grant execute ... to authenticated`, reasoned about at length in the migration's own comment. I
+confirmed the fix was load-bearing rather than defensive by reverting it and re-running the SQL test
+under `role = 'authenticated'`: it fails with exactly that error, every time, without the grant.
+
+**A three-layer review ran against the diff and found three real test-coverage gaps — no
+`intent_gap`, no `bad_spec`.** The view's week window was tested at its lower boundary (a held day the
+day before `week_start`, correctly excluded) but not its upper one; added a case proving a held day on
+`week_start + 7` — the *next* week's first day — does not count either. `daysRemaining = 0` (the
+week's last day, still unmet) had no test of its own, and is arguably the state that matters most;
+added three cases covering the label, the family (still `urgent`, never mistaken for met) and the
+spoken form. And the merge in `today.tsx` (`Object.fromEntries(quotas...)`) was only tested with one
+commitment at a time, which cannot expose a wrong key — added a case rendering a Weekly Quota row
+beside a Daily row in the same pass, proving each keeps its own data.
+
+**A major, unrelated defect surfaced while checking whether the new pill would read sensibly beside
+the existing day-chain, and is recorded in `deferred-work.md` rather than fixed here.**
+`commitments_owing()` excludes `daily_hours_quota` from daily settlement but never excludes
+`weekly_quota` — so a Weekly Quota commitment with `carries_penalty = true` is judged, and can be
+penalized, on any single day it is not declared `held`, directly contradicting FR-2 ("judged only at
+Week Close"). Traced to specific lines in `20260819220000_settlement.sql` and
+`20260819262000_summary_names_the_strongest_survivor.sql`, both untouched by this spec and both
+predating it. Out of scope here — this spec's own Boundaries require asking first before touching
+either function — and almost certainly belongs to Story 3.4, but the exclusion itself should probably
+land before 3.4 does, since it is what stops the wrong judgment from happening in the meantime.
+
+**Left for the author, because no file here can answer it.** Confirming the urgent pill reads legibly
+distinct from a failed Ledger entry, side by side, on the device. Also worth the author's own direct
+attention regardless of this story: checking whether any live Weekly Quota commitment has
+`carries_penalty` set, given the defect above.
+
+## Suggested Review Order
+
+**The view (D1): one source, verified against the story's own numbers rather than assumed**
+
+- The entry point: the whole story's central claim, verified against both of `EXPERIENCE.md` KF-6's
+  own numbers before being trusted.
+  [`20260820130000_the_week_counts_its_own_days.sql:32`](../../supabase/migrations/20260820130000_the_week_counts_its_own_days.sql#L32)
+
+- The permission fix found by testing, not by inspection — a `security_invoker` view runs its own
+  called functions under the caller's privileges, and this is what a real read needed.
+  [`20260820130000_the_week_counts_its_own_days.sql:58`](../../supabase/migrations/20260820130000_the_week_counts_its_own_days.sql#L58)
+
+- The view itself: one `held` count, scoped to the week `week_days_remaining` measures against, RLS
+  doing the account-scoping rather than a filter of its own.
+  [`20260820130000_the_week_counts_its_own_days.sql:80`](../../supabase/migrations/20260820130000_the_week_counts_its_own_days.sql#L80)
+
+- Proof the window's both edges hold, not just the lower one — the case review added.
+  [`3-3-weekly-quota-progress.sql:258`](../../supabase/tests/3-3-weekly-quota-progress.sql#L258)
+
+**The pill (D2): always urgent while open, held the moment it is won**
+
+- The formatting this story adds no new arithmetic to — three numbers in, a label and a family out.
+  [`weekly-quota.ts:60`](../../lib/weekly-quota.ts#L60)
+
+- The family switch itself, and why `≥` rather than `=` guards it.
+  [`weekly-quota.ts:87`](../../lib/weekly-quota.ts#L87)
+
+**Wiring (D3): one optional override, every existing caller untouched**
+
+- `StatusPill`'s new escape hatch from a settlement verdict it was never meant to carry.
+  [`status-pill.tsx:22`](../../components/status-pill.tsx#L22)
+
+- Where the override and the spoken label are built, so a screen reader and a sighted reader agree.
+  [`commitment-row.tsx:67`](../../components/commitment-row.tsx#L67)
+
+- The new parallel read, following the same pattern `chain_current`/`penalty_current` already set.
+  [`today.tsx:63`](../../components/today.tsx#L63)

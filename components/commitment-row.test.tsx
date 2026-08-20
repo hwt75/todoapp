@@ -84,6 +84,39 @@ describe('a commitment row', () => {
     expect(screen.queryByText(/0\/3/)).not.toBeInTheDocument();
   });
 
+  it('shows the live position once one is supplied, and states it aloud too', () => {
+    // The sibling of the guard above: `weekly_quota_progress` (spec 3-3) is a source the row
+    // is allowed to draw from, unlike a client-side tally. `3×` from the target string still
+    // shows in the muted line — quotaPosition replaces the pill and the spoken sentence, not
+    // the setup line beneath the name.
+    render(
+      <CommitmentRow
+        commitment={{ ...gym, cadence: 'weekly_quota', weekly_target: 3 }}
+        state="not_yet"
+        quotaPosition={{ held: 1, target: 3, daysRemaining: 3 }}
+      />,
+    );
+
+    expect(screen.getByText('1/3 · 3 days')).toBeInTheDocument();
+    expect(screen.getByText(/3×/)).toBeInTheDocument();
+    expect(screen.getByRole('group')).toHaveAccessibleName('Gym, 1 of 3 this week, 3 days left');
+  });
+
+  it('flips the live position to the met label and family once the target is reached', () => {
+    render(
+      <CommitmentRow
+        commitment={{ ...gym, cadence: 'weekly_quota', weekly_target: 3 }}
+        state="not_yet"
+        quotaPosition={{ held: 3, target: 3, daysRemaining: 4 }}
+      />,
+    );
+
+    const pill = screen.getByText('3/3');
+    expect(pill).toHaveClass('pill-held');
+    expect(screen.queryByText(/day/)).not.toBeInTheDocument();
+    expect(screen.getByRole('group')).toHaveAccessibleName('Gym, 3 of 3 this week, held');
+  });
+
   it('is a group until it has somewhere to go, and then it is a button', () => {
     const { rerender } = render(<CommitmentRow commitment={gym} state="not_yet" />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();

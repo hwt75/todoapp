@@ -85,16 +85,24 @@ export function stateToday(_commitment: { cadence: CommitmentCadence }): Commitm
  *
  * VoiceOver announcing "Gym" and then "Not yet" as separate elements makes the user
  * assemble the sentence themselves, every row, every morning.
+ *
+ * `spokenOverride` replaces `STATE_PRESENTATION[state].spoken` when present — the parallel to
+ * `StatusPill`'s own `override` prop (spec 3-3, D3). A live quota position such as
+ * `1/3 · 3 days` is not one of the five settled states `stateToday` can honestly return, so
+ * without this the row would fall back to "not yet done today" while the pill beside it says
+ * something else entirely. Every existing caller is unaffected: omitting it keeps the state
+ * table's own wording exactly as before.
  */
 export function rowLabel(
   name: string,
   state: CommitmentState,
   costsMoney: boolean,
   chainDays = 0,
+  spokenOverride?: string,
 ): string {
   // Name, state, then chain — the order `EXPERIENCE.md` § Accessibility specifies, and the
   // order they matter in. The chain is history; it must not arrive before what today is.
-  const parts = [name, STATE_PRESENTATION[state].spoken];
+  const parts = [name, spokenOverride ?? STATE_PRESENTATION[state].spoken];
   const chain = chainSpoken(chainDays);
   if (chain) parts.push(chain);
   if (costsMoney) parts.push('missing this costs money');

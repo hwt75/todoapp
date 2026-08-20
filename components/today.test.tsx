@@ -53,6 +53,7 @@ beforeEach(() => {
   rows.commitment = { data: [gym], error: null };
   rows.penalty_current = { data: [], error: null };
   rows.chain_current = { data: [], error: null };
+  rows.weekly_quota_progress = { data: [], error: null };
 });
 
 describe('the today screen', () => {
@@ -65,8 +66,12 @@ describe('the today screen', () => {
     // took back. Same for the chain, which is derived in exactly one place.
     expect(seen).toContain('penalty_current');
     expect(seen).toContain('chain_current');
+    // And the live weekly-quota position (spec 3-3), the same discipline: one source, never
+    // a client-side tally of raw declaration rows.
+    expect(seen).toContain('weekly_quota_progress');
     expect(seen).not.toContain('penalty');
     expect(seen).not.toContain('settlement_commitment');
+    expect(seen).not.toContain('declaration');
   });
 
   it('announces the commitments before the debt, whatever the layout shows', async () => {
@@ -120,6 +125,86 @@ describe('the today screen', () => {
     // beside it is yesterday's number, which is a different claim and an allowed one.
     expect(await screen.findByRole('button', { name: /Gym/ })).toHaveAccessibleName(
       'Gym, not yet done today, holding 4 days, missing this costs money',
+    );
+  });
+
+  it('merges a weekly quota row into the commitment it belongs to, by commitment_id', async () => {
+    const weeklyGym = {
+      id: 'c1',
+      name: 'Gym',
+      cadence: 'weekly_quota',
+      carries_penalty: false,
+      weekly_target: 3,
+      daily_minutes_target: null,
+    };
+    rows.commitment = { data: [weeklyGym], error: null };
+    rows.weekly_quota_progress = {
+      data: [{ commitment_id: 'c1', held: 1, target: 3, days_remaining: 3 }],
+      error: null,
+    };
+
+    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
+
+    // The pill reads the live position, and the row's one accessibility label states the same
+    // thing aloud rather than falling back to "not yet done today" beside it.
+    expect(await screen.findByText('1/3 · 3 days')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Gym/ })).toHaveAccessibleName(
+      'Gym, 1 of 3 this week, 3 days left',
+    );
+  });
+
+  it('keys a weekly quota row correctly when a non-quota row shares the render', async () => {
+    // The realistic shape: most accounts have a mix of cadences on Today at once. This is the
+    // only case that can expose a wrong key in `Object.fromEntries(quotas...)` — a single-row
+    // fixture can accidentally pass even with the wrong commitment_id, or with `quotas` merged
+    // by array position rather than by id.
+    const weeklyGym = {
+      id: 'c1',
+      name: 'Gym',
+      cadence: 'weekly_quota',
+      carries_penalty: false,
+      weekly_target: 3,
+      daily_minutes_target: null,
+    };
+    const dailyReading = {
+      id: 'c2',
+      name: 'Reading',
+      cadence: 'daily',
+      carries_penalty: false,
+      weekly_target: null,
+      daily_minutes_target: null,
+    };
+    rows.commitment = { data: [weeklyGym, dailyReading], error: null };
+    rows.weekly_quota_progress = {
+      data: [{ commitment_id: 'c1', held: 1, target: 3, days_remaining: 3 }],
+      error: null,
+    };
+
+    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
+
+    // The weekly row reads its own position, by its own id.
+    expect(await screen.findByText('1/3 · 3 days')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Gym/ })).toHaveAccessibleName(
+      'Gym, 1 of 3 this week, 3 days left',
+    );
+
+    // The daily row, which `weekly_quota_progress` has no row for at all, must keep its
+    // ordinary state-derived rendering rather than inheriting Gym's position or going blank.
+    expect(screen.getByRole('button', { name: /Reading/ })).toHaveAccessibleName(
+      'Reading, not yet done today',
+    );
+    // Exactly one quota pill on screen — the merge did not fan the one quota row out to both
+    // commitments.
+    expect(screen.getAllByText('1/3 · 3 days')).toHaveLength(1);
+  });
+
+  it('leaves a commitment with no weekly-quota row exactly as before', async () => {
+    // `gym` here is a Daily commitment, so `weekly_quota_progress` has nothing for it — the
+    // merge must not invent a position for a commitment the view was never asked about.
+    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: /Gym/ })).toHaveAccessibleName(
+      'Gym, not yet done today, missing this costs money',
     );
   });
 

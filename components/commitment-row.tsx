@@ -2,6 +2,11 @@ import { StatusPill } from '@/components/status-pill';
 import { chainLabel } from '@/lib/chain';
 import { CADENCE_LABELS, type CommitmentCadence } from '@/lib/commitment';
 import { rowLabel, type CommitmentState } from '@/lib/commitment-state';
+import {
+  weeklyQuotaOverride,
+  weeklyQuotaSpoken,
+  type WeeklyQuotaPosition,
+} from '@/lib/weekly-quota';
 
 export interface RowCommitment {
   id: string;
@@ -42,6 +47,7 @@ export function CommitmentRow({
   state,
   chainDays = 0,
   onOpen,
+  quotaPosition,
 }: {
   commitment: RowCommitment;
   state: CommitmentState;
@@ -49,8 +55,24 @@ export function CommitmentRow({
   chainDays?: number;
   /** Opens the Chains detail. Without it the row stays a group rather than a control. */
   onOpen?: (commitment: RowCommitment) => void;
+  /**
+   * A Weekly Quota commitment's live position from `weekly_quota_progress` (spec 3-3). When
+   * given, it replaces the pill and the row's spoken sentence via `StatusPill`'s `override` and
+   * `rowLabel`'s `spokenOverride` — `state` itself is untouched, since a live position is not
+   * one of the five settled states `stateToday` can honestly return (D3). Without it the row
+   * keeps its AD-8 guard exactly as before: a target, never a progress it cannot know.
+   */
+  quotaPosition?: WeeklyQuotaPosition;
 }) {
-  const label = rowLabel(commitment.name, state, commitment.carries_penalty, chainDays);
+  const override = quotaPosition ? weeklyQuotaOverride(quotaPosition) : undefined;
+  const spokenOverride = quotaPosition ? weeklyQuotaSpoken(quotaPosition) : undefined;
+  const label = rowLabel(
+    commitment.name,
+    state,
+    commitment.carries_penalty,
+    chainDays,
+    spokenOverride,
+  );
   const chain = chainLabel(chainDays);
 
   const inside = (
@@ -69,7 +91,7 @@ export function CommitmentRow({
           {chain}
         </div>
       )}
-      <StatusPill state={state} />
+      <StatusPill state={state} override={override} />
     </>
   );
 
