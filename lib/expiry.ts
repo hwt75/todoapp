@@ -7,7 +7,13 @@
  * Day applied afterwards, which is a recorded act with a count, rather than a clock that
  * stretches for whoever asks.
  *
- * Mirrors `public.declaration_deadline`, and the tests hold them together.
+ * **Not production code, and nothing holds it to the rule it copies.** The deadline that
+ * decides anything is `public.declaration_deadline`
+ * (`supabase/migrations/20260819241000_expiry_and_supersession.sql`). Nothing in `app/` or
+ * `components/` imports this file; `expiry.test.ts` exercises the TypeScript and never runs
+ * the SQL, so the earlier claim here — that the tests hold the two together — was false. It
+ * is kept as a readable statement of the rule. If the two ever disagree, the function is
+ * right and this file is a bug.
  */
 
 import { ZONE, previousDay } from './declaration';

@@ -19,6 +19,13 @@ Prose explains why; this is what proves it, on the next machine and in six month
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/2-5-settlement.sql
 ```
 
+Against the local stack there is no `psql` on the host, so the container's own is used — the
+form every result in this project has been produced with:
+
+```
+docker exec -i supabase_db_todoapp psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/2-5-settlement.sql
+```
+
 Each file is one transaction that **rolls back at the end**. Nothing persists, no account needs
 deleting afterwards, and a crash mid-run leaves the database as it was.
 
@@ -29,7 +36,7 @@ the failure a non-zero exit code.
 ## Where they can run — and where they cannot
 
 **Not against the author's own project.** `settle_day` refuses `p_override` whenever it meets a
-profile with `is_live_doer` set, and it *raises* rather than skipping that account
+profile with `is_live_doer` set, and it _raises_ rather than skipping that account
 (`20260819241000_expiry_and_supersession.sql:105-110`) — so one live account disables the override
 path for the entire call. The only way past it is to set `app.settlement_invocation` by hand, which
 is precisely what AD-16 exists to prevent.
@@ -37,28 +44,44 @@ is precisely what AD-16 exists to prevent.
 That leaves a local stack or a preview branch:
 
 ```
-npx supabase init        # no supabase/config.toml exists yet
-npx supabase start       # needs Docker
+npx supabase start       # needs Docker Desktop running
 npx supabase db reset    # applies every migration in order
 ```
+
+`supabase/config.toml` is committed, and its ports are **not** the CLI defaults: on this
+Windows machine 54321-54324 fall inside a Hyper-V reserved range and the database container
+cannot bind them (`bind: An attempt was made to access a socket in a way forbidden by its
+access permissions`). Everything is moved to 553xx. `netsh int ipv4 show excludedportrange
+protocol=tcp` lists the ranges to avoid if they ever move again.
 
 Every file's first step checks for a live doer account and refuses with that explanation rather
 than failing somewhere confusing later.
 
 ## What is here
 
-| File | Covers |
-|---|---|
-| `2-5-settlement.sql` | One Failed Day costs exactly one 500,000₫ penalty however many commitments were missed (FR-13); an all-held day is clean and a penalty-free miss costs nothing; a day still being answered stays open and announces nothing (FR-10); a retried or overlapped pass is a no-op (AD-5); both AD-16 guards refuse; the settlement tables carry no write policy (AD-8). |
-| `2-7-supersession.sql` | An answer given in time but delivered after the deadline takes back the expiry, the penalty stops counting, and **the day comes back to the chain** — the last of which is the question the retrospective could not answer by reading. |
+| File                        | Covers                                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `2-5-settlement.sql`        | One Failed Day costs exactly one 500,000₫ penalty however many commitments were missed (FR-13); an all-held day is clean and a penalty-free miss costs nothing; a day still being answered stays open and announces nothing (FR-10); a retried or overlapped pass is a no-op (AD-5); both AD-16 guards refuse; the settlement tables carry no write policy (AD-8). |
+| `2-7-supersession.sql`      | An answer given in time but delivered after the deadline takes back the expiry, the penalty stops counting, and **the day comes back to the chain** — the last of which is the question the retrospective could not answer by reading.                                                                                                                             |
+| `2-9-chain-calendar.sql`    | A superseded day is drawn once, as what it turned out to be, and `chain_current` and `settlement_commitment_current` cannot disagree about it — the database half of A2.                                                                                                                                                                                           |
+| `2-4a-outbox-body-rule.sql` | A notification body that describes the present, or carries no time or named day, cannot reach the queue — and both sentences the product really sends still can.                                                                                                                                                                                                   |
 
-Neither file has been executed yet. They were written on 2026-08-20 on a machine with no `psql`,
-`docker` or `supabase` binary available, so they have never been parsed by a server. Treat them as
-unverified until each has run once; the first run is as likely to find a mistake in the fixture as
-in the product.
+**All four pass**, run on 2026-08-20 against a local stack with all 22 migrations applied from
+scratch. The first run of `2-7-supersession.sql` did not: it failed at step 4 with `A1 CONFIRMED`,
+which is what it was written to do. `supersede_expiries()` wrote a correction carrying no frozen
+outcomes, so a day answered in time and delivered late dropped out of the chain entirely. Fixed in
+`20260820102000_supersession_freezes_the_day.sql`, and the file that found it is now the file that
+holds it.
 
 ## Still uncovered
 
 Story 2.1's RLS and role helpers, 2.2's constraints and cross-account writes, 2.4a's
-`outbox_claim` skip-locked behaviour, 2.8's summary copy, and 2.9's chain arithmetic. Each was
-verified by hand once, and each has a paragraph rather than a file.
+`outbox_claim` skip-locked behaviour, 2.8's summary copy, and 2.9's chain arithmetic over more
+than one day. Each was verified by hand once, and each has a paragraph rather than a file.
+
+**One thing these files deliberately do not assert: table grants.** The local stack's default
+privileges differ from the author's project — `authenticated` has no `select` on any application
+table here, while on the live project Supabase's defaults granted it — so a grant assertion would
+test the environment rather than the product. That divergence is itself a finding and is recorded
+in `deferred-work.md`. Policies, `security_invoker` and RLS being enabled are asserted, because
+those live in migrations and travel.

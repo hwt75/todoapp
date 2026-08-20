@@ -15,6 +15,14 @@
  *   - **Exactly one suggestion**, naming a specific commitment. Two is a to-do list.
  *   - **The amount once, after the fact.** Never while asking a question — that is the
  *     morning gate's rule and this message is the only place money may be named at all.
+ *
+ * **Not production code.** The sentence that actually reaches a lock screen is built by
+ * `public.day_summary_body` and queued by `settle_day`
+ * (`supabase/migrations/20260819262000_summary_names_the_strongest_survivor.sql`); nothing
+ * outside this module's own test imports what is below. The cost of the arrangement is on
+ * the record: the two copies disagreed about a thousands separator within minutes of being
+ * written, and the wrong one was the one he would have read. If they disagree again, the
+ * function is right.
  */
 
 import { formatDong } from './money';
