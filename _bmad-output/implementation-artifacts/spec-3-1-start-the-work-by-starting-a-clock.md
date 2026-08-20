@@ -2,7 +2,7 @@
 title: 'Story 3.1 — Start the work by starting a clock'
 type: 'feature'
 created: '2026-08-20'
-status: 'draft'
+status: 'ready-for-dev'
 baseline_commit: 'a799d7f98a7ae59fdf0bb313459948ef55c9503b'
 review_loop_iteration: 0
 story_key: '3-1-start-the-work-by-starting-a-clock'
@@ -12,6 +12,13 @@ context:
 ---
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+
+> **APPROVED 2026-08-20 by tmtuan123** — all six decisions, and the full spec kept rather than split.
+> It runs to roughly 4,300 tokens against the workflow's 1,600 proposal; the scope standard only
+> splits a spec carrying two independently shippable deliverables, and this is one goal reaching
+> across the database, `lib/` and one surface. Frozen from here.
+>
+> Stamped in its own commit, before any implementation, as Story 3.0 was (retro P2b).
 
 ## Intent
 
