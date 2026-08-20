@@ -634,6 +634,46 @@ what that story deliberately left out.*
 The author can commit to time rather than completion, and the two remaining cadences work: a weekly
 quota that counts down as days run out, and a week that closes on its own terms.
 
+### Story 3.0: Change the hour I am asked, and see what is switched off
+
+As the author,
+I want a Settings surface that lets me move the morning hour and shows me what is currently
+switched off,
+So that the one blocking question in this product arrives when I am awake, and I can tell whether
+it will arrive at all.
+
+*Added 2026-08-20, after the Epic 2 retrospective. Story 2.4 declared the morning hour
+"configurable from Settings, per UX-DR17"; no Settings surface was built, and the omission was
+neither deferred nor recorded (A3). The team discussion found the gap larger than one file: the
+product has no Settings surface at all, the gate is pinned at 07:00 with no way to move it, and
+notification permission is granted only through Story 1.2's diagnostic push probe (T2). It sits at
+the front of Epic 3 because the two stories after it schedule reminders against that same hour.*
+
+**Acceptance Criteria:**
+
+**Given** the morning hour that decides when I am asked
+**When** I change it from Settings
+**Then** it is written to my own profile through the column grant that already exists, and the
+morning gate and its reminders both follow it from the next day
+**And** an hour outside 0–23 is refused by the database rather than by the form alone
+
+**Given** the Settings surface
+**Then** it shows notification permission state and home-screen install state, each with what
+breaks if it is off, in plain language rather than as a toggle alone, per UX-DR17 and
+`EXPERIENCE.md` § Settings
+**And** install state is the row that matters most: without home-screen installation there is no
+push at all, and without push there is no product
+
+**Given** notification permission has never been asked for
+**When** I grant it from Settings
+**Then** it is granted from inside the installed app, and the push probe stops being the only
+route to a subscription
+**And** a refusal says which answer the browser gave, because iOS does not offer the prompt twice
+
+**Given** a row this epic cannot yet fill — referee pairing, grace days remaining
+**Then** it is absent rather than shown empty or disabled, and the spec records which rows were
+left out and which story brings each one
+
 ### Story 3.1: Start the work by starting a clock
 
 As the author,
