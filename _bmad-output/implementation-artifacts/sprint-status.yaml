@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-20-2026 12:20
+last_updated: 08-20-2026 12:40
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -42,7 +42,7 @@ development_status:
   epic-1-retrospective: done
 
   epic-2: in-progress
-  2-1-sign-in-as-the-doer: review
+  2-1-sign-in-as-the-doer: done
   2-2-create-and-edit-a-commitment: done
   2-3-see-today-and-the-row-and-pill-everything-else-reuses: done
   2-4a-the-outbox-and-its-worker: review
