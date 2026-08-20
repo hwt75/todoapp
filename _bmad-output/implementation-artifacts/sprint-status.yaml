@@ -159,7 +159,7 @@ action_items:
     action: "Stamp spec approval in its own commit, separate from the implementation
       commit (P2b)"
     owner: "hwt75"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
   - id: "epic-2-retro-item-13-restore-the-commit-key-convention-full-s"
     epic: 2
