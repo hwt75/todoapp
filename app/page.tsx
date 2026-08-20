@@ -9,6 +9,7 @@ import { Today } from '@/components/today';
 import { Ledger } from '@/components/ledger';
 import { Settings } from '@/components/settings';
 import { ChainsDetail } from '@/components/chains-detail';
+import { FocusSession } from '@/components/focus-session';
 import { readInstallSignals, resolveInstallState, type InstallState } from '@/lib/install-state';
 import { useGate } from '@/lib/use-gate';
 
@@ -19,6 +20,7 @@ export default function Home() {
   const [showLedger, setShowLedger] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [chainOf, setChainOf] = useState<{ id: string; name: string } | null>(null);
+  const [focusOf, setFocusOf] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     try {
@@ -59,7 +61,14 @@ export default function Home() {
   return (
     <main>
       {ownerId &&
-        (chainOf ? (
+        (focusOf ? (
+          <FocusSession
+            ownerId={ownerId}
+            commitmentId={focusOf.id}
+            name={focusOf.name}
+            onClose={() => setFocusOf(null)}
+          />
+        ) : chainOf ? (
           <ChainsDetail
             commitmentId={chainOf.id}
             name={chainOf.name}
@@ -78,6 +87,7 @@ export default function Home() {
             <Today
               onOpenLedger={() => setShowLedger(true)}
               onOpenChain={(c) => setChainOf({ id: c.id, name: c.name })}
+              onOpenFocus={(c) => setFocusOf({ id: c.id, name: c.name })}
             />
             {/* Not on the Today screen itself: that surface answers "where do I stand" and
                 nothing else belongs in it. A settings link inside it would be the first thing

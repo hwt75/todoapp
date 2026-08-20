@@ -57,7 +57,7 @@ beforeEach(() => {
 
 describe('the today screen', () => {
   it('reads the money and the chains through the views that follow a correction', async () => {
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} />);
+    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
     await screen.findByRole('button', { name: /Gym/ });
 
     // `penalty_current`, never `penalty`: a penalty attached to a superseded verdict is
@@ -72,7 +72,9 @@ describe('the today screen', () => {
   it('announces the commitments before the debt, whatever the layout shows', async () => {
     rows.penalty_current = { data: [{ amount_dong: 500000 }], error: null };
 
-    const { container } = render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} />);
+    const { container } = render(
+      <Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
     await screen.findByRole('button', { name: /Gym/ });
 
     const order = [...container.querySelectorAll('.today-rows, .debt-block')].map(
@@ -84,7 +86,7 @@ describe('the today screen', () => {
   });
 
   it('says nothing at all when nothing is owed', async () => {
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} />);
+    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
     await screen.findByRole('button', { name: /Gym/ });
 
     // A large `0` in failed-tint is a decoration that says nothing and charges him the
@@ -99,7 +101,7 @@ describe('the today screen', () => {
     };
     const onOpenLedger = vi.fn();
 
-    render(<Today onOpenLedger={onOpenLedger} onOpenChain={vi.fn()} />);
+    render(<Today onOpenLedger={onOpenLedger} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
 
     const debt = await screen.findByRole('button', { name: /Owed since you started/ });
     // One label rather than three fragments, and the total is a sum of what still stands.
@@ -112,7 +114,7 @@ describe('the today screen', () => {
   it('never claims a verdict for a day that has not ended', async () => {
     rows.chain_current = { data: [{ commitment_id: 'c1', current_days: 4 }], error: null };
 
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} />);
+    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
 
     // FR-10 forbids a mid-day verdict, so every row is honestly `not yet` — and the chain
     // beside it is yesterday's number, which is a different claim and an allowed one.
@@ -123,21 +125,52 @@ describe('the today screen', () => {
 
   it('opens a chain with the commitment the row was drawn from', async () => {
     const onOpenChain = vi.fn();
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={onOpenChain} />);
+    render(<Today onOpenLedger={vi.fn()} onOpenChain={onOpenChain} onOpenFocus={vi.fn()} />);
 
     await userEvent.click(await screen.findByRole('button', { name: /Gym/ }));
 
     expect(onOpenChain).toHaveBeenCalledExactlyOnceWith(gym);
   });
 
+  it('sends an hours-quota row to the timer, because it has no chain to open', async () => {
+    // `commitments_owing()` excludes this cadence, so it never reaches `settlement_commitment`
+    // and `chain_current` has nothing for it — its Chains detail is empty by construction. The
+    // fork is here rather than in the row so `commitment-row.tsx` stays a component that opens
+    // a thing rather than one that knows which thing.
+    const hours = {
+      id: 'c2',
+      name: 'Company work',
+      cadence: 'daily_hours_quota',
+      carries_penalty: false,
+      weekly_target: null,
+      daily_minutes_target: 180,
+    };
+    rows.commitment = { data: [gym, hours], error: null };
+    const onOpenChain = vi.fn();
+    const onOpenFocus = vi.fn();
+
+    render(<Today onOpenLedger={vi.fn()} onOpenChain={onOpenChain} onOpenFocus={onOpenFocus} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Company work/ }));
+    expect(onOpenFocus).toHaveBeenCalledExactlyOnceWith(hours);
+    expect(onOpenChain).not.toHaveBeenCalled();
+
+    // And every other cadence still goes where it always did.
+    await userEvent.click(screen.getByRole('button', { name: /Gym/ }));
+    expect(onOpenChain).toHaveBeenCalledExactlyOnceWith(gym);
+    expect(onOpenFocus).toHaveBeenCalledOnce();
+  });
+
   it('tells an empty setup apart from a broken read', async () => {
     rows.commitment = { data: [], error: null };
-    const { unmount } = render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} />);
+    const { unmount } = render(
+      <Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
     expect(await screen.findByText(/Nothing set up yet/)).toBeInTheDocument();
     unmount();
 
     rows.commitment = { data: null, error: { message: 'permission denied' } };
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} />);
+    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
 
     expect(await screen.findByText(/permission denied/)).toBeInTheDocument();
     expect(screen.queryByText(/Nothing set up yet/)).not.toBeInTheDocument();

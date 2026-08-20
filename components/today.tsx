@@ -25,9 +25,12 @@ const SELECT = 'id,name,cadence,carries_penalty,weekly_target,daily_minutes_targ
 export function Today({
   onOpenLedger,
   onOpenChain,
+  onOpenFocus,
 }: {
   onOpenLedger: () => void;
   onOpenChain: (commitment: RowCommitment) => void;
+  /** Where a *Put hours in* row goes instead. See the fork below. */
+  onOpenFocus: (commitment: RowCommitment) => void;
 }) {
   const [view, setView] = useState<View>({ kind: 'loading' });
 
@@ -102,7 +105,14 @@ export function Today({
                 commitment={row}
                 state={stateToday(row)}
                 chainDays={view.chains[row.id] ?? 0}
-                onOpen={onOpenChain}
+                /* An hours-quota row opens the Focus Session, and every other row opens the
+                   Chains detail as before. Not a preference: `commitments_owing()` excludes
+                   that cadence, so it never reaches `settlement_commitment`, so `chain_current`
+                   has nothing for it — its Chains detail is empty by construction. The fork
+                   lives here because this component already selects `cadence`, which keeps
+                   `commitment-row.tsx` a component that opens a thing rather than one that
+                   knows which thing. */
+                onOpen={row.cadence === 'daily_hours_quota' ? onOpenFocus : onOpenChain}
               />
             ))}
           </div>

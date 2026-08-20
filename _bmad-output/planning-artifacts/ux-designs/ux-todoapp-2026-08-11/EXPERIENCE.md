@@ -133,6 +133,17 @@ Interface labels use plain language, never glossary terms: **Do it / Avoid it / 
 Do/Abstain/Open-ended. **He did it / He didn't**, not Approve/Reject. **Stop and bank it**, not Stop —
 stopping deposits the time, it does not discard it.
 
+The Focus Session's two remaining labels follow the same rule. The control that opens a session reads
+**Start the clock**, not Start — the thing being started is a clock and nothing else, which is the
+promise the sentence above it makes good on. The day's accumulated minutes read **Banked today**, not
+Total or Progress: *banked* is the word the stop control already uses, and it says the minutes are
+deposited rather than merely observed.
+
+One session runs at a time, so starting a second says so out loud: *"A clock is already running on
+another commitment. Stop that one first."* A start control that silently did nothing would be worse
+here than anywhere else in the product — this is the one surface whose entire job is making the tap
+feel like something happened.
+
 ## Component Patterns
 
 | Component | Behavior |

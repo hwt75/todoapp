@@ -197,12 +197,20 @@ describe('structural rules the stylesheet cannot state about itself', () => {
     expect(light['type-figure'], 'the figure role must be defined').toBeDefined();
     expect(light['font-quoted'], 'the quoted role must be defined').toBeDefined();
 
-    const figureUses = GLOBALS.match(/--type-figure/g) ?? [];
+    // The pattern used to carry a stray literal backspace where a `\b` was meant, so it matched
+    // nothing and the budget it exists to police was never counted at all. It now matches the
+    // token as a `var()` argument however it is written — `var(--type-figure)` and
+    // `var(--type-figure, 2rem)` alike — so a claim wearing a fallback cannot slip past the way
+    // the backspace did. The tracking token beside each claim is part of that claim, not a
+    // second one, which is why the closing `)` or `,` is required.
+    const figureUses = GLOBALS.match(/var\(\s*--type-figure\s*[,)]/g) ?? [];
     expect(
       figureUses.length,
-      'the figure role is spent by the debt block (2.6); the only other claimant allowed is ' +
-        "Epic 3's focus timer",
-    ).toBeLessThanOrEqual(2);
+      'the figure role is spent by the debt block (2.6) and the focus timer (3.1). Exactly two, ' +
+        'and asserted in both directions: a third claimant takes the size from "this is the ' +
+        'number" to "this is a number", and a missing one means a claimant was deleted or ' +
+        'renamed and the budget is being counted against something that is no longer there.',
+    ).toBe(2);
 
     // Nothing has earned the serif yet. A second serif string deletes the signal the first
     // one carries.

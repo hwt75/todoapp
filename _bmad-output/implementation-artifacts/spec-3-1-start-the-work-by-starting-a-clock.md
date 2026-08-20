@@ -2,7 +2,7 @@
 title: 'Story 3.1 — Start the work by starting a clock'
 type: 'feature'
 created: '2026-08-20'
-status: 'ready-for-dev'
+status: 'done'
 baseline_commit: 'a799d7f98a7ae59fdf0bb313459948ef55c9503b'
 review_loop_iteration: 0
 story_key: '3-1-start-the-work-by-starting-a-clock'
@@ -195,25 +195,25 @@ stop being one contract.
 
 **Execution:**
 
-- [ ] `EXPERIENCE.md` — add `Start the clock` and `Banked today` to the Focus Session copy, so the
+- [x] `EXPERIENCE.md` — add `Start the clock` and `Banked today` to the Focus Session copy, so the
       component quotes the design doc rather than the other way round (D6).
-- [ ] `supabase/migrations/20260820110000_a_session_lands_on_the_day_it_started.sql` — table,
+- [x] `supabase/migrations/20260820110000_a_session_lands_on_the_day_it_started.sql` — table,
       `stopped_at > started_at` check, `duration_seconds` generated column,
       `focus_session_derive_day()` with its cadence and ownership refusals, `focus_day_minutes`
       view, RLS and policies in the same file, trailing revoke.
-- [ ] `supabase/tests/3-1-focus-session.sql` — the matrix's database rows: day from the start
+- [x] `supabase/tests/3-1-focus-session.sql` — the matrix's database rows: day from the start
       instant across midnight, two sessions summing and flooring once, both trigger refusals, the
       check violation, and one account failing to read another's sessions.
-- [ ] `lib/focus-session.ts` + test — start/read/clear against an injected `Storage`, elapsed across
+- [x] `lib/focus-session.ts` + test — start/read/clear against an injected `Storage`, elapsed across
       a midnight boundary, `0:00`/`0:50`/`10:05` renderings, and `0:50 of 3:00`.
-- [ ] `lib/offline-queue.ts` + existing test — generic item, defaulted key; `lib/offline-queue.test.ts`
+- [x] `lib/offline-queue.ts` + existing test — generic item, defaulted key; `lib/offline-queue.test.ts`
       and `components/morning-gate.tsx` compile and pass **unchanged**.
-- [ ] `components/focus-session.tsx` + test — idle and running states, the figure, the unwatched
+- [x] `components/focus-session.tsx` + test — idle and running states, the figure, the unwatched
       sentence, the day total read from `focus_day_minutes`, stop banking online and stop queueing
       offline, and a refused insert that does not claim to have banked.
-- [ ] `components/today.tsx` — fork the row tap on cadence to a new `onOpenFocus`; existing Today
+- [x] `components/today.tsx` — fork the row tap on cadence to a new `onOpenFocus`; existing Today
       tests still pass and `commitment-row.tsx` is not touched.
-- [ ] `app/page.tsx` — `focusOf` branch, `Back to today` returns to Today.
+- [x] `app/page.tsx` — `focusOf` branch, `Back to today` returns to Today.
 
 **Acceptance Criteria:**
 
@@ -266,3 +266,145 @@ they read. `commitments_owing()` keeps excluding the cadence until 3.4 judges it
 - Start a session on the installed app, lock the phone, leave it twenty minutes, reopen: the same
   session is still running and reads about twenty minutes, with nothing having asked anything.
 - Start a session before midnight and stop it after: the minutes appear on the day it started.
+
+## Verification record
+
+**Built and checked on 2026-08-20**, on the branch this spec was approved on.
+
+`npm test` — 569 passing across 30 files, up from 512. `npx tsc --noEmit`, `npm run lint` and
+`npm run format:check` all clean. All eleven files under `supabase/tests/` were re-run against a
+local stack and every one reports `PASS.`, including `2-2-commitment-rules.sql` and its assertion
+that an hours quota is never declared. `lib/offline-queue.test.ts`'s existing tests and
+`components/morning-gate.tsx` are unmodified, which is what D4's defaulted key parameter was for.
+
+**A three-layer review ran against the diff and found fourteen real patch-level issues — no
+`intent_gap`, no `bad_spec`.** The two worth naming: a failed read of the day's total was hiding the
+Stop control entirely, which broke the frozen matrix row *"Stopped with no network"* outright; and a
+tap on Start while another commitment's session was running was a silent no-op, changing nothing and
+saying nothing. All fourteen are fixed — a `refused`/`unreadable` split in `View` so a failed read
+never hides Stop, `startSession` returning a typed `StartOutcome` so a foreign session is refused out
+loud, the day re-derived from the ticking clock so an open screen crosses midnight correctly while a
+session runs, every permanent queue rejection surfaced rather than only the one just stopped, the
+queue drained on mount and on `online` rather than only on stop, the running figure given
+`role="timer"` and an accessible label, every remaining raw error string moved into `FOCUS_COPY`, a
+missing `daily_minutes_target` treated as a failure rather than a quieter zero, the figure-role
+budget test made to fail in both directions, `setInterval` faked so the ticking figure is actually
+exercised rather than snapshotted, the banked read's `.eq` filters asserted rather than assumed, a
+test proving the focus queue and the declaration queue never share a key, and a new SQL step proving
+the schema — not merely this client — enforces AD-1 and AD-6 against a caller that sends its own day
+or its own duration. The new tests were mutation-checked: reverting any one of the day-dependency,
+the tick, the `for_day` filter, or the queue-key argument fails the suite, which is what makes a
+green run mean something.
+
+**One residual gap, left rather than papered over.** An idle Focus Session screen — nothing running —
+left open across local midnight goes on reporting the previous day's total until touched. Fixing it
+the way the running case was fixed would mean ticking a timer while idle, which the review's own
+finding about an unnecessary interval forbids. Recorded in `deferred-work.md` rather than fixed
+silently in one direction and left broken in the other.
+
+## Suggested Review Order
+
+**The database rule (D2, D3): a session is a fact judged by the schema, not by whoever writes it**
+
+- The whole story's central claim: the day comes from `started_at` with no `- 1`, refusing what the
+  client sends rather than trusting it (AD-6).
+  [`20260820110000_a_session_lands_on_the_day_it_started.sql:90`](../../supabase/migrations/20260820110000_a_session_lands_on_the_day_it_started.sql#L90)
+
+- The table it writes: the unique key (AD-4), the ordering check, and the two columns a client must
+  never be trusted to set.
+  [`20260820110000_a_session_lands_on_the_day_it_started.sql:19`](../../supabase/migrations/20260820110000_a_session_lands_on_the_day_it_started.sql#L19)
+
+- The seam Story 3.2 and 3.4 will read: seconds exposed alongside minutes so a queued top-up can add
+  before flooring once (D3).
+  [`20260820110000_a_session_lands_on_the_day_it_started.sql:143`](../../supabase/migrations/20260820110000_a_session_lands_on_the_day_it_started.sql#L143)
+
+- Proof the schema enforces it, not merely this client: a caller sending its own day or its own
+  duration is overwritten or refused (review patch 13).
+  [`3-1-focus-session.sql:378`](../../supabase/tests/3-1-focus-session.sql#L378)
+
+**The session is a fact, not a process (D1): nothing runs, so nothing can be paused or lost**
+
+- The record start writes, and nothing else — the shape a killed app and a locked phone both
+  survive by construction.
+  [`focus-session.ts:28`](../../lib/focus-session.ts#L28)
+
+- The refusal a foreign session gets, so a second commitment's Start control never goes silently
+  inert (review patch 2).
+  [`focus-session.ts:158`](../../lib/focus-session.ts#L158)
+
+- Seconds only on the figure that has to visibly run; every other duration stays `H:MM` (spec
+  departure 1).
+  [`focus-session.ts:211`](../../lib/focus-session.ts#L211)
+
+- The copy this screen is allowed to say, sourced from `EXPERIENCE.md` before it was written here
+  (D6), including the two strings review found missing.
+  [`focus-session.ts:64`](../../lib/focus-session.ts#L64)
+
+**The screen (review patches 1, 4–8): every control renders on what it can still do, not on what
+failed**
+
+- Where the day is derived from the ticking clock rather than captured once, so an open screen
+  crosses midnight correctly.
+  [`focus-session.tsx:130`](../../components/focus-session.tsx#L130)
+
+- The one function three different moments call — stop, mount, and the network coming back —
+  because a queue that only drains by coincidence is not a queue.
+  [`focus-session.tsx:55`](../../components/focus-session.tsx#L55)
+
+- The three-way read outcome (`ready` / `unreadable` / `refused`) that keeps Stop reachable when
+  only the total failed to load.
+  [`focus-session.tsx:194`](../../components/focus-session.tsx#L194)
+
+**Wiring it into the app: one more row, one more branch, nothing else touched**
+
+- The tap that forks by cadence, so an hours-quota row opens the clock instead of an empty Chains
+  detail (D5).
+  [`today.tsx:115`](../../components/today.tsx#L115)
+
+- `focusOf` beside `chainOf`, the same shape, the same `Back to today`.
+  [`page.tsx:90`](../../app/page.tsx#L90)
+
+**Made generic without being duplicated (D4): the offline queue now serves two callers**
+
+- The type parameter and the defaulted key that let every existing call site compile and pass
+  unchanged.
+  [`offline-queue.ts:1`](../../lib/offline-queue.ts#L1)
+
+**Tests that can fail (review patches 9–12, mutation-checked)**
+
+- The figure-role budget asserted in both directions, against a pattern a fallback claim cannot
+  slip past.
+  [`design-tokens.test.ts:200`](../../lib/design-tokens.test.ts#L200)
+
+- Timers faked alongside the clock, so the ticking figure is exercised rather than snapshotted.
+  [`focus-session.test.tsx:177`](../../components/focus-session.test.tsx#L177)
+
+**Two departures from the spec's letter, both deliberate.**
+
+- **The running figure reads `H:MM:SS`; every other duration reads `H:MM`.** The spec lists only
+  `H:MM` renderings, but in `H:MM` the figure would read `0:00` for a full minute after the tap — on
+  the one screen whose entire job is making *starting* feel like it happened. `formatDuration` still
+  produces every rendering the spec names; `formatElapsed` adds seconds for the figure alone.
+- **`focus_day_minutes` exposes `seconds` beside `minutes`.** The client needs the seconds so that a
+  stopped-but-queued session is added before flooring rather than after, which is D3's rule applied
+  to the one total the client composes itself.
+
+**One defect found in passing, and fixed.** The figure-role budget guard in `lib/design-tokens.test.ts`
+matched `/--type-figure\x08/` — a stray literal backspace byte where a `\b` was meant — so it had
+never counted anything and the budget it exists to police was unenforced. It now matches
+`var(--type-figure)` exactly, reads 2 (the debt block and this timer) against a cap of 2, and the
+budget is closed. The naive fix would have counted `--type-figure-tracking` as a claimant and refused
+the timer the role had been held open for.
+
+**One matrix row is satisfied by construction rather than by a test, and is named here rather than
+left to be discovered.** *Signed out → the surface is unreachable*: `FocusSession` renders only
+inside `app/page.tsx:63`'s `ownerId &&` gate, takes a required `ownerId: string`, and is reachable
+only through a Today callback that does not render signed out. Covering it would mean mounting
+`Home` behind six mocks to assert an invariant TypeScript already refuses to break — and the same
+gate protects the Ledger, Settings and Chains detail with no test either. Worth revisiting as one
+test for the gate itself, not as four.
+
+**Left for the author, because no file here can answer it.** Starting a session on the installed
+app, locking the phone for twenty minutes and confirming it is still running from the original
+instant; and starting before midnight and stopping after, to see the minutes land on the day the
+session began. Both are why this story stays at `review` rather than moving itself to `done`.

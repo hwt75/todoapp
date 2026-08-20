@@ -298,8 +298,8 @@ ul {
   order: 1;
 }
 
-/* The only large coloured area in the product, and the only use of the figure role until
-   Epic 3's timer claims the other one. */
+/* The only large coloured area in the product, and the first of the two elements allowed to
+   claim the figure role. The second is the focus timer, below. */
 .debt-block-tap {
   display: block;
   width: 100%;
@@ -325,4 +325,26 @@ ul {
   letter-spacing: var(--type-figure-tracking);
   /* Scales with Dynamic Type like everything else — an easy thing to exempt and wrong to. */
   line-height: 1.1;
+}
+
+/* The running session, and the second and last claimant of the figure role. The budget is now
+   spent; a third would take the size from meaning "this is the number" to meaning "this is a
+   number", which is the same as meaning nothing.
+
+   No tint, no fill and no coloured area: the debt block is the only one of those in the product,
+   and a large coloured rectangle here would put timed work at the visual weight of money — which
+   is exactly the comparison the epic refuses, since timer-backed work carries no Penalty at all.
+
+   No transition and no animation either. There is none anywhere in this product, there is no
+   motion token to resolve against, and a figure that eased between values would be decoration on
+   a screen whose whole job is to be uneventful. */
+.focus-figure {
+  font-size: var(--type-figure);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--type-figure-tracking);
+  line-height: 1.1;
+  /* Digits that do not shift width as the seconds turn. Without this the whole figure jitters
+     once a second, which reads as something struggling rather than something running. */
+  font-variant-numeric: tabular-nums;
+  margin: 0 0 var(--space-4);
 }
