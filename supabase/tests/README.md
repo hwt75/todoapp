@@ -80,10 +80,12 @@ holds it.
 
 ## Still uncovered
 
-Every component. Eleven of them, and no test of any kind — which is the whole UI half of Stories
-2.3, 2.6 and 2.9, and the only half a check file cannot reach. Two database properties are out of
-reach here too: `outbox_claim`'s skip-locked behaviour under two simultaneous workers, and
-anything the Edge Function worker does after it claims a row.
+Seven of the eleven components. `commitment-row`, `morning-gate`, `chains-detail` and `ledger`
+gained tests on 2026-08-20 (jsdom, under the `components` project in `vitest.config.mts`);
+`today`, `commitment-form`, `commitment-list`, `sign-in`, `push-probe`, `debt-block` and
+`status-pill` have none of their own. Two database properties are out of reach here too:
+`outbox_claim`'s skip-locked behaviour under two simultaneous workers, and anything the Edge
+Function worker does after it claims a row.
 
 **One thing these files deliberately do not assert: table grants.** The local stack's default
 privileges differ from the author's project — `authenticated` has no `select` on any application
