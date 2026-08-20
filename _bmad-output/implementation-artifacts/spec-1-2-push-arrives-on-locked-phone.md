@@ -63,6 +63,33 @@ once the answer is known.
 
 </frozen-after-approval>
 
+> **RENEGOTIATION RECORD — written 2026-08-20, unapproved.** The Intent above is not the one this
+> spec was written with. It was replaced wholesale in `f1021c3`, the same commit that implemented
+> the story, while `status` moved from `draft` to `in-progress` — and nothing recorded that it had
+> been renegotiated. Epic 1's retrospective raised it; Epic 2's found the record still missing.
+> This block is the record, reconstructed from `git diff 2b1d9c1 f1021c3` rather than from memory.
+>
+> **What changed.** The original Approach was the full production path: a Supabase schema holding
+> subscriptions and a transactional outbox, an Edge Function worker draining it on its own
+> `pg_cron` schedule, and Web Push signed with VAPID inside that worker. The replacement is the
+> smallest apparatus that can answer the question — a service worker, a probe, and a local CLI —
+> with the outbox explicitly deferred to "afterwards, once the answer is known". The Boundaries
+> changed with it: the AD-3 rules about dedupe keys, at-least-once delivery and migrations-only
+> schema changes left this spec, because none of them applies to a CLI.
+>
+> **Why, in the commit's own words** (`f1021c3`): "Nothing downstream should be built until it is
+> answered, so this deliberately stops at the smallest apparatus that can answer it … No outbox, no
+> worker, no cron; that stronger proof is recorded in deferred-work.md and comes next." The
+> judgement was sound and the sequencing held — the outbox was built as Story 2.4a and proven
+> unattended, and `deferred-work.md` carries the entry that promised it. What was missing is the
+> record, not the reasoning.
+>
+> **Two things this record does not do.** It does not re-freeze the text: only `hwt75` can do that,
+> by replacing this paragraph with a dated `APPROVED` stamp naming the current Intent, the way
+> every Epic 2 spec carries one. And it does not pretend the change was approved in advance — it
+> was not, and a control that can be applied retroactively is not a control. Epic 1 retrospective
+> action item 3 stays open until the stamp is written.
+
 ## Code Map
 
 **Precondition:** the installable shell exists and is committed (`2b1d9c1`). What remains is
