@@ -173,16 +173,16 @@ day already settled keeps the deadline it was judged against, since `settlement`
 
 ## Tasks & Acceptance
 
-- [ ] `lib/settings.ts` + test — permission and install states as sentences, every state covered,
+- [x] `lib/settings.ts` + test — permission and install states as sentences, every state covered,
       no state rendering as `undefined`.
-- [ ] `lib/push-subscribe.ts` + test — the two refusals before prompting, and the upsert that
+- [x] `lib/push-subscribe.ts` + test — the two refusals before prompting, and the upsert that
       revives a device marked dead.
-- [ ] `components/push-probe.tsx` — call the extracted module, no behaviour change, existing tests
+- [x] `components/push-probe.tsx` — call the extracted module, no behaviour change, existing tests
       still pass untouched.
-- [ ] `components/settings.tsx` + test — the hour writes and refuses; each state row shows its
+- [x] `components/settings.tsx` + test — the hour writes and refuses; each state row shows its
       sentence; the control appears only at `default`; a browser tab leads with install state.
-- [ ] `app/page.tsx` — reachable from Today, returns to Today.
-- [ ] `supabase/tests/3-0-morning-hour.sql` — a session sets its own hour, an out-of-range hour is
+- [x] `app/page.tsx` — reachable from Today, returns to Today.
+- [x] `supabase/tests/3-0-morning-hour.sql` — a session sets its own hour, an out-of-range hour is
       refused, and setting the hour does not move a settled day's deadline.
 
 **Acceptance Criteria** (from `epics.md` § Story 3.0): the hour is written through the existing
@@ -207,8 +207,39 @@ refusal names the answer the browser gave; rows this epic cannot fill are absent
 - Grant notification permission from Settings on the installed app, and confirm a push arrives
   without the probe having been opened.
 
-**This spec will record what was not built**, by name, in this section when the story closes —
-rather than leaving a task list with no ticks, which is the mechanism by which Story 2.4's missing
-Settings surface went unnoticed for an entire epic (retro A4).
+## Verification record
+
+**Built and checked on 2026-08-20**, on the branch this spec was approved on.
+
+`npm test` — 512 passing across 28 files, up from 480. `npx tsc --noEmit`, `npm run lint` and
+`npm run format:check` all clean. `supabase/tests/3-0-morning-hour.sql` passes against a local
+stack: a session moves its own hour through the column grant; the same statement widened by one
+column to set `role` is refused and the role does not move; 24 and -1 are both refused rather than
+clamped, and a refused write leaves the hour where it was; the deadline follows the hour; and a day
+already settled is not re-judged when the hour changes (AD-5).
+
+`components/push-probe.test.tsx` was not touched and still passes — the extraction in D3 was meant
+to be invisible to it, and it was.
+
+**What was not built, by name.** This is the section Story 2.4 did not have, which is how its own
+missing Settings surface went unnoticed for an epic (retro A4):
+
+- **Referee pairing.** No referee account exists; Epic 4 Story 4.5 brings one. Left out entirely
+  per D4, not shown disabled.
+- **Grace days remaining.** `penalty_state` has only `owed`, and a grace day cannot be produced
+  until Epic 5 Story 5.1. Same treatment.
+- **A settings entry point on the Today screen itself.** The control sits beside Today rather than
+  inside it: Today answers "where do I stand" and a settings link inside it would be the first
+  thing to make it a menu.
+
+**Left for the author, because no file here can answer it.** Changing the hour to one a few minutes
+ahead and confirming the morning question arrives at it rather than at 07:00; granting notification
+permission from Settings on the installed app and confirming a push arrives without the probe
+having been opened. Both are why this story stays at `review` rather than moving itself to `done`.
+
+**One consequence for Story 2.4.** Its criterion read "configurable from Settings, alongside
+notification permission state and referee pairing, per UX-DR17". Two of the three now exist. The
+third cannot exist in this epic, so 2.4 is no longer blocked on anything buildable — whether that
+closes it is `hwt75`'s call rather than this spec's.
 
 </frozen-after-approval>

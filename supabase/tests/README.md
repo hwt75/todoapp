@@ -70,8 +70,9 @@ than failing somewhere confusing later.
 | `2-4a-outbox-claim.sql`     | One row per dedupe key, oldest claimed first, `attempts` incremented, a claimed row invisible until its visibility timeout, a deferred row left alone. `for update skip locked` is **read, not run** — it needs two sessions.                                                                                                                                      |
 | `2-8-summary-copy.sql`      | The Vietnamese thousands separator that drifted once; money named once and only when there is money; exactly one suggestion; a chain clause that never says `day 0` and never claims something held when nothing did.                                                                                                                                              |
 | `2-9-chain-arithmetic.sql`  | Seven days, two commitments: a miss breaks a chain, silence breaks it and is recorded as `unanswered`, a day nobody judged is skipped rather than breaking it, one commitment's bad day does not touch another's, and the expired day queues no summary.                                                                                                           |
+| `3-0-morning-hour.sql`      | A session moves its own morning hour through the column grant; the same statement widened to set `role` is refused; 24 and -1 are refused rather than clamped; the expiry deadline follows the hour, and a day already settled is not re-judged when it changes.                                                                                                   |
 
-**All nine pass**, run on 2026-08-20 against a local stack with every migration applied from
+**All ten pass**, run on 2026-08-20 against a local stack with every migration applied from
 scratch. The first run of `2-7-supersession.sql` did not: it failed at step 4 with `A1 CONFIRMED`,
 which is what it was written to do. `supersede_expiries()` wrote a correction carrying no frozen
 outcomes, so a day answered in time and delivered late dropped out of the chain entirely. Fixed in

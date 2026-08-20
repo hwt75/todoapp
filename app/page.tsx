@@ -7,6 +7,7 @@ import { PushProbe } from '@/components/push-probe';
 import { SignIn } from '@/components/sign-in';
 import { Today } from '@/components/today';
 import { Ledger } from '@/components/ledger';
+import { Settings } from '@/components/settings';
 import { ChainsDetail } from '@/components/chains-detail';
 import { readInstallSignals, resolveInstallState, type InstallState } from '@/lib/install-state';
 import { useGate } from '@/lib/use-gate';
@@ -16,6 +17,7 @@ export default function Home() {
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const gate = useGate(ownerId);
   const [showLedger, setShowLedger] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [chainOf, setChainOf] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
@@ -65,11 +67,25 @@ export default function Home() {
           />
         ) : showLedger ? (
           <Ledger onClose={() => setShowLedger(false)} />
-        ) : (
-          <Today
-            onOpenLedger={() => setShowLedger(true)}
-            onOpenChain={(c) => setChainOf({ id: c.id, name: c.name })}
+        ) : showSettings ? (
+          <Settings
+            ownerId={ownerId}
+            installState={installState}
+            onClose={() => setShowSettings(false)}
           />
+        ) : (
+          <>
+            <Today
+              onOpenLedger={() => setShowLedger(true)}
+              onOpenChain={(c) => setChainOf({ id: c.id, name: c.name })}
+            />
+            {/* Not on the Today screen itself: that surface answers "where do I stand" and
+                nothing else belongs in it. A settings link inside it would be the first thing
+                to make it a menu. */}
+            <button type="button" onClick={() => setShowSettings(true)}>
+              Settings
+            </button>
+          </>
         ))}
 
       {/* Server-rendered so it survives a JavaScript failure. Hidden before
