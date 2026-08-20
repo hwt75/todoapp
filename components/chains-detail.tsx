@@ -28,8 +28,10 @@ type View =
  * yourself*. That difference is the reason this surface exists at all — it is reached by
  * tapping a row, and the row most likely to be tapped is the one that just broke.
  *
- * Nothing here is computed. The chain comes from `chain_current` and the days come from the
- * outcomes settlement froze; this screen decides how they read and nothing else.
+ * Nothing here is computed. The chain comes from `chain_current` and the days come from
+ * `settlement_commitment_current` — the same frozen outcomes, through the same supersession
+ * join the chain itself uses, so the number and the calendar cannot disagree about a day
+ * (AD-9). This screen decides how they read and nothing else.
  */
 export function ChainsDetail({
   commitmentId,
@@ -55,8 +57,8 @@ export function ChainsDetail({
           .eq('commitment_id', commitmentId)
           .maybeSingle(),
         supabase
-          .from('settlement_commitment')
-          .select('outcome,settlement:settlement_id(period)')
+          .from('settlement_commitment_current')
+          .select('outcome,period')
           .eq('commitment_id', commitmentId),
       ]);
 
@@ -75,7 +77,7 @@ export function ChainsDetail({
         },
         days: (days ?? [])
           .map((d) => ({
-            day: (d.settlement as unknown as { period: string }).period,
+            day: d.period as string,
             outcome: d.outcome as CommitmentOutcome,
           }))
           .sort((a, b) => b.day.localeCompare(a.day)),

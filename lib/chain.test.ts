@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   OUTCOME_PRESENTATION,
@@ -114,6 +115,46 @@ describe('the chain rule itself', () => {
     expect(view).toContain('public.settlement_current');
     expect(view).not.toContain('join public.settlement ');
   });
+
+  it('and so does every screen, which the assertion above could not see', () => {
+    // The guard above reads one view's SQL text, and Epic 2's retrospective found what that
+    // leaves uncovered: `chains-detail.tsx` selected straight from `settlement_commitment`
+    // while this test passed, so the chain followed a correction and the calendar beside it
+    // did not (A2). The rule is about the client, so the client is what gets read.
+    //
+    // Settlement-derived state has exactly one door per table. Reading the base table is
+    // reading a superseded day as though it still stood.
+    const doors: Record<string, string> = {
+      settlement: 'settlement_current',
+      settlement_commitment: 'settlement_commitment_current',
+      penalty: 'penalty_current',
+    };
+
+    for (const file of sourceFiles(['app', 'components', 'lib'])) {
+      const source = readFileSync(file, 'utf8');
+      for (const [base, view] of Object.entries(doors)) {
+        expect(source, `${file} reads ${base} directly; read ${view} instead`).not.toContain(
+          `.from('${base}')`,
+        );
+      }
+    }
+  });
 });
+
+/** Every shipped `.ts`/`.tsx` under these roots — tests excluded, they are allowed to read
+    a migration as text and to name a base table while saying so. */
+function sourceFiles(roots: string[]): string[] {
+  const found: string[] = [];
+  for (const root of roots) {
+    for (const entry of readdirSync(root, { recursive: true, withFileTypes: true })) {
+      if (!entry.isFile()) continue;
+      const name = entry.name;
+      if (!name.endsWith('.ts') && !name.endsWith('.tsx')) continue;
+      if (name.includes('.test.')) continue;
+      found.push(join(entry.parentPath ?? root, name));
+    }
+  }
+  return found;
+}
 
 const _outcomes: CommitmentOutcome[] = ['held', 'missed', 'unanswered'];
