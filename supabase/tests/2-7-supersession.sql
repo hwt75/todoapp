@@ -12,6 +12,12 @@
 -- follows the correction* — and records a live check that agrees with the spec. One of
 -- those two is wrong, and prose cannot say which. This can.
 --
+-- Step 5 checks a second, unrelated defect found while building Story 3.3 and fixed by
+-- `20260820140000_weekly_quota_is_not_judged_daily.sql`: `supersede_expiries()` shares
+-- `commitments_owing()` with `settle_day` and had the identical bug — a Weekly Quota
+-- commitment's own admitted slip could fail a corrected day and charge a penalty, exactly
+-- as `settle_day` could before its own fix. Traced in deferred-work.md.
+--
 -- **So a failure here is not a broken test. It is the answer.** Every assertion below is
 -- the specification restated in SQL; when one raises, read the message — it names what
 -- the spec promised and what the database actually did.
@@ -61,6 +67,14 @@ declare
   v_count       integer;
   v_chain       integer;
   v_longest     integer;
+
+  -- Fixture, step 5
+  v_user2       uuid := gen_random_uuid();
+  v_weekly      uuid;
+  v_day2        date;
+  v_deadline2   timestamptz;
+  v_answered2   timestamptz;
+  v_correction2 uuid;
 begin
   -- -------------------------------------------------------------------------------
   -- 0. Refuse to run anywhere the AD-16 guard would make the result meaningless.
@@ -258,8 +272,83 @@ begin
 
   raise notice using message =
     'Step 4 ok: the corrected day froze as `held` and the chain reads 1 / 1.';
+
+  -- -------------------------------------------------------------------------------
+  -- 5. FR-2 in the correction path — a Weekly Quota commitment's own admitted slip
+  --    must not fail a corrected day or charge it a penalty either.
+  -- -------------------------------------------------------------------------------
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
+                          email_confirmed_at, created_at, updated_at,
+                          raw_app_meta_data, raw_user_meta_data)
+  values (v_user2, '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated',
+          'retro-2-7-fr2-' || v_user2::text || '@example.test',
+          'not-a-real-password-this-account-never-signs-in',
+          now(), now(), now(),
+          '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb);
+
+  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
+                                 carries_penalty, weekly_target, week_start_day)
+  values (v_user2, gen_random_uuid(), 'Gym', 'do', 'weekly_quota', true, 3, 1)
+  returning id into v_weekly;
+
+  v_day2 := (now() at time zone 'Asia/Ho_Chi_Minh')::date - 4;
+  v_deadline2 := public.declaration_deadline(v_day2, 7);
+
+  -- He says nothing, and the day expires exactly as step 2 above.
+  perform public.settle_day(v_day2, true);
+
+  -- The answer he gave in time finally arrives — an admitted slip, not a `held`.
+  v_answered2 := ((v_day2 + 1)::timestamp + interval '7 hours 31 minutes')
+                 at time zone 'Asia/Ho_Chi_Minh';
+  insert into public.declaration (owner_id, commitment_id, idempotency_key, answer,
+                                  answered_at)
+  values (v_user2, v_weekly, gen_random_uuid(), 'slipped', v_answered2);
+
+  v_returned := public.supersede_expiries();
+  if v_returned <> 1 then
+    raise exception using message = format(
+      'supersede_expiries() corrected %s days for the Weekly Quota fixture, expected 1.',
+      v_returned);
+  end if;
+
+  select id, verdict into v_correction2, v_verdict
+    from public.settlement where subject = v_user2 and supersedes is not null;
+
+  if v_correction2 is null then
+    raise exception using message = 'No correction row references the Weekly Quota expiry.';
+  end if;
+
+  if v_verdict <> 'clean' then
+    raise exception using message = format(
+      'FR-2: a Weekly Quota commitment''s own admitted slip must not fail a corrected '
+      'day. Got verdict `%s`. Fixed by '
+      '20260820140000_weekly_quota_is_not_judged_daily.sql.', v_verdict);
+  end if;
+
+  select count(*) into v_count from public.penalty where settlement_id = v_correction2;
+  if v_count <> 0 then
+    raise exception using message = format(
+      'FR-2: a Weekly Quota commitment''s own admitted slip must cost nothing through the '
+      'correction path either. %s penalties were charged.', v_count);
+  end if;
+
+  select outcome into v_outcome
+    from public.settlement_commitment
+   where settlement_id = v_correction2 and commitment_id = v_weekly;
+  if v_outcome is distinct from 'missed' then
+    raise exception using message = format(
+      'The Weekly Quota commitment''s outcome must still freeze as `missed` through the '
+      'correction path. Got `%s`.', v_outcome);
+  end if;
+
   raise notice using message =
-    'PASS. Supersession restores the day, the money and the chain. A1 is refuted.';
+    'Step 5 ok: the corrected day closed `clean` with the Weekly Quota commitment''s own '
+    'admitted slip costing nothing, its outcome still frozen as `missed`.';
+
+  raise notice using message =
+    'PASS. Supersession restores the day, the money and the chain. A1 is refuted, and a '
+    'Weekly Quota commitment is never judged daily through the correction path either.';
 end $$;
 
 rollback;

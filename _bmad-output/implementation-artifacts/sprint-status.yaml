@@ -58,7 +58,7 @@ development_status:
   3-0-change-the-hour-i-am-asked: review
   3-1-start-the-work-by-starting-a-clock: review
   3-2-know-where-the-hours-stand-without-opening-anything: review
-  3-3-a-weekly-quota-that-counts-down: review
+  3-3-a-weekly-quota-that-counts-down: done
   3-4-the-week-closes-and-settles: backlog
   epic-3-retrospective: optional
 

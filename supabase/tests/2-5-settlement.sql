@@ -19,6 +19,12 @@
 -- A penalty-free miss costing nothing is asserted too, because it is the case most likely
 -- to be broken by a later change and least likely to be noticed: it looks like a bug.
 --
+-- A Weekly Quota commitment's own slip costing nothing is asserted too (step 9):
+-- `20260820140000_weekly_quota_is_not_judged_daily.sql` fixed a live defect where
+-- `commitments_owing()` judged and penalized a Weekly Quota commitment on any single day
+-- it was not declared `held`, contradicting FR-2 ("judged only at Week Close"). Traced in
+-- deferred-work.md against spec-3-3-a-weekly-quota-that-counts-down.
+--
 --
 -- HOW TO RUN
 --
@@ -38,15 +44,18 @@ declare
   -- Fixture
   v_user      uuid := gen_random_uuid();
   v_live      uuid := gen_random_uuid();
+  v_user2     uuid := gen_random_uuid(); -- isolated account for step 9 (below)
   v_money_1   uuid;   -- daily, carries the penalty
   v_money_2   uuid;   -- daily, carries the penalty
   v_free      uuid;   -- daily, carries nothing
+  v_weekly    uuid;   -- weekly_quota, carries the penalty; step 9's own account
 
-  v_today     date;
-  d_open      date;   -- partly answered, deadline not passed -> must stay open
-  d_failed    date;   -- everything slipped
-  d_clean     date;   -- everything held
-  d_free_miss date;   -- only the penalty-free one slipped
+  v_today       date;
+  d_open        date; -- partly answered, deadline not passed -> must stay open
+  d_failed      date; -- everything slipped
+  d_clean       date; -- everything held
+  d_free_miss   date; -- only the penalty-free one slipped
+  d_weekly_slip date; -- only the weekly quota slipped
 
   -- Observed
   v_settlement uuid;
@@ -55,6 +64,7 @@ declare
   v_amount     bigint;
   v_state      public.penalty_state;
   v_type       text;
+  v_outcome    public.commitment_outcome;
   v_count      integer;
   v_raised     boolean;
 begin
@@ -400,9 +410,83 @@ begin
 
   raise notice using message =
     'Step 8 ok: no write policy on the settlement tables, RLS on all three.';
+
+  -- -------------------------------------------------------------------------------
+  -- 9. FR-2 — a Weekly Quota commitment is judged only at Week Close, never daily.
+  --
+  -- `20260820140000_weekly_quota_is_not_judged_daily.sql` fixed a live defect: before it,
+  -- this exact fixture closed `failed` with one penalty, exactly like d_failed above —
+  -- `commitments_owing()` did not distinguish `weekly_quota` from `daily` at all.
+  --
+  -- Its own account, isolated from v_user: `commitments_owing()` returns every
+  -- undeclared commitment an account owns, so adding this commitment onto v_user would
+  -- have made every earlier fixture day in this file short an answer.
+  -- -------------------------------------------------------------------------------
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
+                          email_confirmed_at, created_at, updated_at,
+                          raw_app_meta_data, raw_user_meta_data)
+  values (v_user2, '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated',
+          'retro-2-5-fr2-' || v_user2::text || '@example.test',
+          'not-a-real-password-this-account-never-signs-in',
+          now(), now(), now(),
+          '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb);
+
+  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
+                                 carries_penalty, weekly_target, week_start_day)
+  values (v_user2, gen_random_uuid(), 'Gym', 'do', 'weekly_quota', true, 3, 1)
+  returning id into v_weekly;
+
+  d_weekly_slip := v_today - 4;
+
+  insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
+  values (v_user2, v_weekly, gen_random_uuid(), 'slipped',
+          ((d_weekly_slip + 1)::timestamp + interval '8 hours') at time zone 'Asia/Ho_Chi_Minh');
+
+  perform public.settle_day(d_weekly_slip, true);
+
+  select id, verdict, missed_count into v_settlement, v_verdict, v_missed
+    from public.settlement
+   where subject = v_user2 and period = d_weekly_slip and kind = 'day' and supersedes is null;
+
+  if v_settlement is null then
+    raise exception using message = format(
+      'Every declaration for %s was filed, so the day must have closed. It did not.',
+      d_weekly_slip);
+  end if;
+
+  if v_verdict <> 'clean' or v_missed <> 0 then
+    raise exception using message = format(
+      'FR-2: a Weekly Quota commitment''s own slip must not fail the day or count toward '
+      'missed_count on its own, even though it carries the penalty. Got verdict `%s`, '
+      'missed_count %s.', v_verdict, v_missed);
+  end if;
+
+  select count(*) into v_count from public.penalty where settlement_id = v_settlement;
+  if v_count <> 0 then
+    raise exception using message = format(
+      'FR-2: a Weekly Quota commitment''s own slip must cost nothing daily — Week Close '
+      '(Story 3.4) is where its verdict belongs. %s penalties were charged.', v_count);
+  end if;
+
+  select outcome into v_outcome
+    from public.settlement_commitment
+   where settlement_id = v_settlement and commitment_id = v_weekly;
+  if v_outcome is distinct from 'missed' then
+    raise exception using message = format(
+      'The Weekly Quota commitment''s outcome must still freeze as `missed` (not '
+      'penalized, but not silently dropped either) — Story 2.9''s day-chain and Story '
+      '3.3''s weekly_quota_progress view both read this row. Got `%s`.', v_outcome);
+  end if;
+
+  raise notice using message = format(
+    'Step 9 ok: %s closed `clean` with the Weekly Quota commitment''s own slip costing '
+    'nothing, its outcome still frozen as `missed`.', d_weekly_slip);
+
   raise notice using message =
     'PASS. One Failed Day costs one 500000₫ penalty, a re-run changes nothing, an open '
-    'day says nothing, and both AD-16 guards hold.';
+    'day says nothing, both AD-16 guards hold, and a Weekly Quota commitment is never '
+    'judged daily.';
 end $$;
 
 rollback;
