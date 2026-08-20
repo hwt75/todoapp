@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-20-2026 11:15
+last_updated: 08-20-2026 11:30
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -110,7 +110,7 @@ action_items:
     epic: 1
     action: "When AD-3 outbox is built, retire the direct-send path in scripts/send-push.mjs"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-08-18.md"
   - id: "epic-2-retro-item-6-make-supersede_expiries-freeze-the-corre"
     epic: 2
