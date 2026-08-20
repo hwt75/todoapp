@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-20-2026 09:32
+last_updated: 08-20-2026 10:45
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -47,9 +47,9 @@ development_status:
   2-3-see-today-and-the-row-and-pill-everything-else-reuses: review
   2-4a-the-outbox-and-its-worker: review
   2-4-answer-for-yesterday: review
-  2-5-the-day-closes-on-its-own: review
+  2-5-the-day-closes-on-its-own: done
   2-6-a-failed-day-costs-money-and-i-can-see-every-one: review
-  2-7-silence-is-not-a-way-out: review
+  2-7-silence-is-not-a-way-out: done
   2-8-the-day-tells-me-how-it-went: review
   2-9-chains-that-survive-a-bad-day: review
   epic-2-retrospective: done
@@ -117,14 +117,14 @@ action_items:
     action: "Make supersede_expiries() freeze the corrected day's commitment outcomes,
       and re-run the supersession check through the function rather than by hand (A1)"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
   - id: "epic-2-retro-item-7-read-the-chains-detail-calendar-through"
     epic: 2
     action: "Read the Chains-detail calendar through settlement_current, and widen
       lib/chain.test.ts's base-table guard to cover components (A2)"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
   - id: "epic-2-retro-item-8-settle-components-settings-tsx-build-the"
     epic: 2
@@ -138,21 +138,21 @@ action_items:
     action: "Add executable tests against a local Postgres for settlement, expiry,
       supersession, penalty and RLS (A6)"
     owner: "hwt75"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
   - id: "epic-2-retro-item-10-add-ob-token-to-gitignore-and-decide-whe"
     epic: 2
     action: "Add .ob-token to .gitignore, and decide whether the expired token in
       898b7e7 warrants a history rewrite (A5)"
     owner: "hwt75"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
   - id: "epic-2-retro-item-11-record-the-lib-expiry-ts-and-lib-outbox"
     epic: 2
     action: "Record the lib/expiry.ts and lib/outbox.ts plpgsql mirrors in deferred-work.md
       and decide the source of truth for each (A7)"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
   - id: "epic-2-retro-item-12-stamp-spec-approval-in-its-own-commit-se"
     epic: 2
