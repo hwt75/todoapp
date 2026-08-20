@@ -42,6 +42,11 @@ _bmad/config.user.toml
 # Story 1.2 — a real device push endpoint, never committed
 .push-subscription.json
 
+# Story 2.4a — a signed session token for the outbox verification account. One was committed
+# in 898b7e7 and removed a commit later; it stays in history (expired, throwaway account).
+# This is what stops the next verification run from doing it again.
+.ob-token
+
 # Serwist build output
 public/sw.js
 public/sw.js.map
