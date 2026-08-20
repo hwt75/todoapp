@@ -2,7 +2,7 @@
 title: 'Story 3.0 — Change the hour I am asked, and see what is switched off'
 type: 'feature'
 created: '2026-08-20'
-status: 'draft'
+status: 'approved'
 baseline_commit: 'bdc7362'
 review_loop_iteration: 0
 story_key: '3-0-change-the-hour-i-am-asked'
@@ -13,10 +13,14 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-> **NOT YET APPROVED.** Written 2026-08-20, before any code, and stamped in its own commit when
-> `hwt75` approves — separate from the commit that implements it, per the Epic 2 retrospective
-> finding P2b that all ten Epic 2 specs were stamped in the same commit as their implementation,
-> so the record shows approval happened but not that it happened first.
+> **APPROVED 2026-08-20 by hwt75** — all five decisions, including the two flagged as worth
+> weighing: D3, which edits `push-probe.tsx` to share its refuse-before-prompting code, and D4,
+> which leaves the referee-pairing and grace-day rows out entirely rather than showing them
+> disabled. Frozen from here.
+>
+> Stamped in its own commit, before any implementation. That is the point of it: all ten Epic 2
+> specs were stamped in the same commit as their code, so the record showed that approval happened
+> but not that it happened first (retro P2b).
 
 ## Intent
 
