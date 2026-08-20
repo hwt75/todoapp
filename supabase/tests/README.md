@@ -80,11 +80,13 @@ holds it.
 
 ## Still uncovered
 
-Seven of the eleven components. `commitment-row`, `morning-gate`, `chains-detail` and `ledger`
-gained tests on 2026-08-20 (jsdom, under the `components` project in `vitest.config.mts`);
-`today`, `commitment-form`, `commitment-list`, `sign-in`, `push-probe`, `debt-block` and
-`status-pill` have none of their own. Two database properties are out of reach here too:
-`outbox_claim`'s skip-locked behaviour under two simultaneous workers, and anything the Edge
+Nothing on the client, any more. Nine of the eleven components have tests as of 2026-08-20
+(jsdom, under the `components` project in `vitest.config.mts`); `status-pill` and `debt-block` have
+no file of their own because they are rendered and asserted through `commitment-row` and `today`,
+which is where their rules are actually visible.
+
+Two database properties are still out of reach here: `outbox_claim`'s skip-locked behaviour under
+two simultaneous workers, which needs two sessions holding locks at once, and anything the Edge
 Function worker does after it claims a row.
 
 **One thing these files deliberately do not assert: table grants.** The local stack's default
