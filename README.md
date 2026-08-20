@@ -277,3 +277,26 @@ A spec's frozen block is stamped `APPROVED <date> by <name>` in **its own commit
 commit that implements it. All ten Epic 2 specs were stamped in the same commit as their
 implementation, so the record shows that approval happened but not that it happened first — and a
 gate whose timing is not evidenced is not a gate.
+
+### Spike stories and specs
+
+A **research spike** — a story whose deliverable is an answer rather than a feature — may skip the
+full spec. What it may not skip is writing down its question before it goes looking. The artifact
+is a findings file, `_bmad-output/implementation-artifacts/story-<key>-findings.md`, with:
+
+- front matter carrying `story_key`, `status`, `verdict` and the date tested;
+- **the question, stated before any code was written**, and why it is being asked now;
+- what was tested and what came back, in enough detail to be re-run;
+- what the answer changes — and the answer written into the artifact the next decision will read,
+  not left in this file alone;
+- how to re-test it, because a negative result about somebody else's service has a shelf life.
+
+The reason a spike is exempt: a spec fixes an intent and a set of tasks, and a spike that already
+knows its tasks is not a spike. The reason it is exempt only that far: Story 1.3 skipped its spec,
+nobody recorded that this was allowed, and Epic 1's retrospective could not tell a deliberate
+exemption from an omission. `story-1-3-findings.md` is the shape above and is what this convention
+is generalised from — including its second acceptance criterion, satisfied at `prd.md:324`, where
+the answer lives now.
+
+Adopted 2026-08-20, closing Epic 1 retrospective action item 1. A spike that has already run
+without a findings file writes one before its story is called done.
