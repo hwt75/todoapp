@@ -27,17 +27,21 @@ against, and because the product currently has no way to move it or to see what 
   switch away, or asks whether he is still working. This is a known loophole, accepted knowingly — a
   timer that punishes checking a message is a timer he stops starting — and it is exactly why
   timer-backed work carries no Penalty.
-- Sessions continue while the app is backgrounded and while the phone is locked, bank their elapsed
-  minutes on stop, accumulate across multiple sessions in a day, and must bank correctly if the app is
-  killed mid-session.
+- Only one session runs at a time. Sessions continue while the app is backgrounded and while the phone
+  is locked, bank their elapsed minutes on stop, accumulate across multiple sessions in a day, and must
+  bank correctly if the app is killed mid-session.
 - **A weekly quota cannot fail mid-week.** 0 of 3 on a Tuesday is not a miss, and no reminder may frame
   a mid-week shortfall as a failure. It is judged only at Week Close, where a shortfall produces a
   Failed Day under the same flat 500,000 VND rule as any other.
-- Reminder frequency and urgency increase as sessions remaining approaches days remaining.
-- When quota work has banked no minutes by a configured hour, a notification prompts a session — one
-  action, nothing else.
-- Quota progress must be legible without opening the app; anything reachable only by opening the app
-  unprompted does not exist.
+- Reminder frequency and urgency increase as sessions remaining approaches days remaining, for Weekly
+  Quota commitments.
+- **Quota legibility without opening the app (FR-12, NFR1).** Banked-versus-target progress for a
+  Daily Hours Quota commitment must be readable from the notification surface itself — a capability
+  reachable only by opening the app unprompted does not exist. The running-session screen, when it is
+  opened, shows the day's *total* and a progress bar, not only the current session's elapsed time.
+- **The unstarted-work prompt (FR-5).** When a Daily Hours Quota commitment has banked no minutes by a
+  configured hour, a notification prompts the author to start a session. Like every notification, it
+  offers exactly one action — no secondary controls, no dismiss-and-snooze.
 - Week Close arrives as a notification first, stating the week's verdict in one line, with the screen
   as the detail behind it.
 - The morning hour is writable by the author and validated in the database, not by the form alone; the
@@ -87,10 +91,17 @@ against, and because the product currently has no way to move it or to see what 
 
 ## UX & Interaction Patterns
 
-- The focus control reads **Stop and bank it**, not Stop — stopping deposits the time. It is the
-  screen's single filled action button.
-- The running-session screen shows the day's total and a progress bar, not only the current session,
-  and states plainly that the timer keeps running while the phone is locked and watches nothing.
+- The Focus Session's two labels follow the plain-language rule: the control that opens a session
+  reads **Start the clock**, not Start — the thing being started is a clock and nothing else. The
+  day's accumulated minutes read **Banked today**, not Total or Progress — *banked* is the word the
+  stop control already uses, and it says the minutes are deposited rather than merely observed.
+- The stop control reads **Stop and bank it**, not Stop — stopping deposits the time. It is the
+  screen's single filled action button, per the one-action-button rule.
+- Because only one session runs at a time, starting a second must say so out loud rather than silently
+  doing nothing: *"A clock is already running on another commitment. Stop that one first."* — this is
+  the one surface whose entire job is making the tap feel like something happened.
+- The running-session screen states plainly that the timer keeps running while the phone is locked and
+  watches nothing — this is what removes the suspicion that would stop him pressing start.
 - **Urgent is not failure.** The urgent family means *sort this out*; the failed family means *you lost
   this*. They must be distinguishable at a glance, and a quota pill in the urgent family carries the
   position and days remaining as text (`1/3 · 3 days`) so colour is never the sole carrier.
@@ -99,8 +110,9 @@ against, and because the product currently has no way to move it or to see what 
   timer is the second one (the debt total is the first, already spent).
 - The morning slot belongs to the Declaration. Quota reminders and focus prompts may never occupy it.
 - Every notification offers at most one action and is fully legible on the lock screen.
-- Under Reduce Motion the timer updates without animation and the quota bar snaps rather than fills —
-  this is the only motion in the product.
+- **Under Reduce Motion, the quota bar snaps rather than fills** and the timer updates without
+  animation — this is the only motion in the product, and disabling it must not make the bar
+  disappear or freeze mid-fill; it jumps directly to the current value.
 - The accessibility floor delivered in Epic 2 (Dynamic Type without clipping, 44×44pt targets, AA
   contrast for any token pair added later) is inherited, not re-litigated.
 
