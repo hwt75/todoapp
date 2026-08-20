@@ -116,14 +116,14 @@ quietly, and `payloadProblems` will accept either form.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `lib/summary.ts` + test -- the sentence, built from a count, an amount and the name of
+- [x] `lib/summary.ts` + test -- the sentence, built from a count, an amount and the name of
   something that held. Pure, so the copy rules are testable: no itemising, one suggestion, one
   amount, and the day named.
-- [ ] `lib/outbox.ts` -- self-dating widened to accept a named day as well as a clock time, with the
+- [x] `lib/outbox.ts` -- self-dating widened to accept a named day as well as a clock time, with the
   reason recorded.
-- [ ] `supabase/migrations/<ts>_day_summary.sql` -- `settle_day` enqueues the summary alongside the
+- [x] `supabase/migrations/<ts>_day_summary.sql` -- `settle_day` enqueues the summary alongside the
   penalty, skipping expired days, with a dedupe key of subject and period.
-- [ ] `app/sw.ts` -- unchanged; the worker and the service worker already carry whatever the payload
+- [x] `app/sw.ts` -- unchanged; the worker and the service worker already carry whatever the payload
   says.
 
 **Acceptance Criteria:**

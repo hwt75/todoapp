@@ -99,19 +99,19 @@ of code that does not exist.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/<ts>_commitment.sql` -- `commitment_kind` and `commitment_cadence` enums,
+- [x] `supabase/migrations/<ts>_commitment.sql` -- `commitment_kind` and `commitment_cadence` enums,
   the `commitment` table with its ownership column, targets, `carries_penalty`, `idempotency_key`
   and `archived_at`, the cadence/target check constraints, RLS enabled in the same file, and
   owner-scoped policies whose `with check` calls `role_from_table()`.
-- [ ] `lib/commitment.ts` -- the Kind and Cadence unions, and the pure function deciding which
+- [x] `lib/commitment.ts` -- the Kind and Cadence unions, and the pure function deciding which
   targets a Cadence requires and whether a draft is complete -- so the rule is testable without a
   database or a browser, which is where this codebase puts every rule that matters.
-- [ ] `lib/commitment.test.ts` -- every Cadence's target requirements, the Abstain rule, and the
+- [x] `lib/commitment.test.ts` -- every Cadence's target requirements, the Abstain rule, and the
   defaults, including the money flag defaulting off.
-- [ ] `components/commitment-form.tsx`, `components/commitment-list.tsx` -- create, edit, archive,
+- [x] `components/commitment-form.tsx`, `components/commitment-list.tsx` -- create, edit, archive,
   and the disabled Auto-check section with its explanation.
-- [ ] `app/page.tsx` -- mount the list for a signed-in account.
-- [ ] `README.md` -- the archive-not-delete decision, so it is not rediscovered as a bug.
+- [x] `app/page.tsx` -- mount the list for a signed-in account.
+- [x] `README.md` -- the archive-not-delete decision, so it is not rediscovered as a bug.
 
 **Acceptance Criteria:**
 - Given the setup surface, when a commitment is created, then a name, Kind and Cadence are stored and

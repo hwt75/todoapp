@@ -102,16 +102,16 @@ produces those states. Today emits `not yet` and nothing else, and a test assert
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `lib/commitment-state.ts` -- the five row states, each mapped to its tint family and the shape
+- [x] `lib/commitment-state.ts` -- the five row states, each mapped to its tint family and the shape
   of its label, plus the pure function that decides a commitment's state today -- which returns
   `not yet` for everything until settlement exists, and is the single place that changes when it does.
-- [ ] `lib/commitment-state.test.ts` -- every state maps to a family and a non-empty label; the
+- [x] `lib/commitment-state.test.ts` -- every state maps to a family and a non-empty label; the
   today-function returns only `not yet`; no state maps to a button fill.
-- [ ] `components/commitment-row.tsx`, `components/status-pill.tsx` -- the two components every later
+- [x] `components/commitment-row.tsx`, `components/status-pill.tsx` -- the two components every later
   surface reuses. The row carries one accessibility label combining name and state.
-- [ ] `components/today.tsx` -- the screen: heading, rows, and the empty case.
-- [ ] `app/globals.css` -- a pill class per state family, and row rules that grow with type.
-- [ ] `app/page.tsx` -- Today first when signed in.
+- [x] `components/today.tsx` -- the screen: heading, rows, and the empty case.
+- [x] `app/globals.css` -- a pill class per state family, and row rules that grow with type.
+- [x] `app/page.tsx` -- Today first when signed in.
 
 **Acceptance Criteria:**
 - Given configured commitments, when the app opens signed in, then Today is the first content and

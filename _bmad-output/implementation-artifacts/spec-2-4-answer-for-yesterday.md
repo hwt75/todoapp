@@ -115,24 +115,24 @@ where he does not open the app — which is the case that matters, and is why 2.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/<ts>_declaration.sql` -- the `declaration_answer` enum, the `declaration`
+- [x] `supabase/migrations/<ts>_declaration.sql` -- the `declaration_answer` enum, the `declaration`
   table keyed to owner and commitment with its idempotency key, the tap instant, and the day it
   answers for **derived server-side** by trigger in `Asia/Ho_Chi_Minh`; RLS in the same file; a
   `morning_hour` column on `profile`.
-- [ ] `lib/declaration.ts` -- which commitments owe a declaration for which day given a set of
+- [x] `lib/declaration.ts` -- which commitments owe a declaration for which day given a set of
   commitments, the morning hour and an instant -- pure, so the boundary rule is tested without a
   clock or a database.
-- [ ] `lib/declaration.test.ts` -- the day boundary in `Asia/Ho_Chi_Minh` including the hour either
+- [x] `lib/declaration.test.ts` -- the day boundary in `Asia/Ho_Chi_Minh` including the hour either
   side of the morning hour, and the rule that nothing is owed before it.
-- [ ] `lib/offline-queue.ts` + test -- append, flush, and flush-twice-yields-one, with the tap instant
+- [x] `lib/offline-queue.ts` + test -- append, flush, and flush-twice-yields-one, with the tap instant
   preserved.
-- [ ] `components/morning-gate.tsx` -- the blocking surface, two identical neutral controls, and the
+- [x] `components/morning-gate.tsx` -- the blocking surface, two identical neutral controls, and the
   accessibility contract: two focusable elements, no rotor capture, app always closable.
-- [ ] `supabase/migrations/<ts>_gate_reminder.sql` -- the `pg_cron` job that enqueues a reminder for
+- [x] `supabase/migrations/<ts>_gate_reminder.sql` -- the `pg_cron` job that enqueues a reminder for
   each account with an outstanding declaration after its morning hour, deduped per day and slot so a
   morning produces one notification per slot rather than a queue of identical ones.
 - [ ] `components/settings.tsx` -- the morning hour, alongside notification permission state.
-- [ ] `app/page.tsx` -- the gate takes precedence over Today when a declaration is outstanding.
+- [x] `app/page.tsx` -- the gate takes precedence over Today when a declaration is outstanding.
 
 **Acceptance Criteria:**
 - Given an unfiled declaration for yesterday after the morning hour, when the app opens, then the
@@ -197,3 +197,16 @@ them. Order is stable so the same commitment is not asked twice.
 - With an outstanding declaration, opening the app shows the gate and nothing else
 - The two buttons are indistinguishable apart from their words
 - Airplane mode: answer, re-enable, confirm exactly one row arrives
+
+**Not built, and unticked above** (added 2026-08-20, after the Epic 2 retrospective):
+`components/settings.tsx` — the morning hour, alongside notification permission state. It is a
+declared acceptance criterion of this story (`epics.md` Story 2.4, per UX-DR17) and it was
+neither built nor recorded as dropped, which is how it went unnoticed until a retrospective read
+the epic against the tree. The back end is ready: `morning_hour` is `not null default 7` with a
+`between 0 and 23` check and a column grant to `authenticated`, and `supabase/tests/
+2-1-roles-and-rls.sql` now drives a session setting it. There is simply no way in.
+
+The gap turned out to be larger than one file, so it is **promoted to a story at the front of
+Epic 3** rather than carried as a task here: the product has no Settings surface at all, the gate
+is pinned at 07:00 with no way to move it, and notification permission is granted only through
+Story 1.2's diagnostic push probe. Recorded in `deferred-work.md`.

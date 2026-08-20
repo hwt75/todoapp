@@ -106,21 +106,21 @@ whoever writes the next migration to remember.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/0001_account_and_roles.sql` -- the `app_role` type, the `profile` table
+- [x] `supabase/migrations/0001_account_and_roles.sql` -- the `app_role` type, the `profile` table
   keyed to `auth.users`, RLS enabled in the same statement block, the owner-only policies, the two
   role helpers, and the trigger that creates a profile on sign-up -- one file because a profile table
   without its policies is a window, however short.
-- [ ] `lib/supabase/client.ts`, `lib/supabase/server.ts` -- browser and server clients reading the
+- [x] `lib/supabase/client.ts`, `lib/supabase/server.ts` -- browser and server clients reading the
   publishable key -- separated because the server client carries the session cookie and the browser
   client must never be handed one built for another request.
-- [ ] `lib/roles.ts` -- the two helper names and which path each belongs to, as typed constants the
+- [x] `lib/roles.ts` -- the two helper names and which path each belongs to, as typed constants the
   policy test asserts against -- so the read/write split is stated in one place rather than
   remembered.
-- [ ] `lib/roles.test.ts` -- fails when any `with check` clause in any migration references the JWT
+- [x] `lib/roles.test.ts` -- fails when any `with check` clause in any migration references the JWT
   helper -- this is the guard that makes the hybrid safe to live with.
-- [ ] `components/sign-in.tsx`, `app/page.tsx` -- email sign-in, and the session state the page shows
+- [x] `components/sign-in.tsx`, `app/page.tsx` -- email sign-in, and the session state the page shows
   -- minimal; the real surfaces are later stories.
-- [ ] `README.md` -- how to apply migrations, and that the service-role key never leaves Supabase.
+- [x] `README.md` -- how to apply migrations, and that the service-role key never leaves Supabase.
 
 **Acceptance Criteria:**
 - Given Supabase Auth is configured, when the author signs in, then a profile exists carrying his

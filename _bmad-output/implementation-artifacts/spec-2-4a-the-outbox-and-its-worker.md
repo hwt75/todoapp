@@ -95,20 +95,20 @@ The push proof left two findings that are constraints here, not trivia:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/<ts>_outbox.sql` -- enable `pg_cron` and `pg_net`; `push_subscription`
+- [x] `supabase/migrations/<ts>_outbox.sql` -- enable `pg_cron` and `pg_net`; `push_subscription`
   (owner, endpoint, keys, `dead_at`) with RLS so an account manages only its own; `outbox` with its
   dedupe key, payload, status, attempt count and last error, and **no policies at all**; the atomic
   claim function; the enqueue function settlement will call.
-- [ ] `supabase/functions/outbox-worker/index.ts` -- claims a batch, sends each via Web Push with the
+- [x] `supabase/functions/outbox-worker/index.ts` -- claims a batch, sends each via Web Push with the
   VAPID key from its own environment, marks sent, dead, or failed-with-reason. Never decides
   anything.
-- [ ] `supabase/migrations/<ts>_outbox_schedule.sql` -- the `pg_cron` job that wakes the worker
+- [x] `supabase/migrations/<ts>_outbox_schedule.sql` -- the `pg_cron` job that wakes the worker
   through `pg_net`, on its own schedule, reading its authorization from Vault.
-- [ ] `components/push-probe.tsx` -- save the subscription to `push_subscription` instead of printing
+- [x] `components/push-probe.tsx` -- save the subscription to `push_subscription` instead of printing
   it for a human to copy into a file.
-- [ ] `lib/outbox.ts` + test -- the payload shape, including the rule that every body carries its own
+- [x] `lib/outbox.ts` + test -- the payload shape, including the rule that every body carries its own
   timestamp, tested.
-- [ ] `README.md` -- the two secrets that live in Supabase and nowhere else, and how to watch the
+- [x] `README.md` -- the two secrets that live in Supabase and nowhere else, and how to watch the
   queue drain.
 
 **Acceptance Criteria:**

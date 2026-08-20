@@ -174,15 +174,15 @@ warmer sentence.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Migration — `settlement_commitment`, written by `settle_day` in the same transaction; RLS
+- [x] Migration — `settlement_commitment`, written by `settle_day` in the same transaction; RLS
   read-own, no client write path; a `chain_current` view giving current and longest per
   commitment, derived, reading through supersession.
-- [ ] `lib/chain.ts` + test — the rules as pure functions: what extends, what breaks, what is
+- [x] `lib/chain.ts` + test — the rules as pure functions: what extends, what breaks, what is
   skipped, and how a chain reads.
-- [ ] `lib/commitment-state.ts` — correct the stale note; a chain is not a state.
-- [ ] Today row + `rowLabel` — chain beside the pill, uncoloured, in the single spoken label.
-- [ ] Chains detail surface — current, longest adjacent, calendar of held and missed days.
-- [ ] Day summary — the `— day 12` clause; morning gate — the single-commitment case only.
+- [x] `lib/commitment-state.ts` — correct the stale note; a chain is not a state.
+- [x] Today row + `rowLabel` — chain beside the pill, uncoloured, in the single spoken label.
+- [x] Chains detail surface — current, longest adjacent, calendar of held and missed days.
+- [x] Day summary — the `— day 12` clause; morning gate — the single-commitment case only.
 
 **Acceptance Criteria:**
 - Given a failed day with four of five holding, then four chains extend and one resets.

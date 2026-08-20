@@ -105,16 +105,16 @@ a settled verdict never becomes visible on a day still in progress.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/<ts>_settlement.sql` -- `settlement_kind` and `day_verdict` enums; the
+- [x] `supabase/migrations/<ts>_settlement.sql` -- `settlement_kind` and `day_verdict` enums; the
   `settlement` table with its `(subject, period, kind)` uniqueness; `is_live_doer` on `profile`; the
   shared "who owes an answer for this day" function that both the reminder and settlement call, so
   the rule exists once; `settle_day(p_day, p_override)` with its AD-16 guards; RLS so an account
   reads its own settlements and writes none.
-- [ ] `supabase/migrations/<ts>_settlement_schedule.sql` -- the `pg_cron` job, on its own schedule,
+- [x] `supabase/migrations/<ts>_settlement_schedule.sql` -- the `pg_cron` job, on its own schedule,
   after the day it settles has ended in `Asia/Ho_Chi_Minh`.
-- [ ] `lib/commitment-state.ts` -- `stateToday` learns to read a settled verdict, and returns
+- [x] `lib/commitment-state.ts` -- `stateToday` learns to read a settled verdict, and returns
   `not_yet` for any day not yet closed.
-- [ ] `components/today.tsx` -- shows the settled state where one exists, and nothing different where
+- [x] `components/today.tsx` -- shows the settled state where one exists, and nothing different where
   it does not.
 
 **Acceptance Criteria:**

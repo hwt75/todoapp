@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-20-2026 11:02
+last_updated: 08-20-2026 11:15
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -131,7 +131,7 @@ action_items:
     action: "Settle components/settings.tsx - build the morning-hour surface or record
       it in deferred-work.md with the reason (A3)"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
   - id: "epic-2-retro-item-9-add-executable-tests-against-a-local-pos"
     epic: 2
@@ -166,14 +166,14 @@ action_items:
     action: "Restore the commit-key convention - full sprint-status key in every scope,
       or a commit-msg hook (P3)"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
   - id: "epic-2-retro-item-14-tick-the-spec-task-boxes-or-drop-them-an"
     epic: 2
     action: "Tick the spec task boxes, or drop them and make each spec's verification
       prose name what was not built (A4)"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
   - id: "epic-2-retro-item-15-close-epic-1-and-epic-2-in-sprint-status"
     epic: 2

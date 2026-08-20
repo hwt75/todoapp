@@ -108,15 +108,15 @@ which is a recorded act with a count, rather than a clock that quietly stretches
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/<ts>_expiry.sql` -- `expired` added to `day_verdict` and `penalty_state`;
+- [x] `supabase/migrations/<ts>_expiry.sql` -- `expired` added to `day_verdict` and `penalty_state`;
   a `superseded_by` reference on `settlement` for the fold; `expire_due_declarations()` writing an
   expiry per silent day; `settle_day` teaching itself that an expired declaration counts as answered.
-- [ ] `supabase/migrations/<ts>_supersede.sql` -- the rule that a declaration whose `answered_at`
+- [x] `supabase/migrations/<ts>_supersede.sql` -- the rule that a declaration whose `answered_at`
   precedes the deadline supersedes an expiry, as a new row.
-- [ ] `lib/expiry.ts` + test -- the deadline from a day and a morning hour, and whether an
+- [x] `lib/expiry.ts` + test -- the deadline from a day and a morning hour, and whether an
   `answered_at` beats it. Pure, both sides of the boundary.
-- [ ] `lib/ledger.ts` -- `Expired` as an outcome, folded so a superseded expiry shows the answer.
-- [ ] `components/ledger.tsx` -- the `Expired` pill, in the `failed` family but worded differently.
+- [x] `lib/ledger.ts` -- `Expired` as an outcome, folded so a superseded expiry shows the answer.
+- [x] `components/ledger.tsx` -- the `Expired` pill, in the `failed` family but worded differently.
 
 **Acceptance Criteria:**
 - Given nothing filed 48 hours after the request, then the day settles as a miss and closes.

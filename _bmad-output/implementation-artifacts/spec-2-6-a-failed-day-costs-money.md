@@ -117,17 +117,17 @@ chose that knowingly, against advice, and the design executes it rather than sof
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/<ts>_penalty.sql` -- `penalty_state` enum with `owed` only; the `penalty`
+- [x] `supabase/migrations/<ts>_penalty.sql` -- `penalty_state` enum with `owed` only; the `penalty`
   table with its integer amount, its reference to the settlement that caused it, and uniqueness on
   that reference; RLS so an account reads its own and writes none; `settle_day` extended to write it
   in the same transaction.
-- [ ] `lib/money.ts` + test -- integer đồng, formatting for display, and a guard that no float ever
+- [x] `lib/money.ts` + test -- integer đồng, formatting for display, and a guard that no float ever
   reaches storage.
-- [ ] `lib/ledger.ts` + test -- folding a day's penalty and its missed commitments into one row.
-- [ ] `components/debt-block.tsx` -- the figure. The only large coloured area; tapping opens the
+- [x] `lib/ledger.ts` + test -- folding a day's penalty and its missed commitments into one row.
+- [x] `components/debt-block.tsx` -- the figure. The only large coloured area; tapping opens the
   ledger.
-- [ ] `components/ledger.tsx` -- one row per day, neutral rows with pills, and the empty case.
-- [ ] `components/today.tsx` -- the debt block, drawn first and **read last**.
+- [x] `components/ledger.tsx` -- one row per day, neutral rows with pills, and the empty case.
+- [x] `components/today.tsx` -- the debt block, drawn first and **read last**.
 
 **Acceptance Criteria:**
 - Given a day settled `failed` with any number missed, then exactly one penalty of 500000 exists.
