@@ -8,6 +8,13 @@
  * So a payload states when it was sent, in its body as well as its metadata, and never
  * describes the present. "You have not answered yet" is a claim about a moment that may
  * have passed by the time it is read; "Yesterday is still unanswered as of 07:30" is not.
+ *
+ * **Not production code.** Bodies are built in SQL — `enqueue_gate_reminders` and
+ * `settle_day` — and queued through `outbox_enqueue`, so `payloadProblems` below has never
+ * refused anything. The rule now runs where it can: `public.push_body_is_sendable`
+ * (`supabase/migrations/20260820101000_outbox_body_rule_where_it_runs.sql`) is a check
+ * constraint on the outbox itself. What is below is the same rule written for reading, and
+ * the type is still worth having.
  */
 
 export interface PushPayload {
