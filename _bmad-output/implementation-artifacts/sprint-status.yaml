@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-20-2026 10:45
+last_updated: 08-20-2026 11:02
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -138,7 +138,7 @@ action_items:
     action: "Add executable tests against a local Postgres for settlement, expiry,
       supersession, penalty and RLS (A6)"
     owner: "hwt75"
-    status: in-progress
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
   - id: "epic-2-retro-item-10-add-ob-token-to-gitignore-and-decide-whe"
     epic: 2

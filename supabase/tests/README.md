@@ -65,8 +65,13 @@ than failing somewhere confusing later.
 | `2-7-supersession.sql`      | An answer given in time but delivered after the deadline takes back the expiry, the penalty stops counting, and **the day comes back to the chain** — the last of which is the question the retrospective could not answer by reading.                                                                                                                             |
 | `2-9-chain-calendar.sql`    | A superseded day is drawn once, as what it turned out to be, and `chain_current` and `settlement_commitment_current` cannot disagree about it — the database half of A2.                                                                                                                                                                                           |
 | `2-4a-outbox-body-rule.sql` | A notification body that describes the present, or carries no time or named day, cannot reach the queue — and both sentences the product really sends still can.                                                                                                                                                                                                   |
+| `2-1-roles-and-rls.sql`     | A profile is created server-side as a `doer`; the token and table role functions disagree correctly; a session cannot promote itself to `referee` but can still set its morning hour; RLS filters to one account; nine deciding functions and the outbox are out of reach of `anon` and `authenticated`.                                                           |
+| `2-2-commitment-rules.sql`  | Eight malformed commitments refused by constraints; a replayed idempotency key lands once (AD-4); a client-sent `updated_at` is overwritten; a delete removes nothing; archiving is not retroactive and an hours quota is never declared.                                                                                                                          |
+| `2-4a-outbox-claim.sql`     | One row per dedupe key, oldest claimed first, `attempts` incremented, a claimed row invisible until its visibility timeout, a deferred row left alone. `for update skip locked` is **read, not run** — it needs two sessions.                                                                                                                                      |
+| `2-8-summary-copy.sql`      | The Vietnamese thousands separator that drifted once; money named once and only when there is money; exactly one suggestion; a chain clause that never says `day 0` and never claims something held when nothing did.                                                                                                                                              |
+| `2-9-chain-arithmetic.sql`  | Seven days, two commitments: a miss breaks a chain, silence breaks it and is recorded as `unanswered`, a day nobody judged is skipped rather than breaking it, one commitment's bad day does not touch another's, and the expired day queues no summary.                                                                                                           |
 
-**All four pass**, run on 2026-08-20 against a local stack with all 22 migrations applied from
+**All nine pass**, run on 2026-08-20 against a local stack with every migration applied from
 scratch. The first run of `2-7-supersession.sql` did not: it failed at step 4 with `A1 CONFIRMED`,
 which is what it was written to do. `supersede_expiries()` wrote a correction carrying no frozen
 outcomes, so a day answered in time and delivered late dropped out of the chain entirely. Fixed in
@@ -75,9 +80,10 @@ holds it.
 
 ## Still uncovered
 
-Story 2.1's RLS and role helpers, 2.2's constraints and cross-account writes, 2.4a's
-`outbox_claim` skip-locked behaviour, 2.8's summary copy, and 2.9's chain arithmetic over more
-than one day. Each was verified by hand once, and each has a paragraph rather than a file.
+Every component. Eleven of them, and no test of any kind — which is the whole UI half of Stories
+2.3, 2.6 and 2.9, and the only half a check file cannot reach. Two database properties are out of
+reach here too: `outbox_claim`'s skip-locked behaviour under two simultaneous workers, and
+anything the Edge Function worker does after it claims a row.
 
 **One thing these files deliberately do not assert: table grants.** The local stack's default
 privileges differ from the author's project — `authenticated` has no `select` on any application
