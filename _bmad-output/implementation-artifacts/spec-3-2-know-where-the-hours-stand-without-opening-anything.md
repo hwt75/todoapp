@@ -222,26 +222,38 @@ Verification-gap, edge-case-hunter and acceptance-auditor found nothing — the 
 confirmed every decision (D1–D5), the I/O matrix and both previously-found defects (poisoned
 commitment names, the zero-row-view null trap) are present and correct. blind-hunter's thirteen
 findings were checked individually against the actual code and this project's established
-conventions; none survived as a `patch` (an unambiguous, verifiable fix) — three are real SQL
-test-coverage gaps this environment has no Docker to safely add and verify against (this
-project's own hard-won rule, from Story 2.9: "Applying is not passing"), and the rest are either
-unreachable given existing constraints or pre-existing patterns shared across the whole codebase,
-not specific to this diff. All routed to `defer`.
+conventions; ten are either unreachable given existing constraints or pre-existing patterns
+shared across the whole codebase, routed to `defer`. Three named real SQL test-coverage gaps —
+this environment had no Docker running at first, so they were initially deferred rather than
+patched blind (this project's own hard-won rule, from Story 2.9: "Applying is not passing").
+Once Docker was started later the same session, all three became `patch` and were fixed and
+verified against a freshly reset local stack — see below.
 
-- [x] [Review][Defer] No SQL test exercises cadence exclusion directly — `enqueue_focus_prompts()`
-      filters `c.cadence = 'daily_hours_quota'` correctly, but no fixture proves a `weekly_quota`
+- [x] [Review][Patch] No SQL test exercises cadence exclusion directly — `enqueue_focus_prompts()`
+      filters `c.cadence = 'daily_hours_quota'` correctly, but no fixture proved a `weekly_quota`
       commitment under the same account is skipped rather than merely never having been tested.
-      [supabase/migrations/20260820120000_a_prompt_reads_the_view_it_was_promised.sql:111-114]
-      — deferred, no Docker/local Postgres available in this environment to add and run a new SQL
-      test step safely.
-- [x] [Review][Defer] No SQL test exercises the `where p.role = 'doer'` filter against a
-      counter-example (a `referee` account with an otherwise-eligible commitment).
-      [supabase/migrations/20260820120000_a_prompt_reads_the_view_it_was_promised.sql:99]
-      — deferred, same reason: cannot add/verify a new SQL test step without a local database.
-- [x] [Review][Defer] No SQL test exercises the fully-silent account case — every one of an
-      account's `daily_hours_quota` commitments already at target, asserting `enqueued = 0`
-      directly rather than only the mixed one-met-one-unmet scenario the matrix already covers.
-      [supabase/tests/3-2-focus-prompt.sql] — deferred, same reason.
+      **Fixed 2026-08-21, once Docker was available** — Step 9 inserts a `weekly_quota` commitment
+      under a fresh, otherwise-eligible account and asserts zero rows; a sanity check (a raw
+      query without the cadence filter) confirmed the row would be visible without it, so the
+      assertion depends on the real filter rather than an accident of role or archival state.
+      [supabase/migrations/20260820120000_a_prompt_reads_the_view_it_was_promised.sql:111-114;
+      supabase/tests/3-2-focus-prompt.sql]
+- [x] [Review][Patch] No SQL test exercises the `where p.role = 'doer'` filter against a
+      counter-example (a `referee` account with an otherwise-eligible commitment). **Fixed
+      2026-08-21** — Step 10 gives a `referee` account a fully-eligible `daily_hours_quota`
+      commitment and asserts zero rows.
+      [supabase/migrations/20260820120000_a_prompt_reads_the_view_it_was_promised.sql:99;
+      supabase/tests/3-2-focus-prompt.sql]
+- [x] [Review][Patch] No SQL test exercises the fully-silent account case — every one of an
+      account's `daily_hours_quota` commitments already at target. **Fixed 2026-08-21** — Step 11
+      bans a single-commitment account exactly to its target and asserts zero rows, scoped to
+      that account's own dedupe-key prefix (the file's own `v_queued` return value is no longer a
+      usable global signal by this point, since earlier steps' accounts still carry eligible,
+      unmet commitments). [supabase/tests/3-2-focus-prompt.sql]
+
+All eleven steps of `supabase/tests/3-2-focus-prompt.sql` pass against a freshly reset local
+stack (`npx supabase db reset`, then every file under `supabase/tests/` — all fourteen report
+`PASS.`).
 - [x] [Review][Defer] The composed push body (`commitment.name || ... `) has no length guard —
       `push_body_is_sendable` screens only for banned phrasing and self-dating, never length, so a
       long freeform commitment name could in principle produce an oversized body.
@@ -350,12 +362,20 @@ into place. Both are why this story stays at `review` rather than moving itself 
 verification-gap, acceptance-auditor) ran against `a400e52..397da78`. Three layers found nothing —
 the acceptance-auditor confirmed every decision, the I/O matrix and both previously-found defects
 (poisoned commitment names, the zero-row-view null trap) are present and correct as shipped.
-blind-hunter's thirteen findings were checked individually; none survived as an unambiguous,
-verifiable `patch` — three are real SQL test-coverage gaps this environment has no Docker to add
-and run against safely, and the rest are either unreachable given existing constraints or
-pre-existing patterns shared across the whole codebase. All six routed to `defer`, recorded in
-`deferred-work.md`. No code changed. Story stays at `review`: the two device-only checks above
-remain unrun, and this project's own `done` gate (Epic 2 retro, T4) reserves that for the author.
+blind-hunter's thirteen findings were checked individually; ten are either unreachable given
+existing constraints or pre-existing patterns shared across the whole codebase, routed to
+`defer`. Three named real SQL test-coverage gaps (cadence exclusion, the doer-role filter, the
+fully-silent-account case) that this environment initially had no Docker to add and verify
+against safely.
+
+**Later the same session, Docker was started.** All three gaps became `patch`:
+`supabase/tests/3-2-focus-prompt.sql` gained three new steps (9–11), each proven meaningful
+rather than vacuous — step 9's exclusion was confirmed to depend on the actual cadence filter by
+checking the same row would be visible without it. `npx supabase db reset` applied every
+migration cleanly, and all fourteen files under `supabase/tests/` report `PASS.` against the
+fresh stack, including this one. `npm test` stays at 645/645, `tsc`/`lint`/`format:check` clean.
+Story stays at `review`: the two device-only checks above remain unrun, and this project's own
+`done` gate (Epic 2 retro, T4) reserves that for the author.
 
 ## Suggested Review Order
 

@@ -393,12 +393,168 @@ begin
     'Step 8 ok: a poisoned commitment name is skipped, and another account processed in the '
     'same call still gets its row.';
 
+  -- -------------------------------------------------------------------------------
+  -- 9. Cadence exclusion, proven rather than only read: a weekly_quota commitment under
+  --    an otherwise-eligible account is never enqueued by this pipeline. Scoped to a fresh
+  --    account's own dedupe-key prefix, since by this point in the file other accounts'
+  --    still-unmet commitments (`v_c3`, `v_c5`) remain eligible every pass and would make
+  --    the function's own return value meaningless as a global "nothing fired" signal.
+  -- -------------------------------------------------------------------------------
+  declare
+    v_cadence_user uuid := gen_random_uuid();
+    v_weekly       uuid;
+  begin
+    insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
+                            email_confirmed_at, created_at, updated_at,
+                            raw_app_meta_data, raw_user_meta_data)
+    values (v_cadence_user, '00000000-0000-0000-0000-000000000000',
+            'authenticated', 'authenticated',
+            'retro-3-2-cadence-' || v_cadence_user::text || '@example.test',
+            'not-a-real-password-this-account-never-signs-in',
+            now(), now(), now(),
+            '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb);
+
+    update public.profile set role = 'doer', morning_hour = v_hour - 3
+     where id = v_cadence_user;  -- prompt hour = v_hour, slot 0
+
+    insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
+                                   weekly_target, week_start_day)
+    values (v_cadence_user, gen_random_uuid(), 'Gym', 'do', 'weekly_quota', 3, 1)
+    returning id into v_weekly;
+
+    perform public.enqueue_focus_prompts();
+
+    select count(*) into v_count
+      from public.outbox
+     where dedupe_key like 'focus-' || v_cadence_user::text || '-%';
+
+    if v_count <> 0 then
+      raise exception using message = format(
+        'A weekly_quota commitment was enqueued by the daily-hours prompt pipeline (%s rows). '
+        'enqueue_focus_prompts() filters c.cadence = ''daily_hours_quota'' and this must '
+        'actually exclude every other cadence, not merely never have been asked to include '
+        'one.', v_count);
+    end if;
+  end;
+
+  raise notice using message =
+    'Step 9 ok: a weekly_quota commitment under an otherwise-eligible account is never '
+    'enqueued by the daily-hours prompt pipeline.';
+
+  -- -------------------------------------------------------------------------------
+  -- 10. Role exclusion: a referee account with an otherwise fully-eligible
+  --     daily_hours_quota commitment is never enqueued. `enqueue_focus_prompts()` loops
+  --     `where p.role = 'doer'`, the same filter `enqueue_gate_reminders()` uses, and
+  --     this proves it against a counter-example rather than only against absence.
+  -- -------------------------------------------------------------------------------
+  declare
+    v_referee     uuid := gen_random_uuid();
+    v_referee_com uuid;
+  begin
+    insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
+                            email_confirmed_at, created_at, updated_at,
+                            raw_app_meta_data, raw_user_meta_data)
+    values (v_referee, '00000000-0000-0000-0000-000000000000',
+            'authenticated', 'authenticated',
+            'retro-3-2-referee-' || v_referee::text || '@example.test',
+            'not-a-real-password-this-account-never-signs-in',
+            now(), now(), now(),
+            '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb);
+
+    update public.profile set role = 'referee', morning_hour = v_hour - 3
+     where id = v_referee;  -- prompt hour = v_hour, slot 0 — fully eligible but for role
+
+    insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
+                                   daily_minutes_target)
+    values (v_referee, gen_random_uuid(), 'Reading', 'open_ended', 'daily_hours_quota', 30)
+    returning id into v_referee_com;
+
+    perform public.enqueue_focus_prompts();
+
+    select count(*) into v_count
+      from public.outbox
+     where dedupe_key like 'focus-' || v_referee::text || '-%';
+
+    if v_count <> 0 then
+      raise exception using message = format(
+        'A referee account''s otherwise-eligible commitment was enqueued (%s rows). This '
+        'pipeline asks only doers where they stand — the morning question and now this one '
+        'both belong to the person doing the work, not the one refereeing it.', v_count);
+    end if;
+  end;
+
+  raise notice using message =
+    'Step 10 ok: a referee account with an otherwise fully-eligible commitment is never '
+    'enqueued — the role filter excludes it, not merely coincidence.';
+
+  -- -------------------------------------------------------------------------------
+  -- 11. The fully-silent account: every one of an account's daily_hours_quota
+  --     commitments already at target produces zero rows, asserted directly rather than
+  --     only through the mixed one-met-one-unmet scenario step 5 already covers.
+  -- -------------------------------------------------------------------------------
+  declare
+    v_silent_user uuid := gen_random_uuid();
+    v_silent_com  uuid;
+  begin
+    insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
+                            email_confirmed_at, created_at, updated_at,
+                            raw_app_meta_data, raw_user_meta_data)
+    values (v_silent_user, '00000000-0000-0000-0000-000000000000',
+            'authenticated', 'authenticated',
+            'retro-3-2-silent-' || v_silent_user::text || '@example.test',
+            'not-a-real-password-this-account-never-signs-in',
+            now(), now(), now(),
+            '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb);
+
+    update public.profile set role = 'doer', morning_hour = v_hour - 3
+     where id = v_silent_user;  -- prompt hour = v_hour, slot 0
+
+    insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
+                                   daily_minutes_target)
+    values (v_silent_user, gen_random_uuid(), 'Reading', 'open_ended',
+            'daily_hours_quota', 30)
+    returning id into v_silent_com;
+
+    perform set_config('request.jwt.claims',
+      json_build_object('sub', v_silent_user, 'role', 'authenticated',
+                         'app_role', 'doer')::text, true);
+    perform set_config('role', 'authenticated', true);
+
+    insert into public.focus_session (owner_id, commitment_id, idempotency_key,
+                                      started_at, stopped_at)
+    values (v_silent_user, v_silent_com, gen_random_uuid(),
+            (v_today + time '00:00') at time zone 'Asia/Ho_Chi_Minh',
+            (v_today + time '00:30') at time zone 'Asia/Ho_Chi_Minh');  -- exactly the target
+
+    perform set_config('role', 'postgres', true);
+
+    perform public.enqueue_focus_prompts();
+
+    select count(*) into v_count
+      from public.outbox
+     where dedupe_key like 'focus-' || v_silent_user::text || '-%';
+
+    if v_count <> 0 then
+      raise exception using message = format(
+        'An account whose every commitment is already at target was still enqueued (%s '
+        'rows). The whole product answer to a quota that succeeded is silence, for every '
+        'commitment an account has, not only whichever one a mixed test happened to leave '
+        'unmet.', v_count);
+    end if;
+  end;
+
+  raise notice using message =
+    'Step 11 ok: an account whose every commitment is already at target produces zero rows.';
+
   raise notice using message =
     'PASS. The prompt is silent before its hour, states the real fraction once it has passed, '
     'goes quiet the moment a target is met without silencing its account-mate, stops after '
     'four attempts, never repeats a pass, never speaks for an archived commitment, its hour '
-    'caps at 23 rather than wrapping into the next day, and a single badly-named commitment '
-    'cannot take the whole pass down with it.';
+    'caps at 23 rather than wrapping into the next day, a single badly-named commitment '
+    'cannot take the whole pass down with it, a weekly_quota commitment and a non-doer '
+    'account are both excluded outright, and an account whose every commitment is already '
+    'met is silent in full, not only in the one commitment a mixed test happened to leave '
+    'unmet.';
 end $$;
 
 rollback;
