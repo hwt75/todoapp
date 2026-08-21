@@ -145,4 +145,13 @@ describe('the chains detail', () => {
     expect(await screen.findByText(/permission denied/)).toBeInTheDocument();
     expect(screen.queryByText('No day has been judged for this yet.')).not.toBeInTheDocument();
   });
+
+  it('says what failed when only the calendar read fails, not just the chain read', async () => {
+    rows.chain_current = { data: { current_days: 3, longest_days: 9 }, error: null };
+    rows.settlement_commitment_current = { data: null, error: { message: 'calendar unreadable' } };
+
+    render(<ChainsDetail commitmentId="c1" name="Gym" onClose={vi.fn()} />);
+
+    expect(await screen.findByText(/calendar unreadable/)).toBeInTheDocument();
+  });
 });

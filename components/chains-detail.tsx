@@ -50,7 +50,7 @@ export function ChainsDetail({
     async function load() {
       const supabase = createClient();
 
-      const [{ data: chain, error }, { data: days }] = await Promise.all([
+      const [{ data: chain, error }, { data: days, error: daysError }] = await Promise.all([
         supabase
           .from('chain_current')
           .select('current_days,longest_days')
@@ -63,8 +63,12 @@ export function ChainsDetail({
       ]);
 
       if (cancelled) return;
-      if (error) {
-        setView({ kind: 'failed', reason: error.message });
+
+      // Both parallel reads are checked, not only the first — a failed calendar read used to
+      // render silently as an empty history rather than surfacing the failure.
+      const failed = error ?? daysError;
+      if (failed) {
+        setView({ kind: 'failed', reason: failed.message });
         return;
       }
 

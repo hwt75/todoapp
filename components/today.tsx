@@ -48,26 +48,35 @@ export function Today({
 
     async function load() {
       const supabase = createClient();
-      const [{ data, error }, { data: penalties }, { data: chains }, { data: quotas }] =
-        await Promise.all([
-          supabase.from('commitment').select(SELECT).is('archived_at', null).order('created_at'),
-          // `penalty_current`, not `penalty`. A penalty attached to a superseded verdict is
-          // history rather than debt — it stays in the table so the trace survives and stops
-          // counting (AD-9). Reading the base table would charge him for a day he took back.
-          supabase.from('penalty_current').select('amount_dong').eq('state', 'owed'),
-          // Derived in one place — `chain_current` — rather than counted here. A second
-          // implementation of the chain rule would drift, and this one would drift silently
-          // because a wrong chain still looks like a number.
-          supabase.from('chain_current').select('commitment_id,current_days'),
-          // Same pattern, for the other live position this screen shows: `weekly_quota_progress`
-          // (spec 3-3) is the one source the pill reads, never a client-side tally of raw
-          // `declaration` rows (AD-8).
-          supabase.from('weekly_quota_progress').select('commitment_id,held,target,days_remaining'),
-        ]);
+      const [
+        { data, error },
+        { data: penalties, error: penaltiesError },
+        { data: chains, error: chainsError },
+        { data: quotas, error: quotasError },
+      ] = await Promise.all([
+        supabase.from('commitment').select(SELECT).is('archived_at', null).order('created_at'),
+        // `penalty_current`, not `penalty`. A penalty attached to a superseded verdict is
+        // history rather than debt — it stays in the table so the trace survives and stops
+        // counting (AD-9). Reading the base table would charge him for a day he took back.
+        supabase.from('penalty_current').select('amount_dong').eq('state', 'owed'),
+        // Derived in one place — `chain_current` — rather than counted here. A second
+        // implementation of the chain rule would drift, and this one would drift silently
+        // because a wrong chain still looks like a number.
+        supabase.from('chain_current').select('commitment_id,current_days'),
+        // Same pattern, for the other live position this screen shows: `weekly_quota_progress`
+        // (spec 3-3) is the one source the pill reads, never a client-side tally of raw
+        // `declaration` rows (AD-8).
+        supabase.from('weekly_quota_progress').select('commitment_id,held,target,days_remaining'),
+      ]);
 
       if (cancelled) return;
-      if (error) {
-        setView({ kind: 'failed', reason: error.message });
+
+      // Every parallel read is checked, not only the first — a failed penalties/chains/quotas
+      // read used to render silently as if nothing were owed or held, which is a wrong answer
+      // dressed as a clean one, not an absence of data.
+      const failed = error ?? penaltiesError ?? chainsError ?? quotasError;
+      if (failed) {
+        setView({ kind: 'failed', reason: failed.message });
         return;
       }
       setView({

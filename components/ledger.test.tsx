@@ -163,6 +163,24 @@ describe('the ledger', () => {
     expect(await screen.findByText(/permission denied/)).toBeInTheDocument();
     expect(screen.queryByText('No day has been judged yet.')).not.toBeInTheDocument();
   });
+
+  it('surfaces a failed penalties, misses, or week read instead of rendering an incomplete ledger', async () => {
+    for (const key of [
+      'penalty_current:day',
+      'declaration',
+      'settlement_current:week',
+      'penalty_current:week',
+    ]) {
+      withDays([]);
+      withWeeks([]);
+      rows[key] = { data: null, error: { message: `${key} unreadable` } };
+
+      const { unmount } = render(<Ledger onClose={vi.fn()} />);
+
+      expect(await screen.findByText(new RegExp(`${key} unreadable`))).toBeInTheDocument();
+      unmount();
+    }
+  });
 });
 
 describe('a week row (3.4)', () => {

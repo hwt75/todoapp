@@ -28,10 +28,10 @@ export function Ledger({ onClose }: { onClose: () => void }) {
 
       const [
         { data: settlements, error },
-        { data: penalties },
-        { data: misses },
-        { data: weekSettlements },
-        { data: weekPenalties },
+        { data: penalties, error: penaltiesError },
+        { data: misses, error: missesError },
+        { data: weekSettlements, error: weekSettlementsError },
+        { data: weekPenalties, error: weekPenaltiesError },
       ] = await Promise.all([
         supabase.from('settlement_current').select('period,verdict,missed_count').eq('kind', 'day'),
         supabase.from('penalty_current').select('amount_dong,state,period').eq('kind', 'day'),
@@ -47,8 +47,13 @@ export function Ledger({ onClose }: { onClose: () => void }) {
       ]);
 
       if (cancelled) return;
-      if (error) {
-        setView({ kind: 'failed', reason: error.message });
+
+      // Every parallel read is checked, not only the first — a failed penalties/misses/week
+      // read used to render silently as an incomplete or wrong ledger rather than a failure.
+      const failed =
+        error ?? penaltiesError ?? missesError ?? weekSettlementsError ?? weekPenaltiesError;
+      if (failed) {
+        setView({ kind: 'failed', reason: failed.message });
         return;
       }
 

@@ -382,4 +382,26 @@ describe('the today screen', () => {
     expect(await screen.findByText(/permission denied/)).toBeInTheDocument();
     expect(screen.queryByText(/Nothing set up yet/)).not.toBeInTheDocument();
   });
+
+  it('surfaces a failed penalties, chains, or quotas read instead of rendering as if nothing were owed or held', async () => {
+    for (const table of ['penalty_current', 'chain_current', 'weekly_quota_progress']) {
+      rows.commitment = { data: [gym], error: null };
+      rows.penalty_current = { data: [], error: null };
+      rows.chain_current = { data: [], error: null };
+      rows.weekly_quota_progress = { data: [], error: null };
+      rows[table] = { data: null, error: { message: `${table} unreadable` } };
+
+      const { unmount } = render(
+        <Today
+          onOpenLedger={vi.fn()}
+          onOpenChain={vi.fn()}
+          onOpenFocus={vi.fn()}
+          onOpenSettings={vi.fn()}
+        />,
+      );
+
+      expect(await screen.findByText(new RegExp(`${table} unreadable`))).toBeInTheDocument();
+      unmount();
+    }
+  });
 });
