@@ -212,6 +212,9 @@ begin
   foreach f in array array[
     'public.settle_day(date, boolean)',
     'public.settle_due_days()',
+    'public.settle_week(date, boolean)',
+    'public.settle_due_weeks()',
+    'public.week_summary_body(integer, integer, date, bigint, integer, text)',
     'public.supersede_expiries()',
     'public.commitments_owing(uuid, date)',
     'public.declaration_deadline(date, integer)',

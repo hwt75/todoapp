@@ -107,6 +107,82 @@ describe('the total owed', () => {
   });
 });
 
+describe('a week row folds in alongside day rows (3.4)', () => {
+  const failedWeek: SettlementRecord = { period: '2026-08-17', verdict: 'failed', missed_count: 1 };
+  const cleanWeek: SettlementRecord = { period: '2026-08-10', verdict: 'clean', missed_count: 0 };
+  const weekPenalty: PenaltyRecord = {
+    period: '2026-08-17',
+    amount_dong: PENALTY_DONG,
+    state: 'owed',
+  };
+
+  it('is tagged kind: week, distinct from a day row', () => {
+    const rows = buildLedger([], [], [], [failedWeek], [weekPenalty]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ kind: 'week', day: '2026-08-17', amountDong: PENALTY_DONG });
+  });
+
+  it('names nothing — Week Close freezes no per-commitment outcome', () => {
+    const rows = buildLedger([], [], [], [failedWeek], [weekPenalty]);
+    expect(rows[0].missed).toEqual([]);
+  });
+
+  it('leaves existing day-row behavior unchanged when no week rows are given', () => {
+    const rows = buildLedger([failedDay], [penalty], misses);
+    expect(rows).toEqual(buildLedger([failedDay], [penalty], misses, [], []));
+  });
+
+  it('sorts alongside day rows, newest first, by period', () => {
+    const rows = buildLedger([failedDay, cleanDay], [penalty], misses, [failedWeek, cleanWeek]);
+    // failedDay (08-18) newest, then the 08-17 pair (cleanDay and failedWeek — same date,
+    // both assert '2026-08-17' regardless of which comes first), then cleanWeek (08-10).
+    expect(rows.map((r) => r.day)).toEqual([
+      '2026-08-18',
+      '2026-08-17',
+      '2026-08-17',
+      '2026-08-10',
+    ]);
+  });
+
+  it('breaks a same-date tie week-before-day, rather than leaving it to insertion order', () => {
+    const rows = buildLedger([cleanDay], [], [], [failedWeek]);
+    expect(rows.map((r) => r.kind)).toEqual(['week', 'day']);
+  });
+
+  it("does not let a week's penalty answer a same-dated day's lookup, or vice versa", () => {
+    // A week's period is an ordinary calendar date, so it can coincide with an actual
+    // day's own settlement period. Each must resolve strictly against its own kind.
+    const dayOnThatDate: SettlementRecord = {
+      period: '2026-08-17',
+      verdict: 'clean',
+      missed_count: 0,
+    };
+    const rows = buildLedger([dayOnThatDate], [], [], [failedWeek], [weekPenalty]);
+
+    const dayRow = rows.find((r) => r.kind === 'day')!;
+    const weekRow = rows.find((r) => r.kind === 'week')!;
+
+    expect(dayRow.amountDong).toBeNull();
+    expect(weekRow.amountDong).toBe(PENALTY_DONG);
+  });
+
+  it('a clean week has no penalty, not a penalty of zero', () => {
+    const rows = buildLedger([], [], [], [cleanWeek], []);
+    expect(rows[0].amountDong).toBeNull();
+    expect(rows[0].state).toBeNull();
+  });
+
+  it('counts toward the outstanding total the same as a day penalty', () => {
+    const rows = buildLedger([], [], [], [failedWeek], [weekPenalty]);
+    expect(outstandingTotal(rows)).toBe(PENALTY_DONG);
+  });
+
+  it('carries a pill label the same way a day row does', () => {
+    const rows = buildLedger([], [], [], [failedWeek], [weekPenalty]);
+    expect(ledgerPillLabel(rows[0])).toBe('Owed');
+  });
+});
+
 describe('what a pill says', () => {
   it('never says nothing', () => {
     // Colour is never the sole carrier of state, and a blank row reads as missing data

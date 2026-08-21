@@ -20,6 +20,7 @@ import { Today } from './today';
 
 const rows: Record<string, unknown> = {};
 const seen: string[] = [];
+const seenEq: Array<{ table: string; column: string }> = [];
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
@@ -29,7 +30,10 @@ vi.mock('@/lib/supabase/client', () => ({
       const query = {
         select: () => query,
         is: () => query,
-        eq: () => query,
+        eq: (column: string) => {
+          seenEq.push({ table, column });
+          return query;
+        },
         order: () => Promise.resolve(result()),
         then: (resolve: (value: unknown) => unknown) => Promise.resolve(result()).then(resolve),
       };
@@ -49,6 +53,7 @@ const gym = {
 
 beforeEach(() => {
   seen.length = 0;
+  seenEq.length = 0;
   for (const key of Object.keys(rows)) delete rows[key];
   rows.commitment = { data: [gym], error: null };
   rows.penalty_current = { data: [], error: null };
@@ -114,6 +119,21 @@ describe('the today screen', () => {
 
     await userEvent.click(debt);
     expect(onOpenLedger).toHaveBeenCalledOnce();
+  });
+
+  it("counts a week's own penalty toward what is owed, same as a day's (3.4)", async () => {
+    // `penalty_current` carries both `kind = 'day'` and `kind = 'week'` rows since Story
+    // 3.4, and this screen's read is deliberately unfiltered by kind — a Failed Week costs
+    // the same real money as a Failed Day, and "what is owed" is one number, not two. The
+    // read itself is asserted to carry no `kind` filter, since that is the one line a later
+    // "consistency" edit (mirroring the Ledger's own `.eq('kind', 'day')`) could add and
+    // silently drop week debt from this screen while the Ledger still shows it.
+    rows.penalty_current = { data: [{ amount_dong: 500000 }], error: null };
+
+    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
+
+    await screen.findByRole('button', { name: /Owed since you started/ });
+    expect(seenEq.filter((e) => e.table === 'penalty_current' && e.column === 'kind')).toEqual([]);
   });
 
   it('never claims a verdict for a day that has not ended', async () => {

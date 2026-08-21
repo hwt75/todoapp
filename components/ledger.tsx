@@ -26,17 +26,25 @@ export function Ledger({ onClose }: { onClose: () => void }) {
     async function load() {
       const supabase = createClient();
 
-      const [{ data: settlements, error }, { data: penalties }, { data: misses }] =
-        await Promise.all([
-          supabase.from('settlement_current').select('period,verdict,missed_count'),
-          supabase
-            .from('penalty_current')
-            .select('amount_dong,state,settlement:settlement_id(period)'),
-          supabase
-            .from('declaration')
-            .select('for_day,commitment:commitment_id(name,carries_penalty)')
-            .eq('answer', 'slipped'),
-        ]);
+      const [
+        { data: settlements, error },
+        { data: penalties },
+        { data: misses },
+        { data: weekSettlements },
+        { data: weekPenalties },
+      ] = await Promise.all([
+        supabase.from('settlement_current').select('period,verdict,missed_count').eq('kind', 'day'),
+        supabase.from('penalty_current').select('amount_dong,state,period').eq('kind', 'day'),
+        supabase
+          .from('declaration')
+          .select('for_day,commitment:commitment_id(name,carries_penalty)')
+          .eq('answer', 'slipped'),
+        supabase
+          .from('settlement_current')
+          .select('period,verdict,missed_count')
+          .eq('kind', 'week'),
+        supabase.from('penalty_current').select('amount_dong,state,period').eq('kind', 'week'),
+      ]);
 
       if (cancelled) return;
       if (error) {
@@ -44,15 +52,17 @@ export function Ledger({ onClose }: { onClose: () => void }) {
         return;
       }
 
+      const toPenaltyRecord = (p: { amount_dong: unknown; state: unknown; period: unknown }) => ({
+        period: p.period as string,
+        amount_dong: p.amount_dong as number,
+        state: p.state as 'owed',
+      });
+
       setView({
         kind: 'ready',
         rows: buildLedger(
           settlements ?? [],
-          (penalties ?? []).map((p) => ({
-            period: (p.settlement as unknown as { period: string }).period,
-            amount_dong: p.amount_dong as number,
-            state: p.state as 'owed',
-          })),
+          (penalties ?? []).map(toPenaltyRecord),
           (misses ?? [])
             .filter(
               (m) => (m.commitment as unknown as { carries_penalty: boolean })?.carries_penalty,
@@ -61,6 +71,8 @@ export function Ledger({ onClose }: { onClose: () => void }) {
               for_day: m.for_day as string,
               commitment_name: (m.commitment as unknown as { name: string }).name,
             })),
+          weekSettlements ?? [],
+          (weekPenalties ?? []).map(toPenaltyRecord),
         ),
       });
     }
@@ -93,25 +105,33 @@ export function Ledger({ onClose }: { onClose: () => void }) {
       {view.kind === 'ready' &&
         view.rows.map((row) => (
           <div
-            className="row"
-            key={row.day}
+            className={row.kind === 'week' ? 'row row-week' : 'row'}
+            key={`${row.kind}-${row.day}`}
             role="group"
             aria-label={
-              row.verdict === 'clean'
-                ? `${row.day}, clean`
-                : row.verdict === 'expired'
-                  ? `${row.day}, expired unanswered, owed ${formatDong(row.amountDong ?? 0)}`
-                  : `${row.day}, owed ${formatDong(row.amountDong ?? 0)}, for ${row.missed.join(' and ')}`
+              row.kind === 'week'
+                ? row.verdict === 'clean'
+                  ? `Week of ${row.day}, clean`
+                  : `Week of ${row.day}, owed ${formatDong(row.amountDong ?? 0)}`
+                : row.verdict === 'clean'
+                  ? `${row.day}, clean`
+                  : row.verdict === 'expired'
+                    ? `${row.day}, expired unanswered, owed ${formatDong(row.amountDong ?? 0)}`
+                    : `${row.day}, owed ${formatDong(row.amountDong ?? 0)}, for ${row.missed.join(' and ')}`
             }
           >
             <div className="row-main">
-              <div className="row-name">{row.day}</div>
+              <div className="row-name">{row.kind === 'week' ? `Week of ${row.day}` : row.day}</div>
               <div className="row-muted" aria-hidden="true">
-                {row.verdict === 'expired'
-                  ? `Went unanswered${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`
-                  : row.verdict === 'clean'
+                {row.kind === 'week'
+                  ? row.verdict === 'clean'
                     ? 'Everything held'
-                    : `${row.missed.join(' · ')}${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`}
+                    : `Fell short${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`
+                  : row.verdict === 'expired'
+                    ? `Went unanswered${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`
+                    : row.verdict === 'clean'
+                      ? 'Everything held'
+                      : `${row.missed.join(' · ')}${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`}
               </div>
             </div>
             {/* The pill carries the colour. The row never does. */}
