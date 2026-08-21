@@ -213,3 +213,21 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-1-start-the-work-by-starting-a-clock.md`
   summary: "`readRunning()` in `lib/focus-session.ts` does not validate that a present `startedAt` parses as a date, so a corrupted record would render `NaN:NaN:NaN` rather than being refused the way a missing field already is."
   evidence: Raised by the 2026-08-21 review (edge-case-hunter). Deferred — requires a corrupted `localStorage` record (external tampering, or a bug elsewhere writing malformed data) to reach; the missing-field guard right beside it already covers the realistic failure mode.
+
+## Deferred from: code review of spec-3-2-know-where-the-hours-stand-without-opening-anything (2026-08-21)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-know-where-the-hours-stand-without-opening-anything.md`
+  summary: "No SQL test exercises cadence exclusion or the `role = 'doer'` filter directly in `enqueue_focus_prompts()`, and no SQL test exercises the fully-silent account case (every commitment already at target) — the shipped SQL is correct on inspection but these three branches are untested."
+  evidence: Raised by the 2026-08-21 review (blind-hunter). Deferred rather than patched — this environment has no Docker/local Postgres running, so a new `.sql` test step cannot be added and actually run here, and this project's own established rule (Story 2.9: "Applying is not passing") is that an unrun SQL test is unverified code, not a fix. Revisit with a local stack available.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-know-where-the-hours-stand-without-opening-anything.md`
+  summary: "The push body composed in `enqueue_focus_prompts()` (commitment name + banked/target/time) has no length guard — `push_body_is_sendable` screens only for banned phrasing and self-dating, never length."
+  evidence: Raised by the 2026-08-21 review (blind-hunter). Deferred — pre-existing and shared by every notification body in the codebase (gate reminders, day and week summaries all use the same `push_body_is_sendable` rule with the same absence of a length check); not introduced or worsened by this story. Revisit with one pass across every body-composing function if it is ever an issue in practice.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-know-where-the-hours-stand-without-opening-anything.md`
+  summary: "`.quota-bar`/`.quota-bar-fill` (`app/globals.css`) have no `forced-colors`/high-contrast fallback and no minimum width for a very small non-zero fill, which can round to sub-pixel and effectively vanish."
+  evidence: Raised by the 2026-08-21 review (blind-hunter). Deferred — no element anywhere in this codebase handles `forced-colors: active` yet, so this is a systemic gap rather than one this story introduced; the minimum-width question is a design call (how many px reads as "some progress" without misrepresenting a near-zero fill), not an unambiguous bug fix. Revisit alongside a dedicated accessibility pass if Windows High Contrast use is ever reported.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-know-where-the-hours-stand-without-opening-anything.md`
+  summary: "`bankedPercent()` in `lib/focus-session.ts` has no explicit guard against non-finite (`NaN`/`Infinity`) input propagating into the rendered bar's `width` style."
+  evidence: Raised by the 2026-08-21 review (blind-hunter). Deferred — defensive-only; `targetMinutes` is guaranteed positive by `commitment_daily_hours_target`'s biconditional check and `bankedSeconds` always comes from a real numeric read, so the condition cannot occur in practice today.

@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-08-20'
 status: 'done'
 baseline_commit: 'a400e52457601ec9ea67543ac5af15279072d0a9'
-review_loop_iteration: 0
+review_loop_iteration: 1
 story_key: '3-2-know-where-the-hours-stand-without-opening-anything'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-3-context.md'
@@ -214,6 +214,53 @@ Height reuses `--space-2` (8px) rather than a new size token.
   target.
 - Given Reduce Motion is enabled, then the bar's width still updates but never animates to get there.
 
+### Review Findings
+
+<!-- Code review 2026-08-21, iteration 1. Layers: blind-hunter, edge-case-hunter, verification-gap, acceptance-auditor. -->
+
+Verification-gap, edge-case-hunter and acceptance-auditor found nothing — the acceptance-auditor
+confirmed every decision (D1–D5), the I/O matrix and both previously-found defects (poisoned
+commitment names, the zero-row-view null trap) are present and correct. blind-hunter's thirteen
+findings were checked individually against the actual code and this project's established
+conventions; none survived as a `patch` (an unambiguous, verifiable fix) — three are real SQL
+test-coverage gaps this environment has no Docker to safely add and verify against (this
+project's own hard-won rule, from Story 2.9: "Applying is not passing"), and the rest are either
+unreachable given existing constraints or pre-existing patterns shared across the whole codebase,
+not specific to this diff. All routed to `defer`.
+
+- [x] [Review][Defer] No SQL test exercises cadence exclusion directly — `enqueue_focus_prompts()`
+      filters `c.cadence = 'daily_hours_quota'` correctly, but no fixture proves a `weekly_quota`
+      commitment under the same account is skipped rather than merely never having been tested.
+      [supabase/migrations/20260820120000_a_prompt_reads_the_view_it_was_promised.sql:111-114]
+      — deferred, no Docker/local Postgres available in this environment to add and run a new SQL
+      test step safely.
+- [x] [Review][Defer] No SQL test exercises the `where p.role = 'doer'` filter against a
+      counter-example (a `referee` account with an otherwise-eligible commitment).
+      [supabase/migrations/20260820120000_a_prompt_reads_the_view_it_was_promised.sql:99]
+      — deferred, same reason: cannot add/verify a new SQL test step without a local database.
+- [x] [Review][Defer] No SQL test exercises the fully-silent account case — every one of an
+      account's `daily_hours_quota` commitments already at target, asserting `enqueued = 0`
+      directly rather than only the mixed one-met-one-unmet scenario the matrix already covers.
+      [supabase/tests/3-2-focus-prompt.sql] — deferred, same reason.
+- [x] [Review][Defer] The composed push body (`commitment.name || ... `) has no length guard —
+      `push_body_is_sendable` screens only for banned phrasing and self-dating, never length, so a
+      long freeform commitment name could in principle produce an oversized body.
+      [supabase/migrations/20260820120000_a_prompt_reads_the_view_it_was_promised.sql:139-141]
+      — deferred, pre-existing: every notification body in this codebase (gate reminders, day and
+      week summaries) shares the same `push_body_is_sendable` rule and the same absence of a
+      length check; not introduced or worsened by this story.
+- [x] [Review][Defer] `.quota-bar`/`.quota-bar-fill` have no `forced-colors`/high-contrast fallback
+      and no minimum width for a very small non-zero fill (which can round to sub-pixel and
+      effectively vanish). [app/globals.css:361-375] — deferred: no element anywhere in this
+      codebase handles `forced-colors: active` yet (a systemic gap, not one this story
+      introduced), and the minimum-width question is a design call (how many px reads as "some
+      progress" without misrepresenting a near-zero fill) rather than an unambiguous bug fix.
+- [x] [Review][Defer] `bankedPercent()` has no explicit guard against non-finite (`NaN`/`Infinity`)
+      input propagating into the rendered `width` style. [lib/focus-session.ts:234-238] —
+      deferred, defensive-only: `targetMinutes` is guaranteed positive by
+      `commitment_daily_hours_target`'s biconditional check and `bankedSeconds` always comes from
+      a real numeric read, so the condition cannot occur in practice today.
+
 ## Design Notes
 
 **Why the bar and the notification share one number rather than two.** The bar reads
@@ -298,6 +345,17 @@ decision, not a patch.
 installed app with nothing banked, to confirm a push arrives stating the target; and enabling Reduce
 Motion in iOS Settings to confirm the quota bar is simply present at its value rather than filling
 into place. Both are why this story stays at `review` rather than moving itself to `done`.
+
+**Addendum — 2026-08-21, code review.** Four layers (blind-hunter, edge-case-hunter,
+verification-gap, acceptance-auditor) ran against `a400e52..397da78`. Three layers found nothing —
+the acceptance-auditor confirmed every decision, the I/O matrix and both previously-found defects
+(poisoned commitment names, the zero-row-view null trap) are present and correct as shipped.
+blind-hunter's thirteen findings were checked individually; none survived as an unambiguous,
+verifiable `patch` — three are real SQL test-coverage gaps this environment has no Docker to add
+and run against safely, and the rest are either unreachable given existing constraints or
+pre-existing patterns shared across the whole codebase. All six routed to `defer`, recorded in
+`deferred-work.md`. No code changed. Story stays at `review`: the two device-only checks above
+remain unrun, and this project's own `done` gate (Epic 2 retro, T4) reserves that for the author.
 
 ## Suggested Review Order
 
