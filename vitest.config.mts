@@ -33,7 +33,9 @@ export default defineConfig({
         test: {
           name: 'components',
           environment: 'jsdom',
-          include: ['components/**/*.test.tsx'],
+          // `app/page.tsx` is a component too — the split is by what a file needs, not by
+          // directory, and its own tests need the DOM the same way `components/` ones do.
+          include: ['components/**/*.test.tsx', 'app/**/*.test.tsx'],
           setupFiles: ['./vitest.setup.ts'],
         },
       },

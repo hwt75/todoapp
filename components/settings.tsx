@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { InstallState } from '@/lib/install-state';
 import { subscribeThisDevice } from '@/lib/push-subscribe';
 import {
@@ -50,6 +50,15 @@ export function Settings({
   const [permission, setPermission] = useState<PermissionState>('default');
   const [subscribing, setSubscribing] = useState(false);
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
+  // Shared by `setHour` and `turnOnNotifications`, not only `load()`'s own effect: both fire a
+  // request from a click and can still be in flight when `onClose` unmounts this screen.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,10 +81,15 @@ export function Settings({
         return;
       }
 
-      // The same fallback `lib/use-gate.ts` uses, and deliberately the only other place it
-      // appears — two constants that can disagree about when he is asked would be worse than
-      // one that is wrong.
-      setView({ kind: 'ready', hour: (data?.morning_hour as number | undefined) ?? 7 });
+      // No second fallback constant here — `lib/use-gate.ts` has the only one, and a signed-in
+      // account always has a profile row (it is created by the sign-up trigger), so a missing
+      // row is a real failure to surface rather than a case to paper over with a guessed hour.
+      if (!data) {
+        setView({ kind: 'failed', reason: 'No profile found for this account.' });
+        return;
+      }
+
+      setView({ kind: 'ready', hour: data.morning_hour as number });
     }
 
     void load();
@@ -87,7 +101,6 @@ export function Settings({
   async function setHour(hour: number) {
     if (!isSendableHour(hour)) return;
 
-    const previous = view;
     setSaving({ kind: 'saving' });
     setView({ kind: 'ready', hour });
 
@@ -96,11 +109,14 @@ export function Settings({
       .update({ morning_hour: hour })
       .eq('id', ownerId);
 
+    if (!mounted.current) return;
+
     if (error) {
-      // Nothing was written, so the screen must not go on showing the new hour as though it
-      // were saved. The message is the database's own.
+      // Nothing was written, so "Not saved." must say so — but the field keeps the hour he
+      // typed rather than reverting it, because showing anything else would be a second lie on
+      // top of the first: this is what he chose, and the message beside it says it did not
+      // stick. The message is the database's own.
       setSaving({ kind: 'failed', reason: error.message });
-      setView(previous);
       return;
     }
 
@@ -125,6 +141,8 @@ export function Settings({
       ),
     );
 
+    if (!mounted.current) return;
+
     setSubscribing(false);
 
     if (result.kind === 'refused') {
@@ -140,6 +158,9 @@ export function Settings({
 
   const permissionRow = PERMISSION_ROWS[permission];
   const installRow = INSTALL_ROWS[installState];
+  // The install row leads: a subscription made outside the installed app silently receives
+  // nothing, so the control is never offered there, whatever `permission` itself reads.
+  const permissionActionable = permissionRow.actionable && installState === 'installed';
 
   return (
     <section>
@@ -202,7 +223,7 @@ export function Settings({
           <div className="row-name">Notifications</div>
           <div className="row-muted">{permissionRow.consequence}</div>
         </div>
-        {permissionRow.actionable ? (
+        {permissionActionable ? (
           <button type="button" onClick={() => void turnOnNotifications()} disabled={subscribing}>
             {subscribing ? 'Working…' : 'Turn on notifications'}
           </button>

@@ -83,19 +83,12 @@ export default function Home() {
             onClose={() => setShowSettings(false)}
           />
         ) : (
-          <>
-            <Today
-              onOpenLedger={() => setShowLedger(true)}
-              onOpenChain={(c) => setChainOf({ id: c.id, name: c.name })}
-              onOpenFocus={(c) => setFocusOf({ id: c.id, name: c.name })}
-            />
-            {/* Not on the Today screen itself: that surface answers "where do I stand" and
-                nothing else belongs in it. A settings link inside it would be the first thing
-                to make it a menu. */}
-            <button type="button" onClick={() => setShowSettings(true)}>
-              Settings
-            </button>
-          </>
+          <Today
+            onOpenLedger={() => setShowLedger(true)}
+            onOpenChain={(c) => setChainOf({ id: c.id, name: c.name })}
+            onOpenFocus={(c) => setFocusOf({ id: c.id, name: c.name })}
+            onOpenSettings={() => setShowSettings(true)}
+          />
         ))}
 
       {/* Server-rendered so it survives a JavaScript failure. Hidden before

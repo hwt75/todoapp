@@ -33,11 +33,13 @@ export function Today({
   onOpenLedger,
   onOpenChain,
   onOpenFocus,
+  onOpenSettings,
 }: {
   onOpenLedger: () => void;
   onOpenChain: (commitment: RowCommitment) => void;
   /** Where a *Put hours in* row goes instead. See the fork below. */
   onOpenFocus: (commitment: RowCommitment) => void;
+  onOpenSettings: () => void;
 }) {
   const [view, setView] = useState<View>({ kind: 'loading' });
 
@@ -103,6 +105,14 @@ export function Today({
        figure on top. */
     <section className="today">
       <h1>Today</h1>
+      {/* Reachable the same way the Ledger and Chains detail are: a callback this component
+          invokes itself, never a route the caller renders beside it (spec 3.0, Boundaries &
+          Constraints). Rendered unconditionally, ahead of the load state, so Settings stays
+          reachable even on a failed read — the one place that could turn the morning hour back
+          down to something sendable. */}
+      <button type="button" onClick={onOpenSettings}>
+        Settings
+      </button>
 
       {view.kind === 'loading' && <p>Working…</p>}
 

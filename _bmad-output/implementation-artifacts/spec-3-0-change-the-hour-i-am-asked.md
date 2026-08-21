@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-08-20'
 status: 'approved'
 baseline_commit: 'bdc7362'
-review_loop_iteration: 0
+review_loop_iteration: 1
 story_key: '3-0-change-the-hour-i-am-asked'
 context:
   - '{project-root}/_bmad-output/planning-artifacts/ux-designs/ux-todoapp-2026-08-11/EXPERIENCE.md'
@@ -191,6 +191,83 @@ shown with what breaks if they are off, in plain language rather than as toggles
 can be granted from inside the installed app so the probe is no longer the only route, and a
 refusal names the answer the browser gave; rows this epic cannot fill are absent rather than empty.
 
+### Review Findings
+
+<!-- Code review 2026-08-21, iteration 1. Layers: blind-hunter, edge-case-hunter, verification-gap, acceptance-auditor. -->
+
+- [x] [Review][Decision] The Settings entry point is rendered as a sibling below `<Today>` in
+      `app/page.tsx`, not as a control passed into it the way `onOpenLedger`/`onOpenChain` are —
+      a literal deviation from the frozen "Always" boundary "reachable from Today and returns to
+      it, the same shape the Ledger and Chains detail already use." **Resolved: fixed** — `hwt75`
+      chose to conform to the frozen boundary rather than renegotiate it. `Today` now takes an
+      `onOpenSettings: () => void` prop and renders the trigger itself (unconditionally, ahead of
+      its own load state, so Settings stays reachable even on a failed read); `app/page.tsx` only
+      passes the callback, the same shape as `onOpenLedger`/`onOpenChain`. [components/today.tsx;
+      app/page.tsx]
+- [x] [Review][Patch] Notification permission is offered as actionable regardless of install
+      state — `PERMISSION_ROWS[permission].actionable` never consults `installState` — so the
+      "Turn on notifications" button renders even in a browser tab, contradicting the frozen I/O
+      matrix row "Launched in a browser tab → the install row leads, and permission is not
+      offered at all." The one test at `installState="browser"` only asserted the Home-screen
+      row has no button and never checked the Notifications row, so this shipped untested.
+      **Fixed** — a `permissionActionable` flag now requires `installState === 'installed'` too;
+      a new test drives the browser-tab case directly. [components/settings.tsx:150,213;
+      components/settings.test.tsx:148-156]
+- [x] [Review][Patch] A second hardcoded `morning_hour ?? 7` fallback violates the frozen
+      "Never — a second read of `morning_hour` with its own fallback... this story must not add
+      a second constant that can disagree with it [`lib/use-gate.ts`]." The in-code comment
+      argued the duplication was safe because the values agree, but the boundary forbids adding
+      the second constant at all, not only a disagreeing one. **Fixed** — no fallback; a missing
+      profile row (a signed-in account should always have one, via the sign-up trigger) now
+      surfaces as the same `failed` view an error does, rather than guessing. A new test drives
+      the `data: null, error: null` case directly. [components/settings.tsx:64-84;
+      components/settings.test.tsx:101-109]
+- [x] [Review][Patch] A refused hour write reverted the field to the pre-edit value
+      (`setView(previous)`) instead of keeping what the author typed, contradicting the frozen
+      I/O matrix row "Update refused by policy → the field keeps the value the author typed."
+      `components/settings.test.tsx`'s own test for this case asserted the reverted (wrong)
+      value. **Fixed** — `setHour` no longer reverts `view` on a refusal; only `saving` moves to
+      `failed`, and the field keeps showing the hour he selected. The test now asserts `'6'`
+      stays shown rather than reverting to `'7'`. [components/settings.tsx:92-113;
+      components/settings.test.tsx:88-99]
+- [x] [Review][Patch] No test exercised `app/page.tsx`'s Settings routing — the button, the
+      `showSettings` state, or the `onClose` wiring back to `Today`. An inverted branch or a
+      button wired to the wrong setter would have shipped undetected. **Fixed** — new
+      `app/page.test.tsx` mocks every child and drives the full Today→Settings→Today round trip
+      through `Home`'s own state (the `vitest.config.mts` `components` project now also covers
+      `app/**/*.test.tsx`, since `app/page.tsx` needs jsdom the same way a component does).
+      [app/page.test.tsx; vitest.config.mts]
+- [x] [Review][Patch] `setHour` and `turnOnNotifications` lacked the `cancelled`-guard pattern
+      `load()` already used in the same file, so a state update could fire after `onClose`
+      unmounts the component mid-request. **Fixed** — a shared `mounted` ref, set on mount and
+      cleared on unmount, is checked in both functions immediately after their `await`.
+      [components/settings.tsx:52-60,102,134]
+- [x] [Review][Defer] Rapid consecutive hour changes could race: if an earlier `setHour` call
+      failed after a later one had already applied a newer optimistic value, the earlier call's
+      stale `previous` closure would revert the field past the newer selection.
+      [components/settings.tsx:87-108] — **resolved as a side effect** of the patch above: the
+      revert-on-error path (and the `previous` closure it depended on) no longer exists, so this
+      race no longer applies. No separate fix needed.
+- [x] [Review][Defer] `refusalBeforePrompting` gives `installState === 'unknown'` the same
+      "not launched from the home screen" message as `'browser'`, which could misleadingly read
+      as certain non-installation during the brief detection window. [lib/push-subscribe.ts:71]
+      — deferred, narrow window (installState resolves before Settings is reachable in practice).
+- [x] [Review][Defer] Two entry points now call `subscribeThisDevice` (`PushProbe`, always
+      rendered, and the new Settings button) with no shared in-flight guard — a near-simultaneous
+      tap on both could race two `pushManager.subscribe()` calls. [components/push-probe.tsx;
+      components/settings.tsx:110-139] — deferred, low likelihood (requires two taps within one
+      network round trip) and the underlying `push_subscription` upsert is keyed on `endpoint`,
+      so the worst case is a redundant upsert rather than corrupted data.
+- [x] [Review][Defer] The `Failed.`/`Not saved.`/`Refused.` error paragraphs in
+      `components/settings.tsx` carry no `role="alert"`/`aria-live`, so a VoiceOver user is not
+      told automatically when they appear. — deferred, not required by any acceptance criterion
+      here; revisit alongside a pass over the rest of the app's error messaging.
+- [x] [Review][Defer] `supabase/tests/3-0-morning-hour.sql`'s post-hour-change re-settlement step
+      asserts only row count, not `verdict`, so a regression that re-judges and overwrites the
+      verdict while keeping one row would pass silently. [supabase/tests/3-0-morning-hour.sql]
+      — deferred, test-quality gap rather than a shipped defect; cheap to strengthen in a follow-up
+      pass over the SQL test file.
+
 ## Verification
 
 **Commands:**
@@ -241,5 +318,15 @@ having been opened. Both are why this story stays at `review` rather than moving
 notification permission state and referee pairing, per UX-DR17". Two of the three now exist. The
 third cannot exist in this epic, so 2.4 is no longer blocked on anything buildable — whether that
 closes it is `hwt75`'s call rather than this spec's.
+
+**Addendum — 2026-08-21, code review.** Four layers (blind-hunter, edge-case-hunter,
+verification-gap, acceptance-auditor) ran against `bdc7362..a799d7f`. One `decision-needed` (the
+Settings entry point's shape) and five `patch` findings — see Review Findings above — are all now
+fixed; `npm test` passes at 640 across 33 files (up from 512), `tsc`/`lint`/`format:check` are all
+clean. Four low-severity items are recorded as `defer` in `deferred-work.md`. **The two device-only
+checks above are still unrun** — this review is static and had no installed app to test against —
+so the story stays at `review` under this project's own `done` gate (Epic 2 retro, T4: device-gated
+work is verified by the author on his own iPhone, and he moves it himself), not because of any
+remaining code defect.
 
 </frozen-after-approval>

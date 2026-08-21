@@ -85,17 +85,27 @@ describe('the settings surface', () => {
     expect(update).toHaveBeenCalledWith({ morning_hour: 6 });
   });
 
-  it('does not go on showing an hour the database refused', async () => {
+  it('does not claim a refused write saved, but keeps the hour he typed', async () => {
     updateResult = { error: { message: 'new row violates check constraint' } };
     render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
     await screen.findByLabelText('Morning hour');
 
     await userEvent.selectOptions(screen.getByLabelText('Morning hour'), '6');
 
-    // Nothing was written, so the screen must not claim otherwise — the author would set an
-    // hour, believe it, and be asked at seven for a month.
+    // Nothing was written, so "Not saved." must say so — but the field shows what he chose,
+    // not what reverting it would silently claim was still true.
     expect(await screen.findByText(/Not saved\./)).toBeInTheDocument();
-    expect(screen.getByLabelText('Morning hour')).toHaveValue('7');
+    expect(screen.getByLabelText('Morning hour')).toHaveValue('6');
+  });
+
+  it('says what failed rather than guessing a second fallback hour', async () => {
+    // Zero rows, no error — `maybeSingle()`'s honest shape for a missing profile row. The
+    // frozen boundary forbids a second `?? 7` here, so this must read as a failure, not a guess.
+    profileResult = { data: null, error: null };
+    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+
+    expect(await screen.findByText(/No profile found/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Morning hour')).not.toBeInTheDocument();
   });
 
   it('offers a control for permission only while one could still change the answer', async () => {
@@ -133,6 +143,16 @@ describe('the settings surface', () => {
     expect(home.querySelector('button')).toBeNull();
     // It says what to do instead, in the words iOS uses for it.
     expect(screen.getByText(/Add to Home Screen/)).toBeInTheDocument();
+  });
+
+  it('does not offer notification permission from a browser tab either — the install row leads', async () => {
+    // Permission defaults to `'default'` (from `beforeEach`), which is actionable on its own —
+    // this is the case the install row must still override, per the frozen I/O matrix row
+    // "Launched in a browser tab → permission is not offered at all".
+    render(<Settings ownerId="u1" installState="browser" onClose={vi.fn()} />);
+    await screen.findByLabelText('Morning hour');
+
+    expect(screen.queryByRole('button', { name: 'Turn on notifications' })).not.toBeInTheDocument();
   });
 
   it('leaves out the rows this epic cannot fill, rather than greying them out', async () => {

@@ -63,7 +63,14 @@ beforeEach(() => {
 
 describe('the today screen', () => {
   it('reads the money and the chains through the views that follow a correction', async () => {
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
+    render(
+      <Today
+        onOpenLedger={vi.fn()}
+        onOpenChain={vi.fn()}
+        onOpenFocus={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
     await screen.findByRole('button', { name: /Gym/ });
 
     // `penalty_current`, never `penalty`: a penalty attached to a superseded verdict is
@@ -83,7 +90,12 @@ describe('the today screen', () => {
     rows.penalty_current = { data: [{ amount_dong: 500000 }], error: null };
 
     const { container } = render(
-      <Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+      <Today
+        onOpenLedger={vi.fn()}
+        onOpenChain={vi.fn()}
+        onOpenFocus={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
     );
     await screen.findByRole('button', { name: /Gym/ });
 
@@ -96,7 +108,14 @@ describe('the today screen', () => {
   });
 
   it('says nothing at all when nothing is owed', async () => {
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
+    render(
+      <Today
+        onOpenLedger={vi.fn()}
+        onOpenChain={vi.fn()}
+        onOpenFocus={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
     await screen.findByRole('button', { name: /Gym/ });
 
     // A large `0` in failed-tint is a decoration that says nothing and charges him the
@@ -111,7 +130,14 @@ describe('the today screen', () => {
     };
     const onOpenLedger = vi.fn();
 
-    render(<Today onOpenLedger={onOpenLedger} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
+    render(
+      <Today
+        onOpenLedger={onOpenLedger}
+        onOpenChain={vi.fn()}
+        onOpenFocus={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
 
     const debt = await screen.findByRole('button', { name: /Owed since you started/ });
     // One label rather than three fragments, and the total is a sum of what still stands.
@@ -130,7 +156,14 @@ describe('the today screen', () => {
     // silently drop week debt from this screen while the Ledger still shows it.
     rows.penalty_current = { data: [{ amount_dong: 500000 }], error: null };
 
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
+    render(
+      <Today
+        onOpenLedger={vi.fn()}
+        onOpenChain={vi.fn()}
+        onOpenFocus={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
 
     await screen.findByRole('button', { name: /Owed since you started/ });
     expect(seenEq.filter((e) => e.table === 'penalty_current' && e.column === 'kind')).toEqual([]);
@@ -139,7 +172,14 @@ describe('the today screen', () => {
   it('never claims a verdict for a day that has not ended', async () => {
     rows.chain_current = { data: [{ commitment_id: 'c1', current_days: 4 }], error: null };
 
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
+    render(
+      <Today
+        onOpenLedger={vi.fn()}
+        onOpenChain={vi.fn()}
+        onOpenFocus={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
 
     // FR-10 forbids a mid-day verdict, so every row is honestly `not yet` — and the chain
     // beside it is yesterday's number, which is a different claim and an allowed one.
@@ -163,7 +203,14 @@ describe('the today screen', () => {
       error: null,
     };
 
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
+    render(
+      <Today
+        onOpenLedger={vi.fn()}
+        onOpenChain={vi.fn()}
+        onOpenFocus={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
 
     // The pill reads the live position, and the row's one accessibility label states the same
     // thing aloud rather than falling back to "not yet done today" beside it.
@@ -200,7 +247,14 @@ describe('the today screen', () => {
       error: null,
     };
 
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
+    render(
+      <Today
+        onOpenLedger={vi.fn()}
+        onOpenChain={vi.fn()}
+        onOpenFocus={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
 
     // The weekly row reads its own position, by its own id.
     expect(await screen.findByText('1/3 · 3 days')).toBeInTheDocument();
@@ -221,7 +275,14 @@ describe('the today screen', () => {
   it('leaves a commitment with no weekly-quota row exactly as before', async () => {
     // `gym` here is a Daily commitment, so `weekly_quota_progress` has nothing for it — the
     // merge must not invent a position for a commitment the view was never asked about.
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
+    render(
+      <Today
+        onOpenLedger={vi.fn()}
+        onOpenChain={vi.fn()}
+        onOpenFocus={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
 
     expect(await screen.findByRole('button', { name: /Gym/ })).toHaveAccessibleName(
       'Gym, not yet done today, missing this costs money',
@@ -230,7 +291,14 @@ describe('the today screen', () => {
 
   it('opens a chain with the commitment the row was drawn from', async () => {
     const onOpenChain = vi.fn();
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={onOpenChain} onOpenFocus={vi.fn()} />);
+    render(
+      <Today
+        onOpenLedger={vi.fn()}
+        onOpenChain={onOpenChain}
+        onOpenFocus={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
 
     await userEvent.click(await screen.findByRole('button', { name: /Gym/ }));
 
@@ -254,7 +322,14 @@ describe('the today screen', () => {
     const onOpenChain = vi.fn();
     const onOpenFocus = vi.fn();
 
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={onOpenChain} onOpenFocus={onOpenFocus} />);
+    render(
+      <Today
+        onOpenLedger={vi.fn()}
+        onOpenChain={onOpenChain}
+        onOpenFocus={onOpenFocus}
+        onOpenSettings={vi.fn()}
+      />,
+    );
 
     await userEvent.click(await screen.findByRole('button', { name: /Company work/ }));
     expect(onOpenFocus).toHaveBeenCalledExactlyOnceWith(hours);
@@ -266,16 +341,43 @@ describe('the today screen', () => {
     expect(onOpenFocus).toHaveBeenCalledOnce();
   });
 
+  it('opens settings the same way it opens the ledger or a chain — a callback it owns', async () => {
+    const onOpenSettings = vi.fn();
+    render(
+      <Today
+        onOpenLedger={vi.fn()}
+        onOpenChain={vi.fn()}
+        onOpenFocus={vi.fn()}
+        onOpenSettings={onOpenSettings}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(onOpenSettings).toHaveBeenCalledOnce();
+  });
+
   it('tells an empty setup apart from a broken read', async () => {
     rows.commitment = { data: [], error: null };
     const { unmount } = render(
-      <Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+      <Today
+        onOpenLedger={vi.fn()}
+        onOpenChain={vi.fn()}
+        onOpenFocus={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
     );
     expect(await screen.findByText(/Nothing set up yet/)).toBeInTheDocument();
     unmount();
 
     rows.commitment = { data: null, error: { message: 'permission denied' } };
-    render(<Today onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />);
+    render(
+      <Today
+        onOpenLedger={vi.fn()}
+        onOpenChain={vi.fn()}
+        onOpenFocus={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
 
     expect(await screen.findByText(/permission denied/)).toBeInTheDocument();
     expect(screen.queryByText(/Nothing set up yet/)).not.toBeInTheDocument();
