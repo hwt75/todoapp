@@ -31,6 +31,9 @@ const insert = vi.fn();
 /** Every `.eq(column, value)` the screen filtered a read by, tagged with its table. */
 const filters: string[][] = [];
 let insertResult: { error: { code?: string; message: string } | null } = { error: null };
+/** Overrides `insertResult` for one specific `idempotency_key`, so a test can make two items in
+ *  the same flush pass resolve differently — one accepted, one refused. */
+let insertResultByKey: Record<string, { error: { code?: string; message: string } | null }> = {};
 let bankedSeconds: number | null = null;
 let bankedError: { message: string } | null = null;
 let commitmentResult: { data: unknown; error: { message: string } | null } = {
@@ -63,7 +66,8 @@ vi.mock('@/lib/supabase/client', () => ({
           ),
         insert: (payload: unknown) => {
           insert(table, payload);
-          return Promise.resolve(insertResult);
+          const key = (payload as { idempotency_key: string }).idempotency_key;
+          return Promise.resolve(insertResultByKey[key] ?? insertResult);
         },
       };
       return query;
@@ -101,6 +105,7 @@ beforeEach(() => {
   insert.mockReset();
   filters.length = 0;
   insertResult = { error: null };
+  insertResultByKey = {};
   bankedSeconds = null;
   bankedError = null;
   commitmentResult = { data: { daily_minutes_target: 180 }, error: null };
@@ -480,6 +485,41 @@ describe('a refusal', () => {
 
     expect(await screen.findByText(FOCUS_COPY.notBanked)).toBeInTheDocument();
     expect(screen.getByText(/focus_session_stops_after/)).toBeInTheDocument();
+    expect(queue()).toEqual([]);
+  });
+
+  it('does not claim the session just stopped failed when a different queued item was refused in the same pass', async () => {
+    // A stale item from an unrelated earlier session is already sitting in the queue, and the
+    // server will refuse it permanently — but the session about to be stopped here is a
+    // different one, with its own key, and the server accepts it.
+    window.localStorage.setItem(
+      FOCUS_QUEUE_KEY,
+      JSON.stringify([
+        {
+          idempotencyKey: 'stale-key',
+          ownerId: 'u1',
+          commitmentId: 'c1',
+          startedAt: '2026-08-19T02:00:00.000Z',
+          stoppedAt: '2026-08-19T01:00:00.000Z',
+        },
+      ]),
+    );
+    insertResultByKey['stale-key'] = {
+      error: { code: '23514', message: 'violates check constraint focus_session_stops_after…' },
+    };
+    // `insertResult` (the default every other key falls back to) stays a clean success — this
+    // is what the just-stopped session's own insert receives.
+
+    alreadyRunning();
+    render(view());
+
+    await userEvent.click(await screen.findByRole('button', { name: FOCUS_COPY.stop }));
+
+    // The one flush pass processed both: the stale item was dropped as permanently refused, and
+    // the session just stopped went through. Nothing here may say the current session failed —
+    // that would be exactly the false "your work was not banked" this screen exists to prevent.
+    expect(screen.queryByText(FOCUS_COPY.notBanked)).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: FOCUS_COPY.start })).toBeInTheDocument();
     expect(queue()).toEqual([]);
   });
 

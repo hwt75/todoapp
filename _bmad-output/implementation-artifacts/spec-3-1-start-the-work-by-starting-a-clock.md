@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-08-20'
 status: 'done'
 baseline_commit: 'a799d7f98a7ae59fdf0bb313459948ef55c9503b'
-review_loop_iteration: 0
+review_loop_iteration: 1
 story_key: '3-1-start-the-work-by-starting-a-clock'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-3-context.md'
@@ -205,7 +205,10 @@ stop being one contract.
       instant across midnight, two sessions summing and flooring once, both trigger refusals, the
       check violation, and one account failing to read another's sessions.
 - [x] `lib/focus-session.ts` + test — start/read/clear against an injected `Storage`, elapsed across
-      a midnight boundary, `0:00`/`0:50`/`10:05` renderings, and `0:50 of 3:00`.
+      a midnight boundary, `0:00`/`0:50`/`10:05` renderings, and `0:50 of 3:00`. **Renegotiated
+      2026-08-21 by tmtuan123** (code review decision below): the running figure alone reads
+      `H:MM:SS` rather than `H:MM` — every other rendering this bullet names stays `H:MM`, exactly
+      as written.
 - [x] `lib/offline-queue.ts` + existing test — generic item, defaulted key; `lib/offline-queue.test.ts`
       and `components/morning-gate.tsx` compile and pass **unchanged**.
 - [x] `components/focus-session.tsx` + test — idle and running states, the figure, the unwatched
@@ -227,6 +230,85 @@ stop being one contract.
   the minutes reach that commitment's total for the day the session **started**.
 - Given a session stopped without a network, when the queue is later flushed any number of times,
   then exactly one session exists.
+
+### Review Findings
+
+<!-- Code review 2026-08-21, iteration 1. Layers: blind-hunter, edge-case-hunter, verification-gap, acceptance-auditor. -->
+
+- [x] [Review][Decision] The running figure reads `H:MM:SS` (`formatElapsed`); the frozen Tasks
+      checklist for `lib/focus-session.ts` names only `0:00`/`0:50`/`10:05`-shaped renderings.
+      Disclosed and reasoned at length in "Suggested Review Order" (a `0:00`-for-a-full-minute
+      figure would read as broken on the one screen whose job is making starting feel like
+      something happened) — but the frozen block itself had never been reopened to permit it.
+      **Resolved: accepted** — `tmtuan123` renegotiated the frozen checklist bullet in place
+      (see Tasks & Acceptance above) rather than reverting to `H:MM`; the reasoning already on
+      record stands as the rationale. No code change. [lib/focus-session.ts:203-215]
+- [x] [Review][Patch] `deliverSessions()`'s rejections are collected queue-wide, not scoped to the
+      session `stop()` or `drain()` was acting on — so if *any* other queued item is permanently
+      refused in the same flush pass, `stop()` shows "Not banked." for a session that may itself
+      have been banked successfully. `components/morning-gate.tsx`'s own flush (the pattern this
+      module was modeled on) gets this right: it only reports a rejection when
+      `pending.idempotencyKey === queued.idempotencyKey`. This is the trust-critical case the rest
+      of the product goes out of its way to avoid — telling the author work was lost when it
+      was not. **Fixed** — `Delivery.rejections` now carries `{key, message}` per refusal;
+      `stop()` only fails on its own key (`rejections.find(r => r.key === stopped.idempotencyKey)`)
+      and otherwise reports success/queued from `kept`, exactly as before. A new test drives two
+      items through one flush pass — one refused, one accepted — and asserts the accepted one is
+      never reported as failed. [components/focus-session.tsx:56-86,277-289;
+      components/focus-session.test.tsx]
+- [x] [Review][Patch] `stop()` lacks the `cancelled`-guard pattern its own `load()` and `drain()`
+      effects use, so a state update can fire after `onClose` unmounts the screen mid-request.
+      **Fixed** — a shared `mounted` ref, set on mount and cleared on unmount, is checked
+      immediately after `stop()`'s `await` and in its `catch`. [components/focus-session.tsx:256-293]
+- [x] [Review][Patch] The `queuedOffline`/`notBanked`/`failed`/`unreadable` status paragraphs carry
+      no `aria-live`, and the Stop button gives no `aria-busy`/visible indication while
+      `sending.kind === 'sending'` — a real gap against the deliberate accessibility work the
+      story's own review pass already did on this screen (`role="timer"`, an explicit
+      `aria-label`). **Fixed** — all four status paragraphs now carry `role="status"`; the Stop
+      button gets `aria-busy` and reads `FOCUS_COPY.stopping` ("Stopping…") while sending.
+      [components/focus-session.tsx:358-365,392-398; lib/focus-session.ts]
+- [x] [Review][Patch] `app/page.tsx`'s `focusOf` branch and the `onOpenFocus` wiring into `Today`
+      are exercised by no test — `app/page.test.tsx` (added by Story 3.0 for exactly this class of
+      bug) mocks `Today` with a stub that only accepts `onOpenSettings`, and
+      `components/today.test.tsx` asserts `Today` calls `onOpenFocus` correctly but never composes
+      with `Home`'s own `setFocusOf` wiring. An inverted branch or a wrong setter would ship
+      undetected. **Fixed** — `app/page.test.tsx`'s `Today` and `FocusSession` mocks now expose
+      the callback and the props respectively, and a new test drives the full
+      Today→FocusSession→Today round trip, asserting the tapped commitment's id and name are
+      carried through unchanged. [app/page.tsx:64-70,89; app/page.test.tsx]
+- [x] [Review][Defer] `deliverSessions()` is uncaught in the mount/`online` `drain()` effect — if
+      `flush()`'s `send` callback throws (rather than resolving `'failed'`/`'sent'`/`'duplicate'`),
+      the drain silently stalls with an unhandled rejection and no user-facing signal.
+      [components/focus-session.tsx:195-219] — deferred, narrow (requires `send` to throw a raw
+      exception rather than the classified error path supabase-js normally takes) and the next
+      `online` event or screen open retries anyway.
+- [x] [Review][Defer] `stop()`'s single `catch` always reports `FOCUS_COPY.deviceRefused` ("This
+      device would not record the session…"), even when the throw happens *after* `enqueue()` has
+      already queued the session locally — the message is technically imprecise in that narrow
+      case (the session is not lost, only unsent). [components/focus-session.tsx:256-293]
+      — deferred, narrow and low-consequence (no data loss, only an imprecise message).
+- [x] [Review][Defer] The `'refused'` view (`FOCUS_COPY.notAnHoursQuota`) reads identically whether
+      the commitment has the wrong cadence or does not exist/belong to the caller.
+      [components/focus-session.tsx:174-177] — deferred, effectively unreachable in normal
+      navigation (Today only ever passes the author's own commitment ids).
+- [x] [Review][Defer] `load()`'s two read failures (`commitment`, `focus_day_minutes`) collapse
+      into one generic `unreadable` reason string, losing which read actually failed.
+      [components/focus-session.tsx:161-165] — deferred, cosmetic; the clock and Stop remain
+      available either way, which is the property the split exists to protect.
+- [x] [Review][Defer] `rejections.join(' ')` has no guaranteed punctuation between multiple
+      distinct rejection messages in one pass. [components/focus-session.tsx:207,285] — deferred,
+      cosmetic and rare (requires two+ distinct permanent rejections in one flush).
+- [x] [Review][Defer] `<FocusSession>` is rendered in `app/page.tsx` with no `key` tied to
+      `focusOf.id` — harmless today (nothing transitions `focusOf` directly between two non-null
+      commitments), but not defended against a future change that would. [app/page.tsx:64-70]
+      — deferred, defensive-only.
+- [x] [Review][Defer] `FOCUS_COPY.alreadyElsewhere` names no way to reach the commitment whose
+      clock is already running. [lib/focus-session.ts:71] — deferred, UX nice-to-have rather than
+      a defect; the author set the other clock running himself minutes or hours earlier.
+- [x] [Review][Defer] `readRunning()` does not validate that a present `startedAt` parses as a
+      date, so a corrupted record would render `NaN:NaN:NaN` rather than being refused the way a
+      missing field already is. [lib/focus-session.ts:118-134] — deferred, requires corrupted
+      `localStorage` (external tampering or a bug elsewhere) to reach.
 
 ## Design Notes
 
@@ -408,3 +490,16 @@ test for the gate itself, not as four.
 app, locking the phone for twenty minutes and confirming it is still running from the original
 instant; and starting before midnight and stopping after, to see the minutes land on the day the
 session began. Both are why this story stays at `review` rather than moving itself to `done`.
+
+**Addendum — 2026-08-21, code review.** Four layers (blind-hunter, edge-case-hunter,
+verification-gap, acceptance-auditor) ran against `a799d7f..a400e52`. One `decision-needed` (the
+running figure's `H:MM:SS`) and four `patch` findings — see Review Findings above — are resolved;
+`npm test` passes at 642 across 33 files (up from 569), `tsc`/`lint`/`format:check` are all clean.
+The most consequential fix: `stop()` had been reporting "Not banked." for the session just
+stopped whenever *any other* queued item was permanently refused in the same flush pass, a
+scoping bug `components/morning-gate.tsx`'s own flush never had. Nine low-severity items are
+recorded as `defer` in `deferred-work.md`; several duplicate ground this story's own review pass
+already covered (the idle-screen midnight gap, the missing table grants) and were dismissed
+rather than re-recorded. **The two device-only checks above are still unrun** — this review is
+static and had no installed app to test against — so the story stays at `review` under this
+project's own `done` gate (Epic 2 retro, T4), not because of any remaining code defect.

@@ -64,6 +64,8 @@ export const FOCUS_QUEUE_KEY = 'todoapp.focus-session-queue.v1';
 export const FOCUS_COPY = {
   start: 'Start the clock',
   stop: 'Stop and bank it',
+  /** Shown on the Stop button itself while the tap is still in flight, alongside `aria-busy`. */
+  stopping: 'Stopping…',
   banked: 'Banked today',
   unwatched: "Keeps running while your phone is locked. Nothing here watches what you're doing.",
 

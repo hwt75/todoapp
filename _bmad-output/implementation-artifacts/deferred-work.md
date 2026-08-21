@@ -179,3 +179,37 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-0-change-the-hour-i-am-asked.md`
   summary: "`supabase/tests/3-0-morning-hour.sql`'s post-hour-change re-settlement step asserts only row count, not `verdict`, so a regression that re-judges and overwrites the verdict while keeping one row would pass silently."
   evidence: Raised by the 2026-08-21 review (blind-hunter). Deferred — a test-quality gap rather than a shipped defect; cheap to strengthen in a follow-up pass over the SQL test file rather than blocking this story on it.
+
+## Deferred from: code review of spec-3-1-start-the-work-by-starting-a-clock (2026-08-21)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-start-the-work-by-starting-a-clock.md`
+  summary: "`deliverSessions()` is uncaught in the mount/`online` `drain()` effect in `components/focus-session.tsx` — if `flush()`'s `send` callback throws rather than resolving `'failed'`/`'sent'`/`'duplicate'`, the drain silently stalls with an unhandled rejection and no user-facing signal."
+  evidence: Raised by the 2026-08-21 review (edge-case-hunter + blind-hunter). Deferred — narrow (requires `send` to throw a raw exception rather than take the classified error path `supabase-js` normally takes) and self-healing (the next `online` event or screen open retries the same drain).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-start-the-work-by-starting-a-clock.md`
+  summary: "`stop()`'s single `catch` in `components/focus-session.tsx` always reports `FOCUS_COPY.deviceRefused` ('This device would not record the session…'), even when the throw happens after `enqueue()` has already queued the session locally — the message is technically imprecise in that narrow case (the session is not lost, only unsent)."
+  evidence: Raised by the 2026-08-21 review (blind-hunter). Deferred — narrow and low-consequence; no data loss, only an imprecise message in an already-rare failure path.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-start-the-work-by-starting-a-clock.md`
+  summary: "The `'refused'` view in `components/focus-session.tsx` (`FOCUS_COPY.notAnHoursQuota`) reads identically whether the commitment has the wrong cadence or does not exist/belong to the caller."
+  evidence: Raised by the 2026-08-21 review (blind-hunter). Deferred — effectively unreachable in normal navigation, since Today only ever passes the author's own commitment ids to this screen.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-start-the-work-by-starting-a-clock.md`
+  summary: "`load()`'s two read failures (`commitment`, `focus_day_minutes`) in `components/focus-session.tsx` collapse into one generic `unreadable` reason string, losing which read actually failed."
+  evidence: Raised by the 2026-08-21 review (blind-hunter). Deferred — cosmetic; the clock and Stop control remain available either way, which is the property the `unreadable`/`refused` split exists to protect.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-start-the-work-by-starting-a-clock.md`
+  summary: "`rejections.join(' ')` in `components/focus-session.tsx` has no guaranteed punctuation between multiple distinct rejection messages collected in one flush pass."
+  evidence: Raised by the 2026-08-21 review (blind-hunter). Deferred — cosmetic and rare, requiring two or more distinct permanent rejections in the same pass.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-start-the-work-by-starting-a-clock.md`
+  summary: "`<FocusSession>` is rendered in `app/page.tsx` with no `key` tied to `focusOf.id` — harmless today since nothing transitions `focusOf` directly between two non-null commitments, but undefended against a future change that would."
+  evidence: Raised by the 2026-08-21 review (blind-hunter). Deferred — defensive-only; add the `key` if `app/page.tsx` ever gains a way to switch `focusOf` from one commitment straight to another.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-start-the-work-by-starting-a-clock.md`
+  summary: "`FOCUS_COPY.alreadyElsewhere` ('A clock is already running on another commitment. Stop that one first.') names no way to reach the commitment whose clock is already running."
+  evidence: Raised by the 2026-08-21 review (blind-hunter). Deferred — a UX nice-to-have rather than a defect; the author started the other clock himself, minutes or hours earlier, and knows which commitment it was.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-start-the-work-by-starting-a-clock.md`
+  summary: "`readRunning()` in `lib/focus-session.ts` does not validate that a present `startedAt` parses as a date, so a corrupted record would render `NaN:NaN:NaN` rather than being refused the way a missing field already is."
+  evidence: Raised by the 2026-08-21 review (edge-case-hunter). Deferred — requires a corrupted `localStorage` record (external tampering, or a bug elsewhere writing malformed data) to reach; the missing-field guard right beside it already covers the realistic failure mode.

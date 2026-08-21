@@ -14,6 +14,10 @@ import Home from './page';
  * switches between children on it. Nothing here exercised that switch before this story added a
  * `showSettings` branch to it (spec 3.0, verification-gap review, 2026-08-21) — a broken wire, an
  * inverted branch, or a button calling the wrong setter would all have shipped undetected.
+ *
+ * Story 3.1 added a second branch, `focusOf`, to the same ternary without extending this file —
+ * reintroducing the exact gap it was written to close (spec 3.1, verification-gap review,
+ * 2026-08-21). The `Today` stub below now exposes both callbacks for the same reason.
  */
 
 vi.mock('@/lib/use-gate', () => ({
@@ -36,13 +40,42 @@ vi.mock('@/components/push-probe', () => ({ PushProbe: () => null }));
 vi.mock('@/components/morning-gate', () => ({ MorningGate: () => null }));
 vi.mock('@/components/ledger', () => ({ Ledger: () => null }));
 vi.mock('@/components/chains-detail', () => ({ ChainsDetail: () => null }));
-vi.mock('@/components/focus-session', () => ({ FocusSession: () => null }));
+
+vi.mock('@/components/focus-session', () => ({
+  FocusSession: ({
+    commitmentId,
+    name,
+    onClose,
+  }: {
+    commitmentId: string;
+    name: string;
+    onClose: () => void;
+  }) => (
+    <div>
+      <p>{`Focus Session screen: ${name} (${commitmentId})`}</p>
+      <button type="button" onClick={onClose}>
+        Back to today
+      </button>
+    </div>
+  ),
+}));
 
 vi.mock('@/components/today', () => ({
-  Today: ({ onOpenSettings }: { onOpenSettings: () => void }) => (
-    <button type="button" onClick={onOpenSettings}>
-      Settings
-    </button>
+  Today: ({
+    onOpenSettings,
+    onOpenFocus,
+  }: {
+    onOpenSettings: () => void;
+    onOpenFocus: (commitment: { id: string; name: string }) => void;
+  }) => (
+    <>
+      <button type="button" onClick={onOpenSettings}>
+        Settings
+      </button>
+      <button type="button" onClick={() => onOpenFocus({ id: 'c1', name: 'Company work' })}>
+        Open Company work
+      </button>
+    </>
   ),
 }));
 
@@ -76,5 +109,23 @@ describe('the app shell', () => {
     // Today again, Settings gone.
     expect(await screen.findByRole('button', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.queryByText('Settings screen')).not.toBeInTheDocument();
+  });
+
+  it('swaps Today for the Focus Session and back, with the tapped commitment carried through', async () => {
+    render(<Home />);
+
+    const openFocus = await screen.findByRole('button', { name: 'Open Company work' });
+    await userEvent.click(openFocus);
+
+    // The Focus Session is on screen, carrying the exact commitment Today reported the tap for
+    // — not a hardcoded or stale one.
+    expect(await screen.findByText('Focus Session screen: Company work (c1)')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open Company work' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Back to today' }));
+
+    // Today again, the Focus Session gone.
+    expect(await screen.findByRole('button', { name: 'Open Company work' })).toBeInTheDocument();
+    expect(screen.queryByText(/Focus Session screen/)).not.toBeInTheDocument();
   });
 });

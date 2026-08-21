@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { calendarMoment } from '@/lib/declaration';
 import { classifyWriteError, shouldRetry } from '@/lib/declaration-submit';
 import {
@@ -34,11 +34,22 @@ type View =
 type Sending =
   { kind: 'idle' } | { kind: 'sending' } | { kind: 'queued' } | { kind: 'failed'; reason: string };
 
+interface Rejection {
+  key: string;
+  message: string;
+}
+
 interface Delivery {
   /** Keys still waiting: the network is gone, not the rule. */
   kept: string[];
-  /** Every permanent refusal this pass produced, in the server's own words. */
-  rejections: string[];
+  /**
+   * Every permanent refusal this pass produced, each carrying the key of the item it belongs
+   * to — never just the message. A rejection is only *this* session's business if its key says
+   * so; a stale, unrelated item the server will never accept must not be mistaken for the one
+   * just stopped (`components/morning-gate.tsx`'s own flush already gets this right, and this
+   * mirrors it).
+   */
+  rejections: Rejection[];
 }
 
 /**
@@ -54,7 +65,7 @@ interface Delivery {
  * queue quietly losing work while the screen looks fine.
  */
 async function deliverSessions(): Promise<Delivery> {
-  const rejections: string[] = [];
+  const rejections: Rejection[] = [];
 
   const outcome = await flush<QueuedFocusSession>(
     window.localStorage,
@@ -73,7 +84,10 @@ async function deliverSessions(): Promise<Delivery> {
       // ran backwards. Keeping it queued would retry forever against a rule that will never
       // accept it, while the screen shows the minutes as banked.
       if (result === 'rejected') {
-        rejections.push(error?.message ?? FOCUS_COPY.serverRefused);
+        rejections.push({
+          key: pending.idempotencyKey,
+          message: error?.message ?? FOCUS_COPY.serverRefused,
+        });
         removeFromQueue(window.localStorage, pending.idempotencyKey, FOCUS_QUEUE_KEY);
       }
 
@@ -123,6 +137,16 @@ export function FocusSession({
   const [sending, setSending] = useState<Sending>({ kind: 'idle' });
   const [now, setNow] = useState(() => new Date());
   const [reloads, setReloads] = useState(0);
+  // Checked by `stop()`, which — unlike `load()` and `drain()` — has no effect of its own to
+  // hang a `cancelled` flag on; it runs from a click and can still be in flight when `onClose`
+  // unmounts this screen.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   // The day the screen *reports on*, derived from the same instant the figure is drawn from, so
   // a session running across local midnight moves the screen onto the new day rather than going
@@ -204,7 +228,7 @@ export function FocusSession({
       setQueued(readStoppedSessions(window.localStorage));
       setReloads((n) => n + 1);
       if (rejections.length > 0) {
-        setSending({ kind: 'failed', reason: rejections.join(' ') });
+        setSending({ kind: 'failed', reason: rejections.map((r) => r.message).join(' ') });
       }
     }
 
@@ -276,19 +300,26 @@ export function FocusSession({
 
       const { kept, rejections } = await deliverSessions();
 
+      if (!mounted.current) return;
+
       setQueued(readStoppedSessions(window.localStorage));
       setReloads((n) => n + 1);
 
-      if (rejections.length > 0) {
+      // Scoped to *this* session's own key, not to the pass as a whole — a different, stale
+      // item the same flush happened to refuse is not evidence that this one was. Reporting
+      // "Not banked" for a session the server actually accepted is the false negative the rest
+      // of this product goes out of its way never to produce.
+      const ownRejection = rejections.find((r) => r.key === stopped.idempotencyKey);
+      if (ownRejection) {
         // Nothing refused was written and nothing refused is waiting to be. The total must not
         // move, and the screen must not say it banked anything.
-        setSending({ kind: 'failed', reason: rejections.join(' ') });
+        setSending({ kind: 'failed', reason: ownRejection.message });
         return;
       }
 
       setSending(kept.includes(stopped.idempotencyKey) ? { kind: 'queued' } : { kind: 'idle' });
     } catch {
-      setSending({ kind: 'failed', reason: FOCUS_COPY.deviceRefused });
+      if (mounted.current) setSending({ kind: 'failed', reason: FOCUS_COPY.deviceRefused });
     }
   }
 
@@ -326,7 +357,7 @@ export function FocusSession({
       {view.kind === 'loading' && <p>Working…</p>}
 
       {(view.kind === 'unreadable' || view.kind === 'refused') && (
-        <p>
+        <p role="status">
           <strong>{FOCUS_COPY.failed}</strong> {view.reason}
         </p>
       )}
@@ -359,9 +390,10 @@ export function FocusSession({
                 type="button"
                 className="action"
                 disabled={sending.kind === 'sending'}
+                aria-busy={sending.kind === 'sending'}
                 onClick={() => void stop(mine)}
               >
-                {FOCUS_COPY.stop}
+                {sending.kind === 'sending' ? FOCUS_COPY.stopping : FOCUS_COPY.stop}
               </button>
             </>
           ) : (
@@ -389,10 +421,14 @@ export function FocusSession({
         </>
       )}
 
-      {sending.kind === 'queued' && <p className="row-muted">{FOCUS_COPY.queuedOffline}</p>}
+      {sending.kind === 'queued' && (
+        <p className="row-muted" role="status">
+          {FOCUS_COPY.queuedOffline}
+        </p>
+      )}
 
       {sending.kind === 'failed' && (
-        <p>
+        <p role="status">
           <strong>{FOCUS_COPY.notBanked}</strong> {sending.reason}
         </p>
       )}
