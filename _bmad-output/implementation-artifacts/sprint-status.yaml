@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-21-2026 16:30
+last_updated: 08-21-2026 21:27
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -60,7 +60,7 @@ development_status:
   3-2-know-where-the-hours-stand-without-opening-anything: review
   3-3-a-weekly-quota-that-counts-down: done
   3-4-the-week-closes-and-settles: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
   epic-4: backlog
   4-1-attach-a-check-that-answers-for-me: backlog
@@ -98,7 +98,7 @@ action_items:
     action: "Record the renegotiation of spec 1.2 frozen Intent, or re-freeze the
       current text with explicit approval"
     owner: "hwt75"
-    status: in-progress
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-08-18.md"
   - id: "epic-1-retro-item-4-close-epic-1-move-stories-1-2-and-1-3-to"
     epic: 1
@@ -160,7 +160,7 @@ action_items:
     action: "Stamp spec approval in its own commit, separate from the implementation
       commit (P2b)"
     owner: "hwt75"
-    status: in-progress
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
   - id: "epic-2-retro-item-13-restore-the-commit-key-convention-full-s"
     epic: 2
@@ -183,3 +183,32 @@ action_items:
     owner: "hwt75"
     status: open
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
+  - id: "epic-3-retro-item-16-push-the-8-outstanding-migrations-202608"
+    epic: 3
+    action: "Push the 8 outstanding migrations (20260820100000 through 20260820150000)
+      to the live Supabase project (npx supabase db push against hxzalpnlrunctbajgtkv),
+      then re-run the security advisor per README instructions."
+    owner: "hwt75"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-08-21.md"
+  - id: "epic-3-retro-item-17-promote-3-0-3-1-and-3-2-to-done-in-sprin"
+    epic: 3
+    action: "Promote 3-0, 3-1, and 3-2 to done in sprint-status.yaml once review sign-off
+      is confirmed, matching 3-3 and 3-4."
+    owner: "hwt75"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-08-21.md"
+  - id: "epic-3-retro-item-18-give-fr-4-escalating-reminder-pipeline-f"
+    epic: 3
+    action: "Give FR-4 escalating-reminder pipeline for Weekly Quota an owning story,
+      or amend the epics.md FR-4 coverage note to say only the pill shipped."
+    owner: "hwt75"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-08-21.md"
+  - id: "epic-3-retro-item-19-add-a-documented-or-scripted-check-that"
+    epic: 3
+    action: "Add a documented or scripted check that remote migration state matches
+      local before a schema-carrying story is promoted to done."
+    owner: "hwt75"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-08-21.md"
