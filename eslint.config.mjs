@@ -12,6 +12,9 @@ const config = [
       // this project's tsconfig are both right to reject. It is type-checked by the
       // Supabase deploy, not here.
       'supabase/functions/**',
+      // Written by `supabase start`, not by anyone here: a bundled Deno entrypoint
+      // that is gitignored and regenerated on every local stack boot.
+      'supabase/.temp/**',
     ],
   },
   ...nextCoreWebVitals,
