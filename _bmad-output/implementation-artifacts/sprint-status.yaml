@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-21-2026 21:27
+last_updated: 08-21-2026 22:28
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -189,7 +189,7 @@ action_items:
       to the live Supabase project (npx supabase db push against hxzalpnlrunctbajgtkv),
       then re-run the security advisor per README instructions."
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-08-21.md"
   - id: "epic-3-retro-item-17-promote-3-0-3-1-and-3-2-to-done-in-sprin"
     epic: 3
