@@ -275,6 +275,17 @@ because a weekly quota cannot fail on a Thursday. **Climax:** by Saturday mornin
 day remaining, it is the loudest thing on the phone. **Resolution:** he goes, or the week closes
 against him at Week Close.
 
+*The reminder's literal template (Story 3.5, FR-4) names the commitment the same way
+`enqueue_focus_prompts`' body does (Story 3.2), and self-dates with a weekday and clock time —
+neither KF-6's own phrasing above self-dates on its own, the same gap `week_summary_body` (3.4)
+already hit and fixed: `<name>, <held> of <target>, <days> day(s) left this week, as of
+<weekday> <time>.` Once daily while sessions remaining equals days remaining — two left with
+exactly two days left, at his morning hour: `Gym, 1 of 3, 2 days left this week, as of Thursday
+07:30.` Twice daily once sessions remaining exceeds days remaining — the same two still owed
+with only one day left, morning and again twelve hours later: `Gym, 1 of 3, 1 day left this
+week, as of Saturday 07:30.` and `Gym, 1 of 3, 1 day left this week, as of Saturday 19:30.`
+Silent otherwise — a quota with more days left than sessions owed says nothing.*
+
 **KF-7. Hoàng adds a commitment and decides how much truth it needs.**
 He creates *Read 20 pages*, picks Do it and Every day. Money defaults off; he leaves it off. The four
 optional checks are all off, so this one runs on his word alone. **Climax:** had he switched money on

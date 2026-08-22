@@ -76,19 +76,26 @@ second slot stays anchored to the account's own morning hour rather than an abso
 KF-6's literal copy — "2 gym sessions left, 3 days remaining" — matches neither
 `push_body_is_sendable`'s clock-time nor weekday check, exactly the trap 3.4's `week_summary_body`
 already hit and fixed by naming the weekday. Proposed body, added to `EXPERIENCE.md` before use
-(UX-DR26): `"<held> of <target>, <days_remaining> day(s) left this week, as of <weekday>
-<HH:MM>."` — e.g. *"1 of 3, 3 days left this week, as of Thursday 07:30."* for the once-daily tier,
-identical shape for the twice-daily tier (the second push differs only in its slot's clock time).
+(UX-DR26): `"<name>, <held> of <target>, <days_remaining> day(s) left this week, as of <weekday>
+<HH:MM>."` — the name prefixed the same way `enqueue_focus_prompts`' body already does (3.2), since
+this reminder is per-commitment rather than aggregated the way `enqueue_gate_reminders`' is. E.g.
+*"Gym, 1 of 3, 2 days left this week, as of Thursday 07:30."* (sessions remaining equals days
+remaining: 2 and 2) for the once-daily tier, identical shape for the twice-daily tier (the second
+push differs only in its slot's clock time).
 Singular/plural on "day(s)" follows the existing `commitment`/`commitments` pattern in
 `enqueue_gate_reminders`.
 
-### D4. Dedupe key carries the slot, not the tier
+### D4. Dedupe key carries the day and the slot, not the tier or the week
 
-`weekly-<account>-<commitment>-<week_start>-<slot>` (`slot` 0 or 1), mirroring
-`focus-<account>-<commitment>-<today>-<slot>` from 3.2. Keying on slot rather than on
-silent/once/twice means a commitment crossing from `slack = 0` to `slack < 0` mid-week (or back, if
-a `held` declaration lands late within 2.7's window) never collides with or skips a key it already
-used — each slot's row is independent of which tier put it there.
+`weekly-<account>-<commitment>-<today>-<slot>` (`slot` 0 or 1), mirroring
+`focus-<account>-<commitment>-<today>-<slot>` from 3.2 exactly — **corrected during
+implementation from an earlier draft that keyed on `week_start` instead of `today`**, which would
+have let a commitment claim slot 0 only once for the entire week rather than once per qualifying
+day, silencing every day after the first even while `slack` stayed at 0 or below. Keying on the
+day and slot rather than on silent/once/twice also means a commitment crossing from `slack = 0` to
+`slack < 0` mid-week (or back, if a `held` declaration lands late within 2.7's window) never
+collides with or skips a key it already used — each day's slot is independent of which tier put it
+there.
 
 ### D5. Reads `weekly_quota_progress`, which already excludes `archived_at`; no new exclusion needed
 
@@ -164,18 +171,18 @@ never observe the same period at the same time by construction.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `EXPERIENCE.md` — add the reminder body template beside KF-6, per UX-DR26 (D3).
-- [ ] Migration — `enqueue_weekly_quota_reminders()`: loop `weekly_quota_progress` joined to
+- [x] `EXPERIENCE.md` — add the reminder body template beside KF-6, per UX-DR26 (D3).
+- [x] Migration — `enqueue_weekly_quota_reminders()`: loop `weekly_quota_progress` joined to
   `profile` for `morning_hour`, compute `slack`, gate on local hour matching slot 0 or (if
   `slack < 0`) slot 1, build the self-dating body, `continue when not
   push_body_is_sendable(body)`, `outbox_enqueue` with the D4 dedupe key.
-- [ ] Migration — `cron.schedule('weekly-quota-reminders', '35 * * * *', ...)`, the one remaining
+- [x] Migration — `cron.schedule('weekly-quota-reminders', '35 * * * *', ...)`, the one remaining
   offset in the existing 05/15/25/35/45 rotation.
-- [ ] `supabase/tests/3-5-weekly-quota-reminder.sql` — silent at `slack > 0`; one push at
+- [x] `supabase/tests/3-5-weekly-quota-reminder.sql` — silent at `slack > 0`; one push at
   `slack = 0`; two pushes across both slots at `slack < 0`; dedupe holds across a repeated cron
   pass within the same slot; a poisoned commitment name is skipped and a second account/commitment
   in the same pass still enqueues (Story 3.2's own proof, repeated here).
-- [ ] `supabase/tests/README.md` — add this file to the manifest table.
+- [x] `supabase/tests/README.md` — add this file to the manifest table.
 
 **Acceptance Criteria:**
 - Given a Weekly Quota commitment with `slack > 0`, when the reminder pass runs, then nothing is
@@ -192,17 +199,50 @@ never observe the same period at the same time by construction.
 
 ## Design Notes
 
-*(Filled in during implementation.)*
+**The body names the commitment, unlike the D3 draft.** Written during implementation: the draft's
+template (`<held> of <target>, ...`, no name) had nothing for the poisoned-name guard (Boundaries,
+Always) to actually protect against — a name only poisons a body it appears in. Fixed by prefixing
+`<name>, ` the same way `enqueue_focus_prompts`' body already does (3.2), and `EXPERIENCE.md`'s
+template, this spec's own D3 and D3's own example were all updated to match before implementation
+finished, rather than left inconsistent with the shipped code.
+
+**D4's dedupe key corrected from `week_start` to `today`.** The original draft would have let a
+commitment claim slot 0 only once for the entire week — silencing every day after the first even
+while `slack` stayed at 0 or below, the opposite of "once daily." Caught before the migration was
+written; D4 above carries the correction and the reasoning.
+
+**Tested without waiting twelve real hours.** `enqueue_weekly_quota_reminders()` reads the wall
+clock the same way `enqueue_gate_reminders`/`enqueue_focus_prompts` do — no hour of its own. Rather
+than requiring a wide clock window (`3-2-focus-prompt.sql`'s approach for its four slots), the test
+sets `morning_hour` to the real current hour for the first pass (slot 0 fires now) and to twelve
+hours earlier for the second (slot 1 fires now instead) — both real "now," so the file needs no
+clock-window guard.
+
+**`week_start_day` chosen by searching, not computing.** `3-3-weekly-quota-progress.sql` computes
+`days_remaining` from a fixed `week_start_day`; this file needed the opposite — a `week_start_day`
+that produces a *chosen* `days_remaining` (6, 2, and 1) regardless of which real calendar day the
+suite runs on. Solved by searching `1..7` through `week_days_remaining()` itself rather than
+re-deriving its formula, so the fixture can never drift from what the function actually computes.
 
 ## Verification
 
-**Commands:**
-- `npm test` — expected: clean, no regressions.
-- `npx supabase db reset` then `psql ... < supabase/tests/3-5-weekly-quota-reminder.sql` — expected:
-  `PASS.`
-- `npm run migrations:check` — expected: local and remote match after `db push`.
+**Commands, run 2026-08-22:**
+- `npx supabase start` (db-only, mirroring CI's `db-tests` job) → `npx supabase db reset` — all 29
+  local migrations applied clean.
+- All 15 files under `supabase/tests/` run via `psql -v ON_ERROR_STOP=1` — **15/15 pass**, including
+  the new `3-5-weekly-quota-reminder.sql` (comfortable/met slack silent, slack = 0 exactly one push
+  at slot 0 and never slot 1 even twelve hours later, slack < 0 gains slot 1 twelve hours later, a
+  retried pass at the same hour is a no-op, a poisoned name skipped without affecting any other
+  row, an archived commitment never appears).
+- Applied to the live project (`hxzalpnlrunctbajgtkv`) via the Supabase MCP server's
+  `apply_migration` (local CLI unauthenticated in this environment, same constraint the Epic 3
+  retrospective recorded) — re-checked after: `enqueue_weekly_quota_reminders` exists in `pg_proc`
+  (`security definer`), `cron.job` lists `weekly-quota-reminders` at `35 * * * *` alongside the
+  five pre-existing jobs, and `get_advisors(type=security)` is clean.
+- `npm run lint`, `npx tsc --noEmit`, `npm run format:check` — clean (no TypeScript touched by this
+  story).
 
-**Manual checks (only the author can do these):**
+**Manual checks (only the author can do these) — not yet performed:**
 - With a Weekly Quota commitment at `slack = 0`, wait past `morning_hour` on the installed app and
   confirm a push arrives naming the position, not a generic reminder.
 - Confirm the body is fully legible on the lock screen (NFR1), same check Story 2.8 required.
