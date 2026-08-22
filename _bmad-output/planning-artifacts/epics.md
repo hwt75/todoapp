@@ -484,6 +484,11 @@ So that the one thing no machine can check still gets an honest answer. *(FR-9)*
 **Given** the morning hour that decides when I am asked
 **Then** it is configurable from Settings, alongside notification permission state and referee pairing, per UX-DR17
 
+*(Not built within this story's own scope — no Settings surface existed yet. The gap was
+carried into Story 3.0, added 2026-08-20 specifically to close it (see Story 3.0's own note
+below). Satisfied at the product level by 3.0; this AC's own box is checked against that
+story, not against 2.4's original diff.)*
+
 ### Story 2.5: The day closes on its own
 
 As the author,

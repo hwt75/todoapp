@@ -139,6 +139,12 @@ quietly, and `payloadProblems` will accept either form.
 
 ## Design Notes
 
+**Lock-screen legibility confirmed by `hwt75` on his own device (2026-08-22).** Per NFR1 and
+`epics.md` Story 2.8's own AC ("it arrives as a push whose body is fully legible on the lock
+screen"), which the 2026-08-19 verification below could not itself demonstrate — that check
+confirmed the composed sentence's content and character count, not that it reads on a locked
+phone.
+
 **Verified against the live project on 2026-08-19.** A failed day produced exactly one summary:
 *"Two of three on Monday. That's 500.000₫. No fap held though. Start with TryHackMe tomorrow."* —
 91 characters, under the lock-screen ceiling, count once, amount once, something that held named,

@@ -41,16 +41,16 @@ development_status:
   1-3-settle-whether-tryhackme-can-be-read-from-outside: done
   epic-1-retrospective: done
 
-  epic-2: in-progress
+  epic-2: done
   2-1-sign-in-as-the-doer: done
   2-2-create-and-edit-a-commitment: done
   2-3-see-today-and-the-row-and-pill-everything-else-reuses: done
   2-4a-the-outbox-and-its-worker: done
-  2-4-answer-for-yesterday: review
+  2-4-answer-for-yesterday: done
   2-5-the-day-closes-on-its-own: done
   2-6-a-failed-day-costs-money-and-i-can-see-every-one: done
   2-7-silence-is-not-a-way-out: done
-  2-8-the-day-tells-me-how-it-went: review
+  2-8-the-day-tells-me-how-it-went: done
   2-9-chains-that-survive-a-bad-day: done
   epic-2-retrospective: done
 
