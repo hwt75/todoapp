@@ -13,6 +13,7 @@
     "test": "vitest run",
     "icons": "node scripts/generate-icons.mjs",
     "push": "node scripts/send-push.mjs",
+    "migrations:check": "node scripts/check-migrations-pushed.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

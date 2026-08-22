@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-21-2026 22:28
+last_updated: 08-22-2026 09:00
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -54,10 +54,10 @@ development_status:
   2-9-chains-that-survive-a-bad-day: done
   epic-2-retrospective: done
 
-  epic-3: in-progress
-  3-0-change-the-hour-i-am-asked: review
-  3-1-start-the-work-by-starting-a-clock: review
-  3-2-know-where-the-hours-stand-without-opening-anything: review
+  epic-3: done
+  3-0-change-the-hour-i-am-asked: done
+  3-1-start-the-work-by-starting-a-clock: done
+  3-2-know-where-the-hours-stand-without-opening-anything: done
   3-3-a-weekly-quota-that-counts-down: done
   3-4-the-week-closes-and-settles: done
   epic-3-retrospective: done
@@ -196,7 +196,7 @@ action_items:
     action: "Promote 3-0, 3-1, and 3-2 to done in sprint-status.yaml once review sign-off
       is confirmed, matching 3-3 and 3-4."
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-08-21.md"
   - id: "epic-3-retro-item-18-give-fr-4-escalating-reminder-pipeline-f"
     epic: 3
@@ -210,5 +210,5 @@ action_items:
     action: "Add a documented or scripted check that remote migration state matches
       local before a schema-carrying story is promoted to done."
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-08-21.md"

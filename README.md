@@ -174,6 +174,11 @@ npx supabase db push
 After any schema change, run the security advisor. It caught two real holes in the first
 migration within seconds of it being applied, neither of which was visible by reading the SQL.
 
+Before promoting a schema-carrying story to `done`, run `npm run migrations:check`. It diffs
+`supabase migration list`'s local and remote columns and fails on any mismatch in either
+direction — a story's own tests only prove the migration works against a fresh local reset, never
+that it reached the project the deployed app queries.
+
 ### Delete means archive
 
 A commitment is referenced by every declaration, failed day and penalty that ever touched it, so
