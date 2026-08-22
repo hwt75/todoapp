@@ -147,7 +147,7 @@ action_items:
     action: "Add .ob-token to .gitignore, and decide whether the expired token in
       898b7e7 warrants a history rewrite (A5)"
     owner: "hwt75"
-    status: in-progress
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
   - id: "epic-2-retro-item-11-record-the-lib-expiry-ts-and-lib-outbox"
     epic: 2
@@ -182,7 +182,7 @@ action_items:
     action: "Close Epic 1 and Epic 2 in sprint-status.yaml, and get the branch onto
       main under a name that describes it (A9)"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
   - id: "epic-3-retro-item-16-push-the-8-outstanding-migrations-202608"
     epic: 3
