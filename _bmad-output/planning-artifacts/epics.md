@@ -198,7 +198,7 @@ Sources: `DESIGN.md` and `EXPERIENCE.md`, read as one contract.
 | FR-2a | Epic 4 | Precedence once an Auto-check can disagree with the author |
 | FR-2 | Epic 2, Epic 3 | Daily judging in Epic 2; quota judging in Epic 3 |
 | FR-3 | Epic 2 | Push-resident, persistent notification delivery |
-| FR-4 | Epic 3 (partial) | Today pill's escalating urgency (position/days-remaining color) shipped. The push reminder pipeline itself (silent → once-daily → twice-daily) was split out of Story 3.3 at authoring time and has no owning story — design already carried forward in `deferred-work.md`. **Coverage gap**, unlike FR-6/FR-7 below. |
+| FR-4 | Epic 3 (partial, Story 3.5 pending) | Today pill's escalating urgency (position/days-remaining color) shipped. The push reminder pipeline itself (silent → once-daily → twice-daily) was split out of Story 3.3 at authoring time; Story 3.5 (added 2026-08-22) now owns it, spec drafted and awaiting approval. **Coverage gap until 3.5 ships**, unlike FR-6/FR-7 below. |
 | FR-5 | Epic 3 | Prompt when quota work has not started |
 | FR-6 | *(none — resolved as deferred)* | Location Auto-check. Deliberately uncovered: blocked on an Apple Developer account, specified and waiting. **Not a coverage gap.** |
 | FR-7 | *(none — resolved as deferred)* | Movement Auto-check. Same blocker, same status. **Not a coverage gap.** |
@@ -256,7 +256,7 @@ The author can commit to time rather than completion, banking focus sessions aga
 quota, and the two remaining cadences work: a weekly quota that counts down as days run out, and a
 week that closes on its own terms.
 
-**FRs covered:** FR-2 (quota), FR-4 (pill only — reminder pipeline unbuilt, see FR coverage table), FR-5, FR-11, FR-12, FR-23
+**FRs covered:** FR-2 (quota), FR-4 (pill shipped; reminder pipeline owned by Story 3.5, pending — see FR coverage table), FR-5, FR-11, FR-12, FR-23
 
 ### Epic 4: The machine answers for him, and the friend rules
 
@@ -746,9 +746,9 @@ So that a quota gets louder as the week runs out instead of failing silently on 
 **Then** their frequency and urgency increase, per FR-4
 **And** no reminder frames a mid-week shortfall as a failure
 
-*(Unmet as of Epic 3's close — split out at authoring time into its own deferred pipeline,
-no owning story yet. Only the pill AC above shipped. See FR-4 in the coverage table above
-and `deferred-work.md`.)*
+*(Unmet as of Epic 3's close — split out at authoring time into its own deferred pipeline.
+Only the pill AC above shipped. Now owned by Story 3.5 (added 2026-08-22, spec drafted,
+awaiting approval). See FR-4 in the coverage table above and `deferred-work.md`.)*
 
 **Given** the urgent color family
 **Then** it is visually distinguishable from the failed family, per UX-DR1 — *sort this out* must not read as *you lost this*
@@ -773,6 +773,31 @@ So that quota commitments have a real deadline rather than an open question. *(F
 **Given** an already-settled week
 **When** the pass runs again
 **Then** it is a no-op, per AD-5
+
+### Story 3.5: The loudest thing on the phone
+
+As the author,
+I want a Weekly Quota commitment to remind me as the week runs out, louder as it goes,
+So that a quota I have not looked at does not go silent past the point I could still recover it.
+*(FR-4, added 2026-08-22 — split from Story 3.3 at authoring time, deferred pending its own spec;
+see `deferred-work.md` and `epic-3-retro-2026-08-21.md` F2.)*
+
+**Acceptance Criteria:**
+
+**Given** sessions remaining is fewer than days remaining
+**Then** nothing is sent — a comfortable pace stays silent, per FR-4 and UX-DR1
+
+**Given** sessions remaining equals days remaining
+**When** the reminder pass runs at the account's morning hour
+**Then** one push is sent naming the position and days left, never the word "miss" or "fail"
+
+**Given** sessions remaining exceeds days remaining
+**When** the reminder pass runs at the morning and evening slot
+**Then** two pushes are sent that day, each independently deduped
+
+**Given** the reminder body
+**Then** it self-dates with a weekday and clock time and states no present-tense claim, per the
+outbox's own check constraint
 
 ---
 
