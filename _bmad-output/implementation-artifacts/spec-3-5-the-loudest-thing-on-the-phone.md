@@ -2,7 +2,7 @@
 title: 'Story 3.5 — The loudest thing on the phone'
 type: 'feature'
 created: '2026-08-22'
-status: 'awaiting-approval'
+status: 'approved'
 baseline_commit: '0c4e8fe6'
 review_loop_iteration: 0
 story_key: '3-5-the-loudest-thing-on-the-phone'
@@ -15,8 +15,10 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-> **DRAFTED 2026-08-22, not yet approved.** Read it, change what is wrong, then mark it approved —
-> after which it does not move without you. Nothing below is built yet.
+> **APPROVED 2026-08-22 by hwt75.** D2's second-slot offset confirmed as `morning_hour + 12h`
+> (no fixed evening hour). Frozen from here — it does not move without a recorded renegotiation.
+>
+> Stamped in its own commit, before any implementation, as every Epic 3 story before it (retro P2b).
 
 ## Intent
 
@@ -66,9 +68,8 @@ start hour. This pipeline instead runs on a fixed two-slot clock: **slot 0 at th
 per-account setting) and **slot 1 twelve hours later** (`(morning_hour + 12) mod 24`), reachable only
 when `slack < 0`. `slack = 0` gets slot 0 only; `slack > 0` gets neither. This keeps the "once daily /
 twice daily" language literal rather than translating it into an hourly-attempt budget the design
-never asked for. *(Needs sign-off: 12 hours is a proposed fixed offset, not stated anywhere in
-`DESIGN.md`/`EXPERIENCE.md` — an evening hour tied to a fixed wall-clock time, e.g. 20:00, is the
-other reasonable reading. Flagging rather than picking silently.)*
+never asked for. **Confirmed 2026-08-22:** `morning_hour + 12h`, not a fixed wall-clock hour — the
+second slot stays anchored to the account's own morning hour rather than an absolute time.
 
 ### D3. The body must self-date, same gap Story 3.4 found for `week_summary_body`
 
@@ -125,7 +126,6 @@ never observe the same period at the same time by construction.
   Epic 3 story.
 
 **Ask First:**
-- The 12-hour second-slot offset (D2) — confirm or replace before implementation.
 - Any change to `weekly_quota_progress`'s own columns or `week_days_remaining`'s signature.
 
 **Never:**
@@ -209,4 +209,4 @@ never observe the same period at the same time by construction.
 
 ## Open Questions
 
-- D2's 12-hour second-slot offset — confirmed, or replaced with a fixed evening hour (e.g. 20:00)?
+None — D2 was the only open item and is confirmed above.
