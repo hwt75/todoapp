@@ -1,0 +1,114 @@
+# Database checks
+
+The rules that decide days, money and chains live in plpgsql. `npm test` cannot reach any of
+them — it covers the TypeScript side, and three of those modules are mirrors of these functions
+with no production caller at all. These files are where the database is actually exercised.
+
+They exist because of a finding in the Epic 2 retrospective: every story recorded a careful
+"verified end to end" paragraph, and **nine of the ten carried no command anyone could run
+again**. A defect that was suspected in the shipped SQL then could not be confirmed or refuted by
+reading, which is how it ended up in a document as an open question instead of being fixed or
+dismissed in five minutes.
+
+**So the rule is: a story's verification leaves a file here, not a paragraph in its spec.**
+Prose explains why; this is what proves it, on the next machine and in six months.
+
+## Running them
+
+```
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/2-5-settlement.sql
+```
+
+Against the local stack there is no `psql` on the host, so the container's own is used — the
+form every result in this project has been produced with:
+
+```
+docker exec -i supabase_db_todoapp psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/2-5-settlement.sql
+```
+
+Each file is one transaction that **rolls back at the end**. Nothing persists, no account needs
+deleting afterwards, and a crash mid-run leaves the database as it was.
+
+Each assertion raises with a message saying what the specification promised and what the database
+actually did, so a failure is a finding rather than a puzzle. `-v ON_ERROR_STOP=1` is what makes
+the failure a non-zero exit code.
+
+## Continuous integration
+
+**Every file here now runs on every push**, in the `db-tests` job in `.github/workflows/ci.yml` —
+not only when someone remembers to run them by hand. It starts only the database container
+(`supabase start -x ...`, excluding Studio, Storage, Realtime, Auth and the rest of the stack
+this job never talks to), resets it from scratch, and loops the exact `docker exec` command above
+over every `.sql` file. Running them by hand, below, is still how a _new_ file gets written and
+checked before it is committed — CI is what stops the next person from having to remember to run
+the ones that already exist.
+
+## Where they can run — and where they cannot
+
+**Not against the author's own project.** `settle_day` refuses `p_override` whenever it meets a
+profile with `is_live_doer` set, and it _raises_ rather than skipping that account
+(`20260819241000_expiry_and_supersession.sql:105-110`) — so one live account disables the override
+path for the entire call. The only way past it is to set `app.settlement_invocation` by hand, which
+is precisely what AD-16 exists to prevent.
+
+That leaves a local stack or a preview branch:
+
+```
+npx supabase start       # needs Docker Desktop running
+npx supabase db reset    # applies every migration in order
+```
+
+`supabase/config.toml` is committed, and its ports are **not** the CLI defaults: on this
+Windows machine 54321-54324 fall inside a Hyper-V reserved range and the database container
+cannot bind them (`bind: An attempt was made to access a socket in a way forbidden by its
+access permissions`). Everything is moved to 553xx. `netsh int ipv4 show excludedportrange
+protocol=tcp` lists the ranges to avoid if they ever move again.
+
+Every file's first step checks for a live doer account and refuses with that explanation rather
+than failing somewhere confusing later.
+
+## What is here
+
+| File                            | Covers                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `2-5-settlement.sql`            | One Failed Day costs exactly one 500,000₫ penalty however many commitments were missed (FR-13); an all-held day is clean and a penalty-free miss costs nothing; a day still being answered stays open and announces nothing (FR-10); a retried or overlapped pass is a no-op (AD-5); both AD-16 guards refuse; the settlement tables carry no write policy (AD-8).                                                                            |
+| `2-7-supersession.sql`          | An answer given in time but delivered after the deadline takes back the expiry, the penalty stops counting, and **the day comes back to the chain** — the last of which is the question the retrospective could not answer by reading.                                                                                                                                                                                                        |
+| `2-9-chain-calendar.sql`        | A superseded day is drawn once, as what it turned out to be, and `chain_current` and `settlement_commitment_current` cannot disagree about it — the database half of A2.                                                                                                                                                                                                                                                                      |
+| `2-4a-outbox-body-rule.sql`     | A notification body that describes the present, or carries no time or named day, cannot reach the queue — and both sentences the product really sends still can.                                                                                                                                                                                                                                                                              |
+| `2-1-roles-and-rls.sql`         | A profile is created server-side as a `doer`; the token and table role functions disagree correctly; a session cannot promote itself to `referee` but can still set its morning hour; RLS filters to one account; nine deciding functions and the outbox are out of reach of `anon` and `authenticated`.                                                                                                                                      |
+| `2-2-commitment-rules.sql`      | Eight malformed commitments refused by constraints; a replayed idempotency key lands once (AD-4); a client-sent `updated_at` is overwritten; a delete removes nothing; archiving is not retroactive and an hours quota is never declared.                                                                                                                                                                                                     |
+| `2-4a-outbox-claim.sql`         | One row per dedupe key, oldest claimed first, `attempts` incremented, a claimed row invisible until its visibility timeout, a deferred row left alone. `for update skip locked` is **read, not run** — it needs two sessions.                                                                                                                                                                                                                 |
+| `2-8-summary-copy.sql`          | The Vietnamese thousands separator that drifted once; money named once and only when there is money; exactly one suggestion; a chain clause that never says `day 0` and never claims something held when nothing did.                                                                                                                                                                                                                         |
+| `2-9-chain-arithmetic.sql`      | Seven days, two commitments: a miss breaks a chain, silence breaks it and is recorded as `unanswered`, a day nobody judged is skipped rather than breaking it, one commitment's bad day does not touch another's, and the expired day queues no summary.                                                                                                                                                                                      |
+| `3-0-morning-hour.sql`          | A session moves its own morning hour through the column grant; the same statement widened to set `role` is refused; 24 and -1 are refused rather than clamped; the expiry deadline follows the hour, and a day already settled is not re-judged when it changes.                                                                                                                                                                              |
+| `3-1-focus-session.sql`         | A session lands on the day it started (AD-14), never split across midnight; the day floors its own minutes exactly once, not per session; nothing may bank against a cadence that is settled by his word or a commitment another account owns; the schema enforces AD-1/AD-6 against a caller sending its own day or duration, not merely this client.                                                                                        |
+| `3-2-focus-prompt.sql`          | The hours-quota prompt is silent before its derived hour and the moment a target is met, but not for a still-unmet account-mate; a retried pass is a no-op; the four-slot bound holds; an archived commitment is never spoken for; the hour caps at 23 rather than wrapping into the next day; cadence and role are both proven exclusions, not merely untested absences; an account whose every commitment is already met is silent in full. |
+| `3-3-weekly-quota-progress.sql` | `week_days_remaining` matches both of KF-6's own numbers, and the same formula for a week starting on any day; `weekly_quota_progress` excludes an archived commitment, tracks two commitments under one account independently, crosses from unmet to met only as declarations land inside its own week, and scopes every row to its own account.                                                                                             |
+| `3-4-week-settlement.sql`       | A shortfall settles `failed` with exactly one penalty however many commitments fell short that week; a met target settles `clean`; a penalty-free shortfall costs nothing but is still named; different `week_start_day`s settle independently; an archived commitment is excluded entirely; a re-run and both AD-16 guards hold; `settle_due_weeks()` settles through its own schedule path.                                                 |
+| `3-5-weekly-quota-reminder.sql` | Comfortable slack and an already-met target stay silent; slack of exactly 0 sends one named, self-dated push at the account's morning hour and never a second; slack below 0 sends a second twelve hours later; a repeated pass at the same hour is a no-op; a poisoned commitment name is skipped without harming any other row in the same pass; an archived commitment never appears.                                                      |
+
+**All fifteen pass**, most recently re-run on 2026-08-22 against a local stack with every
+migration applied from scratch (`npx supabase db reset`). The first run of `2-7-supersession.sql`
+did not: it failed at step 4 with `A1 CONFIRMED`, which is what it was written to do.
+`supersede_expiries()` wrote a correction carrying no frozen outcomes, so a day answered in time
+and delivered late dropped out of the chain entirely. Fixed in
+`20260820102000_supersession_freezes_the_day.sql`, and the file that found it is now the file that
+holds it.
+
+## Still uncovered
+
+Nothing on the client, any more. Nine of the eleven components have tests as of 2026-08-20
+(jsdom, under the `components` project in `vitest.config.mts`); `status-pill` and `debt-block` have
+no file of their own because they are rendered and asserted through `commitment-row` and `today`,
+which is where their rules are actually visible.
+
+Two database properties are still out of reach here: `outbox_claim`'s skip-locked behaviour under
+two simultaneous workers, which needs two sessions holding locks at once, and anything the Edge
+Function worker does after it claims a row.
+
+**One thing these files deliberately do not assert: table grants.** The local stack's default
+privileges differ from the author's project — `authenticated` has no `select` on any application
+table here, while on the live project Supabase's defaults granted it — so a grant assertion would
+test the environment rather than the product. That divergence is itself a finding and is recorded
+in `deferred-work.md`. Policies, `security_invoker` and RLS being enabled are asserted, because
+those live in migrations and travel.

@@ -1,0 +1,385 @@
+/*
+ * Base element styles, consuming the tokens and adding nothing of its own.
+ *
+ * This is deliberately not a design. It stops the shell looking browser-default —
+ * Times New Roman on white, link blue — without spending component work on a page
+ * that Epic 2's Today screen replaces. Components are specified in DESIGN.md and get
+ * built when there is a screen for them to sit in.
+ */
+
+@import './tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* Stops iOS enlarging text on rotation, which would break the type ramp. It does not
+     disable the user's own text-size setting — the sizes are in rem for that. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-base);
+  color: var(--text-primary);
+  font-family: var(--font-system);
+  font-size: var(--type-body);
+  font-weight: var(--weight-regular);
+  line-height: 1.5;
+  /* Edge-to-edge is declared in the viewport, so the content has to inset itself out
+     from under the notch and the home indicator. */
+  padding: max(var(--space-4), env(safe-area-inset-top))
+    max(var(--space-4), env(safe-area-inset-right)) max(var(--space-4), env(safe-area-inset-bottom))
+    max(var(--space-4), env(safe-area-inset-left));
+}
+
+h1 {
+  font-size: var(--type-screen-title);
+  font-weight: var(--weight-medium);
+  margin: 0 0 var(--space-4);
+}
+
+h2 {
+  font-size: var(--type-label);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-2);
+}
+
+p {
+  margin: 0 0 var(--space-3);
+}
+
+/* Sections are separated by hairlines rather than cards. Nine tinted rectangles stacked
+   vertically would read as an alert panel; a rule keeps the page calm. */
+section + section {
+  border-top: var(--hairline) solid var(--border);
+  padding-top: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+/* Buttons default to outline, and that is the load-bearing rule of the design system
+   rather than a stylistic preference. Every control by which the author reports on
+   himself must be visually identical to its alternative: tinting the honest answer green
+   and the costly one red taxes telling the truth, and nothing in this product can detect
+   a lie. A single false declaration destroys the mechanism in a way that losing money
+   does not.
+
+   So a fill is opt-in, at most one per card, and `.destructive` appears on exactly one
+   action in the whole product. */
+button {
+  font-family: inherit;
+  font-size: var(--type-body);
+  font-weight: var(--weight-medium);
+  padding: var(--space-3) var(--space-4);
+  border: var(--hairline) solid var(--border-strong);
+  border-radius: var(--radius-default);
+  background: transparent;
+  color: var(--text-primary);
+  /* 44px is the stated minimum touch target. */
+  min-height: 44px;
+  margin-right: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/* The screen's purpose, where it has one. Never a self-declaration control. */
+button.action {
+  border-color: transparent;
+  background: var(--action-fill);
+  color: var(--action-ink);
+}
+
+/* Deleting a commitment, and nothing else. Rarity is what preserves its force. */
+button.destructive {
+  border-color: transparent;
+  background: var(--destructive-fill);
+  color: var(--destructive-ink);
+}
+
+button:disabled {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+/* Pill radius is reserved to non-interactive status labels, so nothing pressable is ever
+   pill-shaped. That silhouette is what lets a state label be told from a control before
+   either is read. One class per state family, and never a button fill — a pill wearing a
+   fill would read as pressable. */
+.pill {
+  display: inline-block;
+  border-radius: var(--radius-pill);
+  padding: 2px var(--space-2);
+  font-size: var(--type-label);
+  white-space: nowrap;
+}
+
+.pill-neutral {
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  border: var(--hairline) solid var(--border);
+}
+
+.pill-held {
+  background: var(--held-tint);
+  color: var(--held-ink);
+}
+
+.pill-urgent {
+  background: var(--urgent-tint);
+  color: var(--urgent-ink);
+}
+
+.pill-failed {
+  background: var(--failed-tint);
+  color: var(--failed-ink);
+}
+
+/* Commitment rows are separated by hairlines, not cards, and the row itself is never
+   tinted — colour belongs to the pill. Nine tinted rectangles stacked vertically would
+   read as an alert panel, which is the artifact this product exists to avoid.
+
+   No height, no max-height, no nowrap, no overflow hidden: Dynamic Type has to be able to
+   grow a row, and a fixed height is how that promise gets broken at the largest sizes. */
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  border-top: var(--hairline) solid var(--border);
+  padding: var(--space-row-pad) 0;
+}
+
+.row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.row-name {
+  font-weight: var(--weight-medium);
+  /* Wraps rather than truncating: a name the author chose is not disposable. */
+  overflow-wrap: anywhere;
+}
+
+.row-muted {
+  color: var(--text-secondary);
+  font-size: var(--type-label);
+}
+
+/* The chain, beside the pill and never inside it, and never coloured.
+
+   DESIGN.md rations the `held` family deliberately — it is the only one that reads as good
+   and it stays scarce so it keeps meaning something. A green chain on every row would make
+   the entire screen that colour, which is the same failure as a wall of red with the sign
+   flipped. So the chain carries no tint at all; it is secondary text that happens to be the
+   most durable number on the screen. */
+.row-chain {
+  color: var(--text-secondary);
+  font-size: var(--type-label);
+  white-space: nowrap;
+}
+
+/* A row that opens the Chains detail is a control, so it says so — but it must not become a
+   button in appearance. It keeps the row's hairline separation and left alignment, takes no
+   fill, and no radius: the pill silhouette stays reserved to things that cannot be pressed. */
+.row-open {
+  width: 100%;
+  background: none;
+  border: 0;
+  border-top: var(--hairline) solid var(--border);
+  border-radius: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* Current and longest, one line, never separable. A reset read against zero says you have
+   nothing; read against a record it says you have done better than this and you did it
+   yourself. That is the only reason this surface is worth opening on a bad day.
+
+   Not the `figure` role, though it is the number this screen is about. DESIGN.md reserves
+   that size for exactly two things — the debt total and a running focus timer — and the
+   second is still unbuilt. Spending it here would take a slot from Epic 3 and, worse, would
+   put the chain at the same weight as the money, which is the comparison this product spends
+   most of its design budget refusing to make. */
+.chain-pair {
+  font-size: var(--type-screen-title);
+  font-weight: var(--weight-medium);
+}
+
+textarea {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--type-caption);
+  color: var(--text-secondary);
+  background: var(--surface-sunken);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-default);
+  padding: var(--space-3);
+}
+
+/* Text inputs. Outline only, like every neutral control — a coloured input would be
+   reading as pressable when it is a place to type. */
+input {
+  display: block;
+  width: 100%;
+  margin-bottom: var(--space-3);
+  font-family: inherit;
+  font-size: var(--type-body);
+  color: var(--text-primary);
+  background: var(--surface-card);
+  border: var(--hairline) solid var(--border-strong);
+  border-radius: var(--radius-default);
+  padding: var(--space-3);
+  min-height: 44px;
+}
+
+input::placeholder {
+  color: var(--text-muted);
+}
+
+label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-size: var(--type-label);
+  color: var(--text-secondary);
+}
+
+select {
+  display: block;
+  width: 100%;
+  margin-bottom: var(--space-3);
+  font-family: inherit;
+  font-size: var(--type-body);
+  color: var(--text-primary);
+  background: var(--surface-card);
+  border: var(--hairline) solid var(--border-strong);
+  border-radius: var(--radius-default);
+  padding: var(--space-3);
+  min-height: 44px;
+}
+
+/* A checkbox sits inline with its own label, so it opts out of the block rules above. */
+input[type='checkbox'] {
+  display: inline;
+  width: auto;
+  min-height: 0;
+  margin: 0 var(--space-1) 0 0;
+}
+
+h3 {
+  font-size: var(--type-label);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+ul {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-4);
+}
+
+/* Today lays itself out so the debt block is seen first and heard last. The DOM order is
+   heading, rows, figure — which is the reading order — and `order` moves the figure above
+   the rows visually. A screen reader follows the DOM; the eye follows the layout. */
+.today {
+  display: flex;
+  flex-direction: column;
+}
+
+.today-rows {
+  order: 2;
+}
+
+.debt-block {
+  order: 1;
+}
+
+/* The only large coloured area in the product, and the first of the two elements allowed to
+   claim the figure role. The second is the focus timer, below. */
+.debt-block-tap {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: var(--failed-tint);
+  color: var(--failed-ink);
+  border-radius: var(--radius-default);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.debt-block-label {
+  display: block;
+  font-size: var(--type-label);
+  font-weight: var(--weight-regular);
+}
+
+.debt-block-figure {
+  display: block;
+  font-size: var(--type-figure);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--type-figure-tracking);
+  /* Scales with Dynamic Type like everything else — an easy thing to exempt and wrong to. */
+  line-height: 1.1;
+}
+
+/* The running session, and the second and last claimant of the figure role. The budget is now
+   spent; a third would take the size from meaning "this is the number" to meaning "this is a
+   number", which is the same as meaning nothing.
+
+   No tint, no fill and no coloured area: the debt block is the only one of those in the product,
+   and a large coloured rectangle here would put timed work at the visual weight of money — which
+   is exactly the comparison the epic refuses, since timer-backed work carries no Penalty at all.
+
+   No transition and no animation either. There is none anywhere in this product, there is no
+   motion token to resolve against, and a figure that eased between values would be decoration on
+   a screen whose whole job is to be uneventful. */
+.focus-figure {
+  font-size: var(--type-figure);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--type-figure-tracking);
+  line-height: 1.1;
+  /* Digits that do not shift width as the seconds turn. Without this the whole figure jitters
+     once a second, which reads as something struggling rather than something running. */
+  font-variant-numeric: tabular-nums;
+  margin: 0 0 var(--space-4);
+}
+
+/* The quota bar (Story 3.2, D4/D5) — the first fill this product has anywhere, sitting beside
+   the existing `Banked today` text rather than replacing it. `aria-hidden`: the row it lives in
+   already carries an `aria-label` stating the same fraction as text, and a bar that spoke too
+   would be a second announcement of the number the row already gives.
+
+   Track is `--surface-sunken`, the same tonal step every other sunken area in this product
+   uses. Fill is `--action-fill` — the bar fills with the colour of the button that deposits
+   the time. Radius is `--radius-default`, never `--radius-pill`: that silhouette is reserved
+   to non-interactive status labels, and a bar is neither a label nor pressable. */
+.quota-bar {
+  height: var(--space-2);
+  margin-top: var(--space-1);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-default);
+  overflow: hidden;
+}
+
+.quota-bar-fill {
+  height: 100%;
+  background: var(--action-fill);
+  border-radius: var(--radius-default);
+  /* D4: the only transition in the product, and only on this one property. */
+  transition: width var(--motion-duration) ease-out;
+}
+
+/* D4: Reduce Motion removes the transition outright rather than shortening it. The width still
+   updates on reload — nothing here is what draws the bar at its value, only what animates the
+   change to get there — and no JavaScript reads this media query, so there is nothing that can
+   fall out of sync with the OS setting after first paint. */
+@media (prefers-reduced-motion: reduce) {
+  .quota-bar-fill {
+    transition: none;
+  }
+}

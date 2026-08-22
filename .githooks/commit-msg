@@ -1,0 +1,66 @@
+#!/bin/sh
+# Every commit that changes the product names the story it belongs to.
+#
+# Epic 1's retrospective asked for a commit-subject convention carrying the sprint-status story
+# key, so per-story attribution works. It was adopted, marked `done`, and had already decayed by
+# the end of Epic 2: six of twenty-six commits carried no usable key, and the last two shortened
+# the scope to `2-8` and `2-9` — which is not a key, and which the attribution script cannot
+# match. That is the shape a convention takes when nothing checks it.
+#
+# The rule:
+#
+#   * a `feat` or `fix` commit MUST carry a scope, and the scope must be a full story key from
+#     sprint-status.yaml — those are the commits that change what the product does;
+#   * any commit that DOES carry a scope must use a full key, so a short one is caught rather
+#     than quietly accepted;
+#   * anything else — `docs:`, `chore:`, `test:` spanning several stories — may go without one.
+#     A retrospective addendum belongs to no single story and should not be forced to claim one.
+#
+# Enable it (once per clone; hooks are not cloned):
+#
+#   git config core.hooksPath .githooks
+
+msg_file="$1"
+subject=$(head -n 1 "$msg_file")
+
+case "$subject" in
+  'Merge '*|'Revert '*|'fixup!'*|'squash!'*|'#'*) exit 0 ;;
+esac
+
+status_file="_bmad-output/implementation-artifacts/sprint-status.yaml"
+[ -f "$status_file" ] || exit 0
+
+type=$(printf '%s' "$subject" | sed -n 's/^\([a-z]*\)[(!:].*/\1/p')
+scope=$(printf '%s' "$subject" | sed -n 's/^[a-z]*(\([^)]*\)).*/\1/p')
+
+# The story keys, exactly as the sprint status writes them.
+keys=$(sed -n 's/^  \([0-9][0-9a-z-]*\):[[:space:]].*/\1/p' "$status_file")
+
+is_key() {
+  printf '%s\n' "$keys" | grep -qx "$1"
+}
+
+fail() {
+  echo "commit-msg: $1" >&2
+  echo >&2
+  echo "  subject: $subject" >&2
+  echo >&2
+  echo "  Use the full sprint-status story key as the scope, e.g." >&2
+  printf '%s\n' "$keys" | head -n 3 | sed 's/^/    fix(/; s/$/): …/' >&2
+  echo >&2
+  echo "  Story keys live in $status_file." >&2
+  exit 1
+}
+
+if [ -n "$scope" ] && ! is_key "$scope"; then
+  # A shortened scope is the exact drift this exists to catch: `2-9` instead of the whole key.
+  fail "\`$scope\` is not a story key."
+fi
+
+case "$type" in
+  feat|fix)
+    [ -n "$scope" ] || fail "a \`$type\` commit changes the product, so it names its story."
+    ;;
+esac
+
+exit 0

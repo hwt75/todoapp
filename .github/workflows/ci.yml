@@ -1,0 +1,86 @@
+# Runs the checks that used to run only when someone remembered.
+#
+# The build is included, not just the tests: this project's riskiest failure is a
+# service worker that does not compile or does not get emitted, and that is
+# invisible to Vitest. `npm run build` is what proves /sw.js exists at all.
+#
+# `db-tests` is the other half of that same problem. The rules that decide days, money and
+# chains live in plpgsql, not TypeScript — `npm test` cannot reach any of it, and every file
+# under `supabase/tests/` was, until now, run only by whoever remembered to reset a local
+# stack and feed each one through psql by hand (`supabase/tests/README.md`'s own account of
+# why these files exist at all: nine of ten Epic 2 stories had a "verified end to end"
+# paragraph and no command anyone could run again). This job is that command, run on every
+# push instead of on whoever's memory.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  # So a run can be retried without an empty commit — GitHub refuses to retry some
+  # failed runs, and the only other way back to a green signal is polluting history.
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Test
+        run: npm test
+
+      # No VAPID key is set here on purpose. The build must succeed without one —
+      # the key is a deploy-time value, and a build that needs a secret to compile
+      # would mean the secret had leaked into the bundle.
+      - name: Build
+        run: npm run build
+
+      - name: Service worker was emitted
+        run: test -f public/sw.js || (echo "public/sw.js missing — the push channel would be dead" && exit 1)
+
+  db-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: latest
+
+      # Only the database itself is needed to run migrations and psql against it — Studio,
+      # Storage, Realtime, Auth, the edge runtime and the rest of the stack exist for the app
+      # to talk to, and this job never does. Excluding them is what keeps this fast rather
+      # than pulling and booting a dozen images to run raw SQL.
+      - name: Start the database
+        run: >
+          supabase start
+          -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+
+      - name: Apply every migration from scratch
+        run: supabase db reset
+
+      # Every file rolls back its own transaction (`supabase/tests/README.md`), so running
+      # them in one loop against one reset database is safe — nothing from an earlier file
+      # persists into the next one.
+      - name: Run every file under supabase/tests/
+        run: |
+          set -e
+          for f in supabase/tests/*.sql; do
+            echo "::group::$f"
+            docker exec -i supabase_db_todoapp psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$f"
+            echo "::endgroup::"
+          done

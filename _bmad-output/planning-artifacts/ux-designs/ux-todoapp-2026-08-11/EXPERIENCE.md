@@ -133,6 +133,17 @@ Interface labels use plain language, never glossary terms: **Do it / Avoid it / 
 Do/Abstain/Open-ended. **He did it / He didn't**, not Approve/Reject. **Stop and bank it**, not Stop —
 stopping deposits the time, it does not discard it.
 
+The Focus Session's two remaining labels follow the same rule. The control that opens a session reads
+**Start the clock**, not Start — the thing being started is a clock and nothing else, which is the
+promise the sentence above it makes good on. The day's accumulated minutes read **Banked today**, not
+Total or Progress: *banked* is the word the stop control already uses, and it says the minutes are
+deposited rather than merely observed.
+
+One session runs at a time, so starting a second says so out loud: *"A clock is already running on
+another commitment. Stop that one first."* A start control that silently did nothing would be worse
+here than anywhere else in the product — this is the one surface whose entire job is making the tap
+feel like something happened.
+
 ## Component Patterns
 
 | Component | Behavior |
@@ -225,6 +236,13 @@ taps, a Focus Session starts, and he works. **Climax:** fifty minutes later it b
 0:50 of 3:00 — no money involved, nothing policing where his attention went. **Resolution:** three
 more sessions meet the quota.
 
+*The prompt's literal template (Story 3.2, FR-5/FR-12), a configured hour after the fact rather
+than at 10:20 sharp: `<name>, <banked> of <target>, as of <time>.` — self-dated the same way
+every other push here is, so a copy sitting on the lock screen can be told from a new one.
+`Company work, 0:00 of 3:00, as of 10:20.` before the first session; `Company work, 0:50 of
+3:00, as of 12:40.` once something is banked. Nothing is sent once the target is met that day —
+this is the product's whole answer to a quota that succeeded.*
+
 **KF-3. Hoàng went to the gym and the phone says he did not.**
 *(Written against the location Auto-check, which v1 defers; the same flow runs today for the
 TryHackMe check. The beats are unchanged.)*
@@ -256,6 +274,17 @@ One session done. A notification: *2 gym sessions left, 3 days remaining* — ur
 because a weekly quota cannot fail on a Thursday. **Climax:** by Saturday morning, one left and one
 day remaining, it is the loudest thing on the phone. **Resolution:** he goes, or the week closes
 against him at Week Close.
+
+*The reminder's literal template (Story 3.5, FR-4) names the commitment the same way
+`enqueue_focus_prompts`' body does (Story 3.2), and self-dates with a weekday and clock time —
+neither KF-6's own phrasing above self-dates on its own, the same gap `week_summary_body` (3.4)
+already hit and fixed: `<name>, <held> of <target>, <days> day(s) left this week, as of
+<weekday> <time>.` Once daily while sessions remaining equals days remaining — two left with
+exactly two days left, at his morning hour: `Gym, 1 of 3, 2 days left this week, as of Thursday
+07:30.` Twice daily once sessions remaining exceeds days remaining — the same two still owed
+with only one day left, morning and again twelve hours later: `Gym, 1 of 3, 1 day left this
+week, as of Saturday 07:30.` and `Gym, 1 of 3, 1 day left this week, as of Saturday 19:30.`
+Silent otherwise — a quota with more days left than sessions owed says nothing.*
 
 **KF-7. Hoàng adds a commitment and decides how much truth it needs.**
 He creates *Read 20 pages*, picks Do it and Every day. Money defaults off; he leaves it off. The four

@@ -29,36 +29,39 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-11-2026 14:30
+last_updated: 08-22-2026 09:00
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
 story_location: F:\claude\todoapp\_bmad-output\implementation-artifacts
 development_status:
-  epic-1: backlog
-  1-1-an-installable-shell-and-the-tokens-everything-else-is-built: backlog
-  1-2-a-push-arrives-on-a-locked-phone-and-survives-a-reboot: backlog
-  1-3-settle-whether-tryhackme-can-be-read-from-outside: backlog
-  epic-1-retrospective: optional
+  epic-1: done
+  1-1-an-installable-shell-and-the-tokens-everything-else-is-built: done
+  1-2-a-push-arrives-on-a-locked-phone-and-survives-a-reboot: done
+  1-3-settle-whether-tryhackme-can-be-read-from-outside: done
+  epic-1-retrospective: done
 
-  epic-2: backlog
-  2-1-sign-in-as-the-doer: backlog
-  2-2-create-and-edit-a-commitment: backlog
-  2-3-see-today-and-the-row-and-pill-everything-else-reuses: backlog
-  2-4-answer-for-yesterday: backlog
-  2-5-the-day-closes-on-its-own: backlog
-  2-6-a-failed-day-costs-money-and-i-can-see-every-one: backlog
-  2-7-silence-is-not-a-way-out: backlog
-  2-8-the-day-tells-me-how-it-went: backlog
-  2-9-chains-that-survive-a-bad-day: backlog
-  epic-2-retrospective: optional
+  epic-2: done
+  2-1-sign-in-as-the-doer: done
+  2-2-create-and-edit-a-commitment: done
+  2-3-see-today-and-the-row-and-pill-everything-else-reuses: done
+  2-4a-the-outbox-and-its-worker: done
+  2-4-answer-for-yesterday: done
+  2-5-the-day-closes-on-its-own: done
+  2-6-a-failed-day-costs-money-and-i-can-see-every-one: done
+  2-7-silence-is-not-a-way-out: done
+  2-8-the-day-tells-me-how-it-went: done
+  2-9-chains-that-survive-a-bad-day: done
+  epic-2-retrospective: done
 
-  epic-3: backlog
-  3-1-start-the-work-by-starting-a-clock: backlog
-  3-2-know-where-the-hours-stand-without-opening-anything: backlog
-  3-3-a-weekly-quota-that-counts-down: backlog
-  3-4-the-week-closes-and-settles: backlog
-  epic-3-retrospective: optional
+  epic-3: in-progress
+  3-0-change-the-hour-i-am-asked: done
+  3-1-start-the-work-by-starting-a-clock: done
+  3-2-know-where-the-hours-stand-without-opening-anything: done
+  3-3-a-weekly-quota-that-counts-down: done
+  3-4-the-week-closes-and-settles: done
+  3-5-the-loudest-thing-on-the-phone: review
+  epic-3-retrospective: done
 
   epic-4: backlog
   4-1-attach-a-check-that-answers-for-me: backlog
@@ -76,3 +79,137 @@ development_status:
   5-3-the-friend-is-told-i-have-disappeared: backlog
   5-4-the-long-view-including-whether-this-still-works: backlog
   epic-5-retrospective: optional
+action_items:
+  - id: "epic-1-retro-item-1-record-whether-a-research-spike-may-skip"
+    epic: 1
+    action: "Record whether a research spike may skip its spec, and write one for
+      Story 1.3 if not"
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-08-18.md"
+  - id: "epic-1-retro-item-2-adopt-a-commit-subject-convention-carryi"
+    epic: 1
+    action: "Adopt a commit-subject convention carrying the sprint-status story key
+      so per-story attribution works"
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-08-18.md"
+  - id: "epic-1-retro-item-3-record-the-renegotiation-of-spec-1-2-fro"
+    epic: 1
+    action: "Record the renegotiation of spec 1.2 frozen Intent, or re-freeze the
+      current text with explicit approval"
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-08-18.md"
+  - id: "epic-1-retro-item-4-close-epic-1-move-stories-1-2-and-1-3-to"
+    epic: 1
+    action: "Close Epic 1: move Stories 1.2 and 1.3 to done after review sign-off,
+      and build Story 1.1 remaining token layer"
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-08-18.md"
+  - id: "epic-1-retro-item-5-when-ad-3-outbox-is-built-retire-the-dir"
+    epic: 1
+    action: "When AD-3 outbox is built, retire the direct-send path in scripts/send-push.mjs"
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-08-18.md"
+  - id: "epic-2-retro-item-6-make-supersede_expiries-freeze-the-corre"
+    epic: 2
+    action: "Make supersede_expiries() freeze the corrected day's commitment outcomes,
+      and re-run the supersession check through the function rather than by hand (A1)"
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
+  - id: "epic-2-retro-item-7-read-the-chains-detail-calendar-through"
+    epic: 2
+    action: "Read the Chains-detail calendar through settlement_current, and widen
+      lib/chain.test.ts's base-table guard to cover components (A2)"
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
+  - id: "epic-2-retro-item-8-settle-components-settings-tsx-build-the"
+    epic: 2
+    action: "Settle components/settings.tsx - build the morning-hour surface or record
+      it in deferred-work.md with the reason (A3)"
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
+  - id: "epic-2-retro-item-9-add-executable-tests-against-a-local-pos"
+    epic: 2
+    action: "Add executable tests against a local Postgres for settlement, expiry,
+      supersession, penalty and RLS (A6)"
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
+  - id: "epic-2-retro-item-10-add-ob-token-to-gitignore-and-decide-whe"
+    epic: 2
+    action: "Add .ob-token to .gitignore, and decide whether the expired token in
+      898b7e7 warrants a history rewrite (A5)"
+    owner: "hwt75"
+    status: in-progress
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
+  - id: "epic-2-retro-item-11-record-the-lib-expiry-ts-and-lib-outbox"
+    epic: 2
+    action: "Record the lib/expiry.ts and lib/outbox.ts plpgsql mirrors in deferred-work.md
+      and decide the source of truth for each (A7)"
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
+  - id: "epic-2-retro-item-12-stamp-spec-approval-in-its-own-commit-se"
+    epic: 2
+    action: "Stamp spec approval in its own commit, separate from the implementation
+      commit (P2b)"
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
+  - id: "epic-2-retro-item-13-restore-the-commit-key-convention-full-s"
+    epic: 2
+    action: "Restore the commit-key convention - full sprint-status key in every scope,
+      or a commit-msg hook (P3)"
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
+  - id: "epic-2-retro-item-14-tick-the-spec-task-boxes-or-drop-them-an"
+    epic: 2
+    action: "Tick the spec task boxes, or drop them and make each spec's verification
+      prose name what was not built (A4)"
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
+  - id: "epic-2-retro-item-15-close-epic-1-and-epic-2-in-sprint-status"
+    epic: 2
+    action: "Close Epic 1 and Epic 2 in sprint-status.yaml, and get the branch onto
+      main under a name that describes it (A9)"
+    owner: "hwt75"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-08-20.md"
+  - id: "epic-3-retro-item-16-push-the-8-outstanding-migrations-202608"
+    epic: 3
+    action: "Push the 8 outstanding migrations (20260820100000 through 20260820150000)
+      to the live Supabase project (npx supabase db push against hxzalpnlrunctbajgtkv),
+      then re-run the security advisor per README instructions."
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-08-21.md"
+  - id: "epic-3-retro-item-17-promote-3-0-3-1-and-3-2-to-done-in-sprin"
+    epic: 3
+    action: "Promote 3-0, 3-1, and 3-2 to done in sprint-status.yaml once review sign-off
+      is confirmed, matching 3-3 and 3-4."
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-08-21.md"
+  - id: "epic-3-retro-item-18-give-fr-4-escalating-reminder-pipeline-f"
+    epic: 3
+    action: "Give FR-4 escalating-reminder pipeline for Weekly Quota an owning story,
+      or amend the epics.md FR-4 coverage note to say only the pill shipped."
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-08-21.md"
+  - id: "epic-3-retro-item-19-add-a-documented-or-scripted-check-that"
+    epic: 3
+    action: "Add a documented or scripted check that remote migration state matches
+      local before a schema-carrying story is promoted to done."
+    owner: "hwt75"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-08-21.md"

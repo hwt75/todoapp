@@ -198,7 +198,7 @@ Sources: `DESIGN.md` and `EXPERIENCE.md`, read as one contract.
 | FR-2a | Epic 4 | Precedence once an Auto-check can disagree with the author |
 | FR-2 | Epic 2, Epic 3 | Daily judging in Epic 2; quota judging in Epic 3 |
 | FR-3 | Epic 2 | Push-resident, persistent notification delivery |
-| FR-4 | Epic 3 | Quota-aware escalating reminders |
+| FR-4 | Epic 3 (partial, Story 3.5 pending) | Today pill's escalating urgency (position/days-remaining color) shipped. The push reminder pipeline itself (silent → once-daily → twice-daily) was split out of Story 3.3 at authoring time; Story 3.5 (added 2026-08-22) now owns it, spec drafted and awaiting approval. **Coverage gap until 3.5 ships**, unlike FR-6/FR-7 below. |
 | FR-5 | Epic 3 | Prompt when quota work has not started |
 | FR-6 | *(none — resolved as deferred)* | Location Auto-check. Deliberately uncovered: blocked on an Apple Developer account, specified and waiting. **Not a coverage gap.** |
 | FR-7 | *(none — resolved as deferred)* | Movement Auto-check. Same blocker, same status. **Not a coverage gap.** |
@@ -256,7 +256,7 @@ The author can commit to time rather than completion, banking focus sessions aga
 quota, and the two remaining cadences work: a weekly quota that counts down as days run out, and a
 week that closes on its own terms.
 
-**FRs covered:** FR-2 (quota), FR-4, FR-5, FR-11, FR-12, FR-23
+**FRs covered:** FR-2 (quota), FR-4 (pill shipped; reminder pipeline owned by Story 3.5, pending — see FR coverage table), FR-5, FR-11, FR-12, FR-23
 
 ### Epic 4: The machine answers for him, and the friend rules
 
@@ -484,6 +484,11 @@ So that the one thing no machine can check still gets an honest answer. *(FR-9)*
 **Given** the morning hour that decides when I am asked
 **Then** it is configurable from Settings, alongside notification permission state and referee pairing, per UX-DR17
 
+*(Not built within this story's own scope — no Settings surface existed yet. The gap was
+carried into Story 3.0, added 2026-08-20 specifically to close it (see Story 3.0's own note
+below). Satisfied at the product level by 3.0; this AC's own box is checked against that
+story, not against 2.4's original diff.)*
+
 ### Story 2.5: The day closes on its own
 
 As the author,
@@ -634,6 +639,46 @@ what that story deliberately left out.*
 The author can commit to time rather than completion, and the two remaining cadences work: a weekly
 quota that counts down as days run out, and a week that closes on its own terms.
 
+### Story 3.0: Change the hour I am asked, and see what is switched off
+
+As the author,
+I want a Settings surface that lets me move the morning hour and shows me what is currently
+switched off,
+So that the one blocking question in this product arrives when I am awake, and I can tell whether
+it will arrive at all.
+
+*Added 2026-08-20, after the Epic 2 retrospective. Story 2.4 declared the morning hour
+"configurable from Settings, per UX-DR17"; no Settings surface was built, and the omission was
+neither deferred nor recorded (A3). The team discussion found the gap larger than one file: the
+product has no Settings surface at all, the gate is pinned at 07:00 with no way to move it, and
+notification permission is granted only through Story 1.2's diagnostic push probe (T2). It sits at
+the front of Epic 3 because the two stories after it schedule reminders against that same hour.*
+
+**Acceptance Criteria:**
+
+**Given** the morning hour that decides when I am asked
+**When** I change it from Settings
+**Then** it is written to my own profile through the column grant that already exists, and the
+morning gate and its reminders both follow it from the next day
+**And** an hour outside 0–23 is refused by the database rather than by the form alone
+
+**Given** the Settings surface
+**Then** it shows notification permission state and home-screen install state, each with what
+breaks if it is off, in plain language rather than as a toggle alone, per UX-DR17 and
+`EXPERIENCE.md` § Settings
+**And** install state is the row that matters most: without home-screen installation there is no
+push at all, and without push there is no product
+
+**Given** notification permission has never been asked for
+**When** I grant it from Settings
+**Then** it is granted from inside the installed app, and the push probe stops being the only
+route to a subscription
+**And** a refusal says which answer the browser gave, because iOS does not offer the prompt twice
+
+**Given** a row this epic cannot yet fill — referee pairing, grace days remaining
+**Then** it is absent rather than shown empty or disabled, and the spec records which rows were
+left out and which story brings each one
+
 ### Story 3.1: Start the work by starting a clock
 
 As the author,
@@ -701,6 +746,10 @@ So that a quota gets louder as the week runs out instead of failing silently on 
 **Then** their frequency and urgency increase, per FR-4
 **And** no reminder frames a mid-week shortfall as a failure
 
+*(Unmet as of Epic 3's close — split out at authoring time into its own deferred pipeline.
+Only the pill AC above shipped. Now owned by Story 3.5 (added 2026-08-22, spec drafted,
+awaiting approval). See FR-4 in the coverage table above and `deferred-work.md`.)*
+
 **Given** the urgent color family
 **Then** it is visually distinguishable from the failed family, per UX-DR1 — *sort this out* must not read as *you lost this*
 
@@ -724,6 +773,31 @@ So that quota commitments have a real deadline rather than an open question. *(F
 **Given** an already-settled week
 **When** the pass runs again
 **Then** it is a no-op, per AD-5
+
+### Story 3.5: The loudest thing on the phone
+
+As the author,
+I want a Weekly Quota commitment to remind me as the week runs out, louder as it goes,
+So that a quota I have not looked at does not go silent past the point I could still recover it.
+*(FR-4, added 2026-08-22 — split from Story 3.3 at authoring time, deferred pending its own spec;
+see `deferred-work.md` and `epic-3-retro-2026-08-21.md` F2.)*
+
+**Acceptance Criteria:**
+
+**Given** sessions remaining is fewer than days remaining
+**Then** nothing is sent — a comfortable pace stays silent, per FR-4 and UX-DR1
+
+**Given** sessions remaining equals days remaining
+**When** the reminder pass runs at the account's morning hour
+**Then** one push is sent naming the position and days left, never the word "miss" or "fail"
+
+**Given** sessions remaining exceeds days remaining
+**When** the reminder pass runs at the morning and evening slot
+**Then** two pushes are sent that day, each independently deduped
+
+**Given** the reminder body
+**Then** it self-dates with a weekday and clock time and states no present-tense claim, per the
+outbox's own check constraint
 
 ---
 

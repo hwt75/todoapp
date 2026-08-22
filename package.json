@@ -1,0 +1,48 @@
+{
+  "name": "todoapp",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "prebuild": "node scripts/generate-icons.mjs",
+    "build": "next build --webpack",
+    "start": "next start",
+    "test": "vitest run",
+    "icons": "node scripts/generate-icons.mjs",
+    "push": "node scripts/send-push.mjs",
+    "migrations:check": "node scripts/check-migrations-pushed.mjs",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.4",
+    "@supabase/supabase-js": "^2.109.0",
+    "next": "^16.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "serwist": "^9.5.12"
+  },
+  "devDependencies": {
+    "@serwist/next": "^9.5.12",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.5",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/web-push": "^3.6.4",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.1",
+    "eslint-config-prettier": "^10.1.8",
+    "jsdom": "^25.0.1",
+    "prettier": "^3.9.6",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.10",
+    "web-push": "^3.6.7"
+  }
+}
