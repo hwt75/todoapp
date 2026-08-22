@@ -17,10 +17,14 @@ HTTPS. Anything involving installation or notifications has to be tested against
 
 ## Deploying
 
-1. Push the branch: `git push -u origin <branch>`
-2. On Vercel: **Add New → Project**, import `hwt75/todoapp`, and set the deploy branch to the working
-   branch rather than `main`.
+1. Push to `main` (the repo's only long-lived branch since Epic 1-3 merged, 2026-08-22).
+2. On Vercel: **Add New → Project**, import `hwt75/todoapp`. Production Branch defaults to `main`,
+   which is correct — leave it.
 3. Deploy. The result is a public HTTPS URL.
+
+If the deployed app looks stuck on an old version, check **Settings → Git → Production Branch**
+first: earlier in this project a feature branch was set as Production Branch, and deleting that
+branch (after merging it) silently stopped deploys until the setting was pointed back at `main`.
 
 ## Installing on iPhone
 
