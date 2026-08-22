@@ -203,7 +203,7 @@ action_items:
     action: "Give FR-4 escalating-reminder pipeline for Weekly Quota an owning story,
       or amend the epics.md FR-4 coverage note to say only the pill shipped."
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-08-21.md"
   - id: "epic-3-retro-item-19-add-a-documented-or-scripted-check-that"
     epic: 3

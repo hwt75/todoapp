@@ -198,7 +198,7 @@ Sources: `DESIGN.md` and `EXPERIENCE.md`, read as one contract.
 | FR-2a | Epic 4 | Precedence once an Auto-check can disagree with the author |
 | FR-2 | Epic 2, Epic 3 | Daily judging in Epic 2; quota judging in Epic 3 |
 | FR-3 | Epic 2 | Push-resident, persistent notification delivery |
-| FR-4 | Epic 3 | Quota-aware escalating reminders |
+| FR-4 | Epic 3 (partial) | Today pill's escalating urgency (position/days-remaining color) shipped. The push reminder pipeline itself (silent → once-daily → twice-daily) was split out of Story 3.3 at authoring time and has no owning story — design already carried forward in `deferred-work.md`. **Coverage gap**, unlike FR-6/FR-7 below. |
 | FR-5 | Epic 3 | Prompt when quota work has not started |
 | FR-6 | *(none — resolved as deferred)* | Location Auto-check. Deliberately uncovered: blocked on an Apple Developer account, specified and waiting. **Not a coverage gap.** |
 | FR-7 | *(none — resolved as deferred)* | Movement Auto-check. Same blocker, same status. **Not a coverage gap.** |
@@ -256,7 +256,7 @@ The author can commit to time rather than completion, banking focus sessions aga
 quota, and the two remaining cadences work: a weekly quota that counts down as days run out, and a
 week that closes on its own terms.
 
-**FRs covered:** FR-2 (quota), FR-4, FR-5, FR-11, FR-12, FR-23
+**FRs covered:** FR-2 (quota), FR-4 (pill only — reminder pipeline unbuilt, see FR coverage table), FR-5, FR-11, FR-12, FR-23
 
 ### Epic 4: The machine answers for him, and the friend rules
 
@@ -740,6 +740,10 @@ So that a quota gets louder as the week runs out instead of failing silently on 
 **When** reminders are generated
 **Then** their frequency and urgency increase, per FR-4
 **And** no reminder frames a mid-week shortfall as a failure
+
+*(Unmet as of Epic 3's close — split out at authoring time into its own deferred pipeline,
+no owning story yet. Only the pill AC above shipped. See FR-4 in the coverage table above
+and `deferred-work.md`.)*
 
 **Given** the urgent color family
 **Then** it is visually distinguishable from the failed family, per UX-DR1 — *sort this out* must not read as *you lost this*
