@@ -35,6 +35,22 @@ function designValue(name: string, mode: 'light' | 'dark'): string | undefined {
 const STATE_FAMILIES = ['held', 'urgent', 'failed'] as const;
 const MODE_STABLE_FILLS = ['action-fill', 'action-ink', 'destructive-fill', 'destructive-ink'];
 
+// Every light-mode colour token not already covered by a state family (tint/ink, tested
+// on its own below) or a mode-stable fill (deliberately absent from dark, tested on its
+// own below) is expected to carry its own dark counterpart — derived rather than a
+// hand-maintained list, so a token added later is covered without anyone remembering to
+// add it here.
+const DARK_COUNTERPART_TOKENS = Object.keys(light).filter(
+  (name) =>
+    light[name].startsWith('#') &&
+    !STATE_FAMILIES.some((family) => name === `${family}-tint` || name === `${family}-ink`) &&
+    !MODE_STABLE_FILLS.includes(name),
+);
+
+const FILL_INK_PAIRS = MODE_STABLE_FILLS.filter((name) => name.endsWith('-ink')).map(
+  (ink) => [ink, ink.replace(/-ink$/, '-fill')] as const,
+);
+
 describe('token parity with DESIGN.md', () => {
   // DESIGN.md is the source of truth and a human-owned artifact. Nothing mechanical keeps
   // the stylesheet in step with it, so this is the thing that does.
@@ -59,23 +75,34 @@ describe('token parity with DESIGN.md', () => {
     }
   });
 
-  it.each([['rounded', 'radius', { DEFAULT: 'default', card: 'card', pill: 'pill' }]])(
-    'every %s value is implemented',
-    (section, prefix, mapping) => {
-      const design = parseDesignSection(DESIGN, section);
-      for (const [designKey, tokenKey] of Object.entries(mapping)) {
-        expect(light[`${prefix}-${tokenKey}`], `${prefix}-${tokenKey} missing`).toBe(
-          design[designKey],
-        );
-      }
-    },
-  );
+  it('every rounded value is implemented', () => {
+    const design = parseDesignSection(DESIGN, 'rounded');
+    for (const [key, value] of Object.entries(design)) {
+      // DESIGN.md's Tailwind-style `DEFAULT` key names the un-suffixed token.
+      const tokenName = `radius-${key.toLowerCase()}`;
+      expect(light[tokenName], `${tokenName} missing or drifted`).toBe(value);
+    }
+  });
 
   it('every spacing value is implemented', () => {
     const design = parseDesignSection(DESIGN, 'spacing');
     for (const [key, value] of Object.entries(design)) {
-      const tokenName = /^\d+$/.test(key) ? `space-${key}` : `space-${key}`;
+      const tokenName = `space-${key}`;
       expect(light[tokenName], `${tokenName} missing or drifted`).toBe(value);
+    }
+  });
+
+  it('every colour in DESIGN.md is implemented in tokens.css', () => {
+    // The reverse of "every colour token matches DESIGN.md" above: a colour declared in
+    // DESIGN.md but never implemented in the stylesheet would otherwise go unnoticed.
+    for (const [designKey, value] of Object.entries(designColors)) {
+      const isDark = designKey.endsWith('-dark');
+      const tokenName = isDark ? designKey.slice(0, -'-dark'.length) : designKey;
+      const tokens = isDark ? dark : light;
+      expect(
+        tokens[tokenName]?.toLowerCase(),
+        `${designKey} declared in DESIGN.md but missing from tokens.css`,
+      ).toBe(value.toLowerCase());
     }
   });
 });
@@ -86,12 +113,9 @@ describe('dark mode is a declared set, not an inversion', () => {
     expect(dark[`${family}-ink`], `${family}-ink has no dark counterpart`).toBeDefined();
   });
 
-  it.each(['surface-base', 'surface-card', 'surface-sunken', 'text-primary', 'border'])(
-    '%s carries a dark counterpart',
-    (name) => {
-      expect(dark[name]).toBeDefined();
-    },
-  );
+  it.each(DARK_COUNTERPART_TOKENS)('%s carries a dark counterpart', (name) => {
+    expect(dark[name], `${name} has no dark counterpart`).toBeDefined();
+  });
 
   // The fills carry their own background, which is what makes them mode-stable and lets
   // a coloured area read as pressable in either mode. A dark variant would break that,
@@ -106,23 +130,18 @@ describe('contrast clears WCAG AA', () => {
   // pair added rather than today's values. This is where the floor lives.
   const TEXT_AA = 4.5;
 
-  it.each([
-    ['held', 'light' as const],
-    ['held', 'dark' as const],
-    ['urgent', 'light' as const],
-    ['urgent', 'dark' as const],
-    ['failed', 'light' as const],
-    ['failed', 'dark' as const],
-  ])('%s ink on %s tint', (family, mode) => {
+  it.each(
+    STATE_FAMILIES.flatMap((family) => [
+      [family, 'light' as const],
+      [family, 'dark' as const],
+    ]),
+  )('%s ink on %s tint', (family, mode) => {
     const tokens = mode === 'dark' ? dark : light;
     const ratio = contrastRatio(tokens[`${family}-ink`], tokens[`${family}-tint`]);
     expect(ratio, `${family} (${mode}) is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(TEXT_AA);
   });
 
-  it.each([
-    ['action-ink', 'action-fill'],
-    ['destructive-ink', 'destructive-fill'],
-  ])('%s on %s', (ink, fill) => {
+  it.each(FILL_INK_PAIRS)('%s on %s', (ink, fill) => {
     const ratio = contrastRatio(light[ink], light[fill]);
     expect(ratio, `${ink}/${fill} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(TEXT_AA);
   });

@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-08-19'
 status: 'approved'
 baseline_commit: 'db2a9f5'
-review_loop_iteration: 0
+review_loop_iteration: 1
 story_key: '1-1-an-installable-shell-and-the-tokens-everything-else-is-built'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
@@ -86,16 +86,16 @@ enforced by tests rather than by review.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `app/tokens.css` -- every `DESIGN.md` colour, radius and spacing value as CSS custom properties
+- [x] `app/tokens.css` -- every `DESIGN.md` colour, radius and spacing value as CSS custom properties
   under `:root`, with the dark set under `prefers-color-scheme: dark` -- this file is the token layer;
   everything else in this story exists to keep it honest.
-- [ ] `app/globals.css` -- base element styles that consume the tokens and nothing else: page surface,
+- [x] `app/globals.css` -- base element styles that consume the tokens and nothing else: page surface,
   body text, the 0.5px hairline rule, and the system font stack -- so the existing page stops being
   browser-default without becoming designed.
-- [ ] `app/layout.tsx` -- import the stylesheets -- one line; the existing inline rule stays.
-- [ ] `lib/design-tokens.ts` -- parse `app/tokens.css` into a typed map, and expose the contrast
+- [x] `app/layout.tsx` -- import the stylesheets -- one line; the existing inline rule stays.
+- [x] `lib/design-tokens.ts` -- parse `app/tokens.css` into a typed map, and expose the contrast
   helper -- gives the tests something to assert against without a browser.
-- [ ] `lib/design-tokens.test.ts` -- assert parity with `DESIGN.md`, AA contrast for every pair, a
+- [x] `lib/design-tokens.test.ts` -- assert parity with `DESIGN.md`, AA contrast for every pair, a
   dark counterpart for every state family, no dark variant for either fill, and no shadow declaration
   anywhere -- these are the rules a stylesheet cannot state about itself.
 
@@ -127,6 +127,37 @@ stops there.
 are specified but not built, because a component built without a screen to sit in gets its API from
 imagination. The one rule worth restating when they are: **never colour a self-declaration control** —
 `DESIGN.md` calls it the load-bearing rule of the whole system, and it outranks consistency.
+
+**Review, 2026-08-22 — the first pass this half of the story ever had.** Landed 2026-08-19
+(`62c653b`) with no review commit since, unlike every other spec in this project's history. Eight
+finder angles (line-by-line, removed-behavior, cross-file, reuse/simplification/efficiency,
+altitude/conventions) surfaced ten candidates; five were fixed:
+
+- The "carries a dark counterpart" check named five of the eight surface/text/border tokens that
+  actually have dark values — `text-secondary`, `text-muted` and `border-strong` were silently
+  unprotected. Now derived from `light`'s own keys minus the state families and mode-stable fills,
+  so a token added later is covered without anyone remembering to list it. Mutation-verified:
+  deleting `--text-muted` from the dark block now fails the suite by name; it did not before.
+- The WCAG contrast check ran against a hardcoded pair list, contradicting this file's own claim
+  that "it applies to pairs added later, not only to today's." Now derived from `STATE_FAMILIES`
+  and `MODE_STABLE_FILLS`, the same two lists the dark-counterpart and no-dark-variant checks
+  already read from.
+- `readDeclarations` matched `--name: value;` inside CSS comments, so a commented-out old value
+  placed after the live rule would have silently won. Comments are now stripped first.
+- A missing token crashed `relativeLuminance` with a bare `TypeError` instead of its own named
+  "not a six-digit hex colour" message. Guarded.
+- The `rounded` parity check was a hardcoded three-entry mapping beside a genuinely generic spacing
+  check; a fourth radius value added to `DESIGN.md` would have gone unchecked. Rewritten to iterate
+  like the spacing check does. A reverse color check (DESIGN.md → `tokens.css`, the direction the
+  original parity test didn't cover) was added alongside it.
+
+Two findings were left as documented, deliberate limitations rather than fixed: the dark-block
+parser reads to end-of-file rather than a matched closing brace (already disclosed in
+`lib/design-tokens.ts`'s own comment — a real parser would cost more than this "thirty lines of
+parsing" module is meant to); and the rationed-role budget check (`figure`/`quoted`) only scans
+`app/globals.css`, which is accurate for this project's actual architecture (no CSS Modules or
+component-level stylesheets exist) rather than an oversight. 36 tests grew to 40; `npm test`,
+`tsc --noEmit`, `npm run lint`, `npm run build` all clean.
 
 ## Verification
 

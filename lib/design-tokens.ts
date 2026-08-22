@@ -20,8 +20,11 @@ export interface CssTokens {
 
 /** Every `--name: value;` in a block of CSS, values trimmed, names without the dashes. */
 function readDeclarations(block: string): TokenMap {
+  // Stripped first so a commented-out declaration (e.g. a value left behind after an
+  // edit) can never be matched and overwrite the real one below it.
+  const withoutComments = block.replace(/\/\*[\s\S]*?\*\//g, '');
   const out: TokenMap = {};
-  for (const [, name, value] of block.matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)) {
+  for (const [, name, value] of withoutComments.matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)) {
     out[name] = value.trim().replace(/\s+/g, ' ');
   }
   return out;
@@ -70,7 +73,10 @@ export function parseDesignSection(markdown: string, section: string): TokenMap 
 
 /** WCAG relative luminance. Throws on anything that is not a six-digit hex. */
 export function relativeLuminance(hex: string): number {
-  const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  // String(hex ?? '') rather than hex.trim() directly: a missing token (undefined,
+  // e.g. one dropped from a dark-mode block) must fail this function's own named
+  // check below, not crash on .trim() with a bare TypeError a reader can't place.
+  const match = /^#?([0-9a-f]{6})$/i.exec(String(hex ?? '').trim());
   if (!match) throw new Error(`Not a six-digit hex colour: ${hex}`);
 
   const channels = [0, 2, 4].map((offset) => {

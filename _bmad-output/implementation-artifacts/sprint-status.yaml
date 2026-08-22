@@ -35,8 +35,8 @@ project_key: NOKEY
 tracking_system: file-system
 story_location: F:\claude\todoapp\_bmad-output\implementation-artifacts
 development_status:
-  epic-1: in-progress
-  1-1-an-installable-shell-and-the-tokens-everything-else-is-built: review
+  epic-1: done
+  1-1-an-installable-shell-and-the-tokens-everything-else-is-built: done
   1-2-a-push-arrives-on-a-locked-phone-and-survives-a-reboot: done
   1-3-settle-whether-tryhackme-can-be-read-from-outside: done
   epic-1-retrospective: done
@@ -105,7 +105,7 @@ action_items:
     action: "Close Epic 1: move Stories 1.2 and 1.3 to done after review sign-off,
       and build Story 1.1 remaining token layer"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-08-18.md"
   - id: "epic-1-retro-item-5-when-ad-3-outbox-is-built-retire-the-dir"
     epic: 1
