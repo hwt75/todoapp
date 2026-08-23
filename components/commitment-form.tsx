@@ -14,6 +14,7 @@ import {
   draftProblems,
   requiredTargets,
   withCadence,
+  withKind,
 } from '@/lib/commitment';
 
 const WEEKDAYS = [
@@ -26,12 +27,14 @@ const WEEKDAYS = [
   [7, 'Sunday'],
 ] as const;
 
-/** The Auto-checks the product defines. None of them run yet; Epic 4 owns that. */
-const AUTO_CHECKS = ['Location with dwell', 'Phone movement', 'Timer', 'Account elsewhere'];
+/** The Auto-checks still unbuilt. Location/Phone/Timer stay disabled placeholders (Epic 4). */
+const UNBUILT_AUTO_CHECKS = ['Location with dwell', 'Phone movement', 'Timer'];
 
 interface Props {
   initial?: CommitmentDraft;
   busy?: boolean;
+  /** When the resolution pass last looked at this commitment, for the "last read" display. */
+  autoCheckLastCheckedAt?: string | null;
   onSave: (draft: CommitmentDraft) => void;
   onCancel: () => void;
   onDelete?: () => void;
@@ -43,7 +46,14 @@ interface Props {
  * Every rule about what a valid commitment is lives in `lib/commitment.ts` and, actually,
  * in the migration's check constraints. This form asks and shows; it does not decide.
  */
-export function CommitmentForm({ initial, busy = false, onSave, onCancel, onDelete }: Props) {
+export function CommitmentForm({
+  initial,
+  busy = false,
+  autoCheckLastCheckedAt,
+  onSave,
+  onCancel,
+  onDelete,
+}: Props) {
   const [draft, setDraft] = useState<CommitmentDraft>(initial ?? EMPTY_DRAFT);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -72,7 +82,12 @@ export function CommitmentForm({ initial, busy = false, onSave, onCancel, onDele
       <select
         id="commitment-kind"
         value={draft.kind}
-        onChange={(event) => set('kind', event.target.value as CommitmentKind)}
+        // Switching to a kind with no sensor for it clears any Auto-check attached, the
+        // same way the Cadence select clears a stale target — otherwise a checked box
+        // could end up disabled with no way left to uncheck it.
+        onChange={(event) =>
+          setDraft((current) => withKind(current, event.target.value as CommitmentKind))
+        }
       >
         {COMMITMENT_KINDS.map((kind) => (
           <option key={kind} value={kind}>
@@ -169,7 +184,8 @@ export function CommitmentForm({ initial, busy = false, onSave, onCancel, onDele
       <h3>Auto-checks</h3>
       {checksPossible ? (
         <p className="row-muted">
-          None run yet — Epic 4 builds them. Until then every commitment is settled by your morning
+          Location, Phone movement and Timer don&apos;t run yet — Epic 4 builds them. Until then,
+          and unless Account elsewhere is linked below, every commitment is settled by your morning
           answer.
         </p>
       ) : (
@@ -179,7 +195,37 @@ export function CommitmentForm({ initial, busy = false, onSave, onCancel, onDele
         </p>
       )}
       <p>
-        {AUTO_CHECKS.map((check) => (
+        <label style={{ display: 'block' }}>
+          <input
+            type="checkbox"
+            disabled={!checksPossible}
+            checked={draft.autoCheckEnabled}
+            onChange={(event) => set('autoCheckEnabled', event.target.checked)}
+          />{' '}
+          Account elsewhere
+        </label>
+
+        {checksPossible && draft.autoCheckEnabled && (
+          <>
+            <label htmlFor="commitment-auto-check-ref">Account</label>
+            <input
+              id="commitment-auto-check-ref"
+              type="text"
+              value={draft.autoCheckAccountRef}
+              placeholder="How you're identified there"
+              onChange={(event) => set('autoCheckAccountRef', event.target.value)}
+            />
+            {autoCheckLastCheckedAt !== undefined && (
+              <p className="row-muted">
+                {autoCheckLastCheckedAt
+                  ? `Last read ${new Date(autoCheckLastCheckedAt).toLocaleString()}`
+                  : 'Not read yet.'}
+              </p>
+            )}
+          </>
+        )}
+
+        {UNBUILT_AUTO_CHECKS.map((check) => (
           <label key={check} style={{ display: 'block' }}>
             <input type="checkbox" disabled checked={false} readOnly /> {check}
           </label>

@@ -6,6 +6,7 @@ import { CommitmentForm } from '@/components/commitment-form';
 import {
   CADENCE_LABELS,
   KIND_LABELS,
+  type AutoCheckKind,
   type CommitmentCadence,
   type CommitmentDraft,
   type CommitmentKind,
@@ -21,6 +22,9 @@ interface CommitmentRow {
   weekly_target: number | null;
   week_start_day: number | null;
   daily_minutes_target: number | null;
+  auto_check_kind: AutoCheckKind | null;
+  auto_check_account_ref: string | null;
+  auto_check_last_checked_at: string | null;
 }
 
 type View =
@@ -31,7 +35,7 @@ type View =
   | { kind: 'failed'; reason: string };
 
 const SELECT =
-  'id,name,kind,cadence,carries_penalty,weekly_target,week_start_day,daily_minutes_target';
+  'id,name,kind,cadence,carries_penalty,weekly_target,week_start_day,daily_minutes_target,auto_check_kind,auto_check_account_ref,auto_check_last_checked_at';
 
 /** The one query both the first load and every refresh use, so they cannot drift apart. */
 function fetchCommitments() {
@@ -51,6 +55,8 @@ function toDraft(row: CommitmentRow): CommitmentDraft {
     weeklyTarget: row.weekly_target,
     weekStartDay: row.week_start_day,
     dailyMinutesTarget: row.daily_minutes_target,
+    autoCheckEnabled: row.auto_check_kind !== null,
+    autoCheckAccountRef: row.auto_check_account_ref ?? '',
   };
 }
 
@@ -180,6 +186,7 @@ export function CommitmentList({ ownerId }: { ownerId: string }) {
       <CommitmentForm
         initial={toDraft(view.row)}
         busy={busy}
+        autoCheckLastCheckedAt={view.row.auto_check_last_checked_at}
         onSave={(draft) => void save(draft, view.row)}
         onCancel={() => setView({ kind: 'list' })}
         onDelete={() => void archive(view.row)}

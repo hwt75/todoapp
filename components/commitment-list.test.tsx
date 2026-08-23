@@ -54,6 +54,9 @@ const gym = {
   weekly_target: 3,
   week_start_day: 1,
   daily_minutes_target: null,
+  auto_check_kind: null,
+  auto_check_account_ref: null,
+  auto_check_last_checked_at: null,
 };
 
 beforeEach(() => {
@@ -122,6 +125,28 @@ describe('the commitment list', () => {
     expect(screen.getByLabelText('Name')).toHaveValue('Gym');
     expect(screen.getByLabelText('Times a week')).toHaveValue(3);
     expect(screen.getByLabelText(/Missing this costs money/)).toBeChecked();
+    // Not linked: the checkbox reads unchecked, not "checked because the field is missing".
+    expect(screen.getByLabelText('Account elsewhere')).not.toBeChecked();
+  });
+
+  it('carries a linked Auto-check into the form, ref and last-read time included', async () => {
+    listResult = {
+      data: [
+        {
+          ...gym,
+          auto_check_kind: 'account_elsewhere',
+          auto_check_account_ref: 'my-handle',
+          auto_check_last_checked_at: '2026-08-23T00:00:00Z',
+        },
+      ],
+      error: null,
+    };
+    render(<CommitmentList ownerId="u1" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+
+    expect(screen.getByLabelText('Account elsewhere')).toBeChecked();
+    expect(screen.getByLabelText('Account')).toHaveValue('my-handle');
+    expect(screen.getByText(/Last read/)).toBeInTheDocument();
   });
 
   it('says what failed instead of showing an empty list', async () => {

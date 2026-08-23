@@ -86,7 +86,7 @@ describe('the commitment form', () => {
   it('says plainly that nothing can check an abstain commitment', async () => {
     render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
 
-    expect(screen.getByText(/None run yet/)).toBeInTheDocument();
+    expect(screen.getByText(/Location, Phone movement and Timer/)).toBeInTheDocument();
 
     await userEvent.selectOptions(screen.getByLabelText('Kind'), 'abstain');
 
@@ -95,18 +95,77 @@ describe('the commitment form', () => {
     expect(screen.getByText(/There is no sensor for a thing not done/)).toBeInTheDocument();
   });
 
-  it('offers no Auto-check that could be turned on today', () => {
+  it('disables every Auto-check on an abstain commitment, including Account elsewhere', async () => {
     render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.selectOptions(screen.getByLabelText('Kind'), 'abstain');
 
     const checks = screen
       .getAllByRole('checkbox')
       .filter((box) => box !== screen.getByLabelText(/Missing this costs money/));
-    // Every one is disabled and unchecked. A togglable check that never runs is a promise
-    // the product would break on the first day it mattered.
+    // Every one is disabled and unchecked, Account elsewhere included: there is no sensor
+    // for a thing not done, so the checkbox stays disabled exactly as it was before Story
+    // 4.1 wired it up for every other kind.
     for (const box of checks) {
       expect(box).toBeDisabled();
       expect(box).not.toBeChecked();
     }
+  });
+
+  it('unchecks Account elsewhere when switching to a kind with no sensor for it', async () => {
+    // A linked commitment edited into Avoid it must not leave the checkbox checked and
+    // disabled at once — that would be a control with no way left to uncheck it.
+    render(
+      <CommitmentForm
+        initial={{
+          ...EMPTY_DRAFT,
+          name: 'TryHackMe',
+          autoCheckEnabled: true,
+          autoCheckAccountRef: 'my-handle',
+        }}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('Account elsewhere')).toBeChecked();
+
+    await userEvent.selectOptions(screen.getByLabelText('Kind'), 'abstain');
+
+    const accountElsewhere = screen.getByLabelText('Account elsewhere');
+    expect(accountElsewhere).toBeDisabled();
+    expect(accountElsewhere).not.toBeChecked();
+  });
+
+  it('offers Account elsewhere as a live checkbox, and leaves the rest disabled', () => {
+    render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    // Account elsewhere is the one Auto-check Story 4.1 wires up.
+    const accountElsewhere = screen.getByLabelText('Account elsewhere');
+    expect(accountElsewhere).toBeEnabled();
+    expect(accountElsewhere).not.toBeChecked();
+
+    // Location/Phone/Timer stay disabled placeholders — Epic 4 does not build them yet.
+    for (const label of ['Location with dwell', 'Phone movement', 'Timer']) {
+      const box = screen.getByLabelText(label);
+      expect(box).toBeDisabled();
+      expect(box).not.toBeChecked();
+    }
+  });
+
+  it('asks for an account only once Account elsewhere is checked, and needs it non-blank', async () => {
+    render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.type(screen.getByLabelText('Name'), 'TryHackMe');
+    expect(screen.queryByLabelText('Account')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText('Account elsewhere'));
+    expect(screen.getByLabelText('Account')).toBeInTheDocument();
+    // No live fetch or validation happens at link time — only that something was typed.
+    expect(screen.getByText(/needs an account identifier/)).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText('Account'), 'my-handle');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
   it('never deletes on the first tap, and says the history stays', async () => {

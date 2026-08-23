@@ -9,6 +9,7 @@ import {
   requiredTargets,
   toRow,
   withCadence,
+  withKind,
 } from './commitment';
 
 function draft(overrides: Partial<CommitmentDraft> = {}): CommitmentDraft {
@@ -25,6 +26,11 @@ describe('a blank commitment', () => {
     expect(EMPTY_DRAFT.weeklyTarget).toBeNull();
     expect(EMPTY_DRAFT.weekStartDay).toBeNull();
     expect(EMPTY_DRAFT.dailyMinutesTarget).toBeNull();
+  });
+
+  it('starts with no Auto-check attached', () => {
+    expect(EMPTY_DRAFT.autoCheckEnabled).toBe(false);
+    expect(EMPTY_DRAFT.autoCheckAccountRef).toBe('');
   });
 });
 
@@ -59,6 +65,60 @@ describe('auto-checks', () => {
     for (const kind of COMMITMENT_KINDS) {
       expect(typeof autoChecksPossible(kind)).toBe('boolean');
     }
+  });
+});
+
+describe('an Account-elsewhere Auto-check draft', () => {
+  it('is valid once enabled with a ref, on a kind that allows it', () => {
+    expect(
+      draftProblems(draft({ autoCheckEnabled: true, autoCheckAccountRef: 'my-handle' })),
+    ).toEqual([]);
+  });
+
+  it('is refused enabled with a blank ref', () => {
+    expect(
+      draftProblems(draft({ autoCheckEnabled: true, autoCheckAccountRef: '   ' })).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('is refused enabled with no ref at all', () => {
+    expect(draftProblems(draft({ autoCheckEnabled: true })).length).toBeGreaterThan(0);
+  });
+
+  it('is refused on an abstention, even with a ref typed', () => {
+    // Mirrors autoChecksPossible(): there is no sensor for a thing not done.
+    expect(
+      draftProblems(
+        draft({ kind: 'abstain', autoCheckEnabled: true, autoCheckAccountRef: 'my-handle' }),
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('raises no problem while disabled, whatever the ref field holds', () => {
+    expect(draftProblems(draft({ autoCheckEnabled: false, autoCheckAccountRef: '' }))).toEqual([]);
+  });
+});
+
+describe('switching kind', () => {
+  it('clears a linked Auto-check when the new kind cannot carry one', () => {
+    // Otherwise the checkbox would render checked and disabled at once — checked because
+    // the draft still says so, disabled because abstain has no sensor — with no control
+    // left for the author to uncheck it from.
+    const linked = draft({ kind: 'do', autoCheckEnabled: true, autoCheckAccountRef: 'my-handle' });
+    const next = withKind(linked, 'abstain');
+    expect(next.autoCheckEnabled).toBe(false);
+    expect(next.autoCheckAccountRef).toBe('');
+  });
+
+  it('leaves a linked Auto-check alone when the new kind still allows one', () => {
+    const linked = draft({ kind: 'do', autoCheckEnabled: true, autoCheckAccountRef: 'my-handle' });
+    const next = withKind(linked, 'open_ended');
+    expect(next.autoCheckEnabled).toBe(true);
+    expect(next.autoCheckAccountRef).toBe('my-handle');
+  });
+
+  it('is a no-op on Auto-check fields when nothing was linked', () => {
+    expect(withKind(draft({ kind: 'do' }), 'abstain').autoCheckEnabled).toBe(false);
   });
 });
 
@@ -153,6 +213,9 @@ describe('the row that reaches the database', () => {
     );
     expect(Object.keys(row).sort()).toEqual(
       [
+        'auto_check_account_ref',
+        'auto_check_kind',
+        'auto_check_last_checked_at',
         'carries_penalty',
         'cadence',
         'daily_minutes_target',
@@ -164,6 +227,27 @@ describe('the row that reaches the database', () => {
         'weekly_target',
       ].sort(),
     );
+  });
+
+  it('writes the auto-check columns when linked', () => {
+    const row = toRow(
+      draft({ autoCheckEnabled: true, autoCheckAccountRef: '  my-handle  ' }),
+      'o',
+      'k',
+    );
+    expect(row.auto_check_kind).toBe('account_elsewhere');
+    expect(row.auto_check_account_ref).toBe('my-handle');
+    // Left untouched — the resolution pass owns this column, never the client. Supabase
+    // strips an `undefined` value from the request, so an update leaves the existing
+    // database value alone rather than sending a null.
+    expect(row.auto_check_last_checked_at).toBeUndefined();
+  });
+
+  it('clears all three auto-check columns when unlinked', () => {
+    const row = toRow(draft({ autoCheckEnabled: false, autoCheckAccountRef: 'stale' }), 'o', 'k');
+    expect(row.auto_check_kind).toBeNull();
+    expect(row.auto_check_account_ref).toBeNull();
+    expect(row.auto_check_last_checked_at).toBeNull();
   });
 });
 

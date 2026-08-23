@@ -31,6 +31,9 @@ export const CADENCE_LABELS: Record<CommitmentCadence, string> = {
   daily_hours_quota: 'Hours per day',
 };
 
+/** The one Auto-check kind wired up so far (Story 4.1). Location/Phone/Timer stay placeholders. */
+export type AutoCheckKind = 'account_elsewhere';
+
 export interface CommitmentDraft {
   name: string;
   kind: CommitmentKind;
@@ -41,6 +44,10 @@ export interface CommitmentDraft {
   weekStartDay: number | null;
   /** Minutes, never hours — one unit at rest, so no rounding decision is made twice. */
   dailyMinutesTarget: number | null;
+  /** Whether the Account-elsewhere Auto-check is attached to this commitment. */
+  autoCheckEnabled: boolean;
+  /** What the author typed to identify the account elsewhere. Saved as-is, no validation. */
+  autoCheckAccountRef: string;
 }
 
 /**
@@ -55,6 +62,8 @@ export const EMPTY_DRAFT: CommitmentDraft = {
   weeklyTarget: null,
   weekStartDay: null,
   dailyMinutesTarget: null,
+  autoCheckEnabled: false,
+  autoCheckAccountRef: '',
 };
 
 export type TargetField = 'weeklyTarget' | 'weekStartDay' | 'dailyMinutesTarget';
@@ -140,7 +149,34 @@ export function draftProblems(draft: CommitmentDraft): string[] {
     }
   }
 
+  if (draft.autoCheckEnabled) {
+    // Mirrors `autoChecksPossible()`: there is no sensor for a thing not done, so an
+    // Auto-check can never attach to an abstention — refused here and by the database's
+    // own `commitment_auto_check_not_on_abstain` check.
+    if (!autoChecksPossible(draft.kind)) {
+      problems.push('Nothing can check an Avoid-it commitment automatically.');
+    }
+    if (draft.autoCheckAccountRef.trim() === '') {
+      problems.push('Account elsewhere needs an account identifier to check.');
+    }
+  }
+
   return problems;
+}
+
+/**
+ * Clears the Auto-check when switching to a kind that can't carry one, so a checked-but-
+ * disabled box can never be left with no way to uncheck it (`autoChecksPossible()` would
+ * refuse the save anyway — this is what keeps the control itself from becoming a dead end).
+ */
+export function withKind(draft: CommitmentDraft, kind: CommitmentKind): CommitmentDraft {
+  const checksPossible = autoChecksPossible(kind);
+  return {
+    ...draft,
+    kind,
+    autoCheckEnabled: checksPossible ? draft.autoCheckEnabled : false,
+    autoCheckAccountRef: checksPossible ? draft.autoCheckAccountRef : '',
+  };
 }
 
 /** Clears whatever the previous cadence needed, so switching cadence cannot leave a stale target. */
@@ -167,5 +203,11 @@ export function toRow(draft: CommitmentDraft, ownerId: string, idempotencyKey: s
     weekly_target: draft.weeklyTarget,
     week_start_day: draft.weekStartDay,
     daily_minutes_target: draft.dailyMinutesTarget,
+    auto_check_kind: draft.autoCheckEnabled ? 'account_elsewhere' : null,
+    auto_check_account_ref: draft.autoCheckEnabled ? draft.autoCheckAccountRef.trim() : null,
+    // Untouched (stripped before the request) while still enabled — it is a value the
+    // resolution pass owns, never the client. Explicitly cleared to null on unlink, along
+    // with the other two columns, so a stale read cannot survive it.
+    auto_check_last_checked_at: draft.autoCheckEnabled ? undefined : null,
   };
 }
