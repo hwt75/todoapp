@@ -221,7 +221,10 @@ begin
     'public.penalty_amount_dong()',
     'public.handle_new_user()',
     'public.outbox_enqueue(uuid, text, jsonb)',
-    'public.enqueue_gate_reminders()'
+    'public.enqueue_gate_reminders()',
+    'public.resolve_account_elsewhere(uuid)',
+    'public.file_auto_check_result(uuid, uuid, public.auto_check_result)',
+    'public.resolve_auto_checks()'
   ]
   loop
     foreach r in array array['anon', 'authenticated'] loop

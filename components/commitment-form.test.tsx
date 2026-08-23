@@ -86,7 +86,7 @@ describe('the commitment form', () => {
   it('says plainly that nothing can check an abstain commitment', async () => {
     render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
 
-    expect(screen.getByText(/Location, Phone movement and Timer/)).toBeInTheDocument();
+    expect(screen.getByText(/Location with dwell, Phone movement and Timer/)).toBeInTheDocument();
 
     await userEvent.selectOptions(screen.getByLabelText('Kind'), 'abstain');
 
@@ -163,6 +163,9 @@ describe('the commitment form', () => {
     expect(screen.getByLabelText('Account')).toBeInTheDocument();
     // No live fetch or validation happens at link time — only that something was typed.
     expect(screen.getByText(/needs an account identifier/)).toBeInTheDocument();
+    // The problem text alone doesn't stop a save — confirm the button is actually the
+    // thing enforcing it.
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
 
     await userEvent.type(screen.getByLabelText('Account'), 'my-handle');
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();

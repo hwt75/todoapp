@@ -18,6 +18,8 @@ declare
   v_linked      uuid; -- account_elsewhere attached, cadence daily, kind 'do'
   v_undeclared  uuid; -- linked, undeclared — resolve_auto_checks() must actually resolve this one
   v_unlinked    uuid; -- no Auto-check at all — resolve_auto_checks() must never touch it
+  v_archived    uuid; -- linked, undeclared, archived — must be excluded like commitments_owing
+  v_too_new     uuid; -- linked, undeclared, created today — must be excluded, yesterday predates it
 
   v_key       uuid := gen_random_uuid();
   v_yesterday date;
@@ -100,9 +102,12 @@ begin
   -- -------------------------------------------------------------------------------
   -- 2. Link, then unlink, round trip.
   -- -------------------------------------------------------------------------------
+  -- Backdated: a real commitment predates the day it's judged for by design (the
+  -- created_at guard added below exists precisely to exclude one that doesn't).
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
-                                 auto_check_kind, auto_check_account_ref)
-  values (v_user, v_key, 'TryHackMe', 'do', 'daily', 'account_elsewhere', 'my-handle')
+                                 auto_check_kind, auto_check_account_ref, created_at)
+  values (v_user, v_key, 'TryHackMe', 'do', 'daily', 'account_elsewhere', 'my-handle',
+          v_yesterday - 1)
   returning id into v_linked;
 
   select auto_check_kind, auto_check_account_ref, auto_check_last_checked_at
@@ -223,11 +228,12 @@ begin
   -- -------------------------------------------------------------------------------
 
   -- v_linked is already declared for yesterday (step 4). Give it a second commitment that
-  -- is linked but undeclared, on the same account.
+  -- is linked but undeclared, on the same account — also backdated, so only its lack of a
+  -- declaration (not its created_at) is what makes the dispatcher pick it up.
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
-                                 auto_check_kind, auto_check_account_ref)
+                                 auto_check_kind, auto_check_account_ref, created_at)
   values (v_user, gen_random_uuid(), 'Side project', 'do', 'daily',
-          'account_elsewhere', 'my-other-handle')
+          'account_elsewhere', 'my-other-handle', v_yesterday - 1)
   returning id into v_undeclared;
 
   -- And a third, not linked at all, to prove the pass never touches an unlinked row.
@@ -235,13 +241,31 @@ begin
   values (v_user, gen_random_uuid(), 'Morning exercise', 'do', 'daily')
   returning id into v_unlinked;
 
+  -- A fourth, linked and undeclared but archived — commitments_owing/settle_due_weeks
+  -- already exclude an archived commitment from being judged; this pass must too. Backdated
+  -- so archived_at, not created_at, is the only thing excluding it.
+  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
+                                 auto_check_kind, auto_check_account_ref, created_at, archived_at)
+  values (v_user, gen_random_uuid(), 'Retired habit', 'do', 'daily',
+          'account_elsewhere', 'my-old-handle', v_yesterday - 1, now())
+  returning id into v_archived;
+
+  -- A fifth, linked and undeclared but created today — target_day is yesterday, and a
+  -- commitment cannot be judged for a day before it existed (mirrors
+  -- settle_due_weeks's own created_at guard, 20260820150000:258).
+  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
+                                 auto_check_kind, auto_check_account_ref)
+  values (v_user, gen_random_uuid(), 'Brand new', 'do', 'daily',
+          'account_elsewhere', 'my-new-handle')
+  returning id into v_too_new;
+
   v_processed := public.resolve_auto_checks();
 
   if v_processed <> 1 then
     raise exception using message = format(
       'resolve_auto_checks() processed %s commitment(s), expected exactly 1 — the '
-      'already-declared one must never be queried at all, and the unlinked one is not its '
-      'concern.', v_processed);
+      'already-declared, archived, too-new and unlinked commitments must all be excluded, '
+      'leaving only the one genuinely undeclared linked commitment.', v_processed);
   end if;
 
   -- The already-declared commitment: untouched. Never queried, never overwritten.
@@ -289,6 +313,29 @@ begin
       'Auto-check attached at all.';
   end if;
 
+  -- The archived commitment: excluded, exactly like commitments_owing excludes it.
+  select auto_check_last_checked_at into v_checked_2
+    from public.commitment where id = v_archived;
+  if v_checked_2 is not null then
+    raise exception using message =
+      'resolve_auto_checks() stamped auto_check_last_checked_at on an archived commitment. '
+      'archived_at is null already gates every other judging pass in this schema.';
+  end if;
+  select count(*) into v_count from public.declaration where commitment_id = v_archived;
+  if v_count <> 0 then
+    raise exception using message = format(
+      '%s declaration(s) were filed for an archived commitment.', v_count);
+  end if;
+
+  -- The too-new commitment: excluded, since yesterday predates it.
+  select auto_check_last_checked_at into v_checked_2
+    from public.commitment where id = v_too_new;
+  if v_checked_2 is not null then
+    raise exception using message =
+      'resolve_auto_checks() stamped auto_check_last_checked_at on a commitment created '
+      'after the day being judged. A commitment cannot be judged for a day before it existed.';
+  end if;
+
   -- AD-5-style: a second pass changes nothing further for either commitment.
   perform public.resolve_auto_checks();
 
@@ -306,14 +353,16 @@ begin
   end if;
 
   raise notice using message =
-    'Step 5 ok: resolve_auto_checks() skips an already-declared commitment untouched, '
-    'bumps auto_check_last_checked_at with zero rows filed on an undeclared one, is '
-    'idempotent on a second pass, and enqueues no outbox row throughout.';
+    'Step 5 ok: resolve_auto_checks() skips an already-declared, archived, or too-new '
+    'commitment untouched, bumps auto_check_last_checked_at with zero rows filed on the '
+    'one genuinely undeclared commitment, is idempotent on a second pass, and enqueues no '
+    'outbox row throughout.';
 
   raise notice using message =
     'PASS. An Auto-check attach is refused when half-filled or attached to an abstention, '
     'link/unlink round-trips cleanly, file_auto_check_result files on held only, and '
-    'resolve_auto_checks() resolves the right set exactly once and stays silent.';
+    'resolve_auto_checks() resolves exactly the right commitment — never an already-'
+    'declared, archived, too-new, or unlinked one — and stays silent throughout.';
 end $$;
 
 rollback;

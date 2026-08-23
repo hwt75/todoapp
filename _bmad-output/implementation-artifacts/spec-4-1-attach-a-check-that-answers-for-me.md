@@ -122,6 +122,44 @@ own Declaration still stands for those days.
 - Given any Auto-check attached to a commitment, then its configuration is stored on that
   commitment, never as a global setting.
 
+### Review Findings (independent pass, 2026-08-24)
+
+A second, fresh-context `bmad-code-review` pass (4 layers: blind-hunter, edge-case-hunter,
+verification-gap, acceptance-auditor) ran against the committed diff, per this project's own
+sprint-status.yaml convention ("dev moves story to review, then runs code-review"). Acceptance
+auditor found zero violations. 6 findings patched, 5 deferred, rest rejected as noise or
+already-disclosed.
+
+- [x] [Review][Patch] `resolve_auto_checks()` had no guard against judging a commitment for a day
+  before it existed [supabase/migrations/20260824090000_a_commitment_predates_the_day_it_is_judged_for.sql]
+  — fixed by mirroring `settle_due_weeks`'s own `created_at` guard (found independently, given
+  concrete production consequence: linking Account elsewhere same-day would resolve against a
+  "yesterday" that predates the commitment).
+- [x] [Review][Patch] Negative-privilege test gap for the 3 new `security definer` functions
+  [supabase/tests/2-1-roles-and-rls.sql] — added to the existing hardcoded array (found
+  independently by 2 of 4 layers, upgraded from last round's defer given a concrete regression
+  demonstration).
+- [x] [Review][Patch] `resolve_auto_checks()`'s own test never proved the `archived_at is null`
+  exclusion [supabase/tests/4-1-account-elsewhere.sql] — added an archived+linked+undeclared
+  fixture, alongside a new too-new-to-judge fixture proving the `created_at` fix above.
+- [x] [Review][Patch] The "asks for an account" test never asserted Save was actually disabled
+  [components/commitment-form.test.tsx] — added the assertion.
+- [x] [Review][Patch] Copy said "Location, Phone movement and Timer" but the actual checkbox is
+  labeled "Location with dwell" [components/commitment-form.tsx] — copy corrected to match.
+- [x] [Review][Patch] The "Not read yet." branch (a linked, never-resolved commitment) had zero
+  test coverage [components/commitment-list.test.tsx] — added.
+- [x] [Review][Defer] List view gives no at-a-glance indicator that a commitment has an Auto-check
+  linked — deferred, product/design decision out of this story's frozen Intent.
+- [x] [Review][Defer] `resolve_auto_checks()` has no per-row exception isolation — deferred until a
+  real (throwable) resolver exists; today's stub cannot fail.
+- [x] [Review][Defer] No supporting index for the dispatcher's WHERE clause — deferred, matches
+  every sibling dispatcher's current (unindexed) pattern in this schema.
+- [x] [Review][Defer] `declaration` has no column distinguishing machine-filed from human-filed rows
+  — deferred, a design decision affecting every consumer of the table.
+- [x] [Review][Defer] A commitment archived mid-pass isn't excluded from the dispatcher's final
+  update the way a concurrent unlink now is — deferred, narrower and lower-severity (no abort risk,
+  cosmetic-only consequence today).
+
 ## Design Notes
 
 **`resolve_account_elsewhere` can never say `held` in v1** — FR-8 was resolved negative for the
@@ -176,6 +214,25 @@ negative-privilege check, both one-line patterns already proven elsewhere) — r
 `deferred-work.md`. The rest (a stale "last read" timestamp when an already-linked ref is edited,
 sprint/spec status labels, minor doc wording) were rejected as either already-disclosed, workflow
 sequencing, or cosmetic.
+
+**Code review, 2026-08-24 (independent pass, 4 layers — blind-hunter, edge-case-hunter,
+verification-gap, acceptance-auditor):** acceptance auditor found zero violations. 6 findings
+patched (see Tasks & Acceptance's "Review Findings" subsection for the full list) — most notably a
+missing `created_at` guard on `resolve_auto_checks()`'s dispatch query (mirroring
+`settle_due_weeks`'s own precedent), and the two test-coverage gaps deferred last round (archived
+exclusion, negative-privilege) upgraded to patched once two independent layers converged on them
+with a concrete regression demonstration. 5 new findings deferred (recorded in `deferred-work.md`).
+
+**Commands, re-run 2026-08-24 after the second review's patches:**
+- `npx supabase db reset` — all 32 migrations, including the new
+  `20260824090000_a_commitment_predates_the_day_it_is_judged_for.sql` follow-up (the live migration
+  from the first review pass was not edited in place, per this project's convention), apply clean.
+- All 16 SQL tests run — **15/16 pass** (same unrelated `3-2-focus-prompt.sql` wall-clock skip).
+- `npm run lint`, `npx tsc --noEmit`, `npm run format:check` — clean.
+- `npm test` — **674/674 pass**.
+- Applied to the live project via `apply_migration` — `resolve_auto_checks()`'s live definition now
+  contains the `created_at` guard, and `get_advisors(type=security)` remains clean (only the
+  pre-existing, unrelated warning).
 
 **Manual checks (only the author can do these) — not yet performed:**
 - In the installed app, enable Account elsewhere on a real commitment, confirm the linked state

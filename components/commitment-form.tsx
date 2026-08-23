@@ -184,9 +184,9 @@ export function CommitmentForm({
       <h3>Auto-checks</h3>
       {checksPossible ? (
         <p className="row-muted">
-          Location, Phone movement and Timer don&apos;t run yet — Epic 4 builds them. Until then,
-          and unless Account elsewhere is linked below, every commitment is settled by your morning
-          answer.
+          Location with dwell, Phone movement and Timer don&apos;t run yet — Epic 4 builds them.
+          Until then, and unless Account elsewhere is linked below, every commitment is settled by
+          your morning answer.
         </p>
       ) : (
         <p className="row-muted">

@@ -149,6 +149,26 @@ describe('the commitment list', () => {
     expect(screen.getByText(/Last read/)).toBeInTheDocument();
   });
 
+  it('says a linked commitment has not been read yet, before any pass has run', async () => {
+    listResult = {
+      data: [
+        {
+          ...gym,
+          auto_check_kind: 'account_elsewhere',
+          auto_check_account_ref: 'my-handle',
+          auto_check_last_checked_at: null,
+        },
+      ],
+      error: null,
+    };
+    render(<CommitmentList ownerId="u1" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+
+    // A freshly linked commitment must not claim a read that never happened.
+    expect(screen.getByText('Not read yet.')).toBeInTheDocument();
+    expect(screen.queryByText(/Last read/)).not.toBeInTheDocument();
+  });
+
   it('says what failed instead of showing an empty list', async () => {
     listResult = { data: null, error: { message: 'permission denied' } };
     render(<CommitmentList ownerId="u1" />);
