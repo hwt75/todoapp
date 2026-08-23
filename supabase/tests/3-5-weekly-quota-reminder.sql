@@ -6,6 +6,8 @@
 --
 --   * comfortable slack (more days left than sessions owed): silent;
 --   * target already met (0 sessions owed): silent, same as comfortable;
+--   * target met exactly on the week's last day (days_remaining = 0): silent too — the
+--     boundary a 2026-08-23 code review found unguarded (slack read 0, not positive, there);
 --   * slack = 0: exactly one push, at the account's morning hour;
 --   * slack < 0: a second push twelve hours later, on top of the first;
 --   * slack = 0 never reaches the second slot, even at the second slot's own hour;
@@ -47,6 +49,8 @@ declare
   v_user        uuid := gen_random_uuid();
   v_comfortable uuid;  -- target 1, days_remaining 6, nothing held -- slack 5, must stay silent
   v_met         uuid;  -- target 2, days_remaining 2, both held -- slack 2, met early, silent
+  v_met_zero    uuid;  -- target 3, days_remaining 0, all held -- slack 0 via target-held=0,
+                        -- the boundary the 2026-08-23 review found unguarded
   v_tight       uuid;  -- target 3, days_remaining 2, one held -- slack 0, once daily only
   v_overdue     uuid;  -- target 3, days_remaining 1, one held -- slack -1, once then twice
   v_poisoned    uuid;  -- same shape as v_tight, name poisons its own body
@@ -57,6 +61,7 @@ declare
   v_wsd_6       integer;  -- week_start_day giving days_remaining = 6
   v_wsd_2       integer;  -- week_start_day giving days_remaining = 2
   v_wsd_1       integer;  -- week_start_day giving days_remaining = 1
+  v_wsd_0       integer;  -- week_start_day giving days_remaining = 0
   v_queued      integer;
   v_count       integer;
   v_body        text;
@@ -76,11 +81,12 @@ begin
     if public.week_days_remaining(v_today, i) = 6 then v_wsd_6 := i; end if;
     if public.week_days_remaining(v_today, i) = 2 then v_wsd_2 := i; end if;
     if public.week_days_remaining(v_today, i) = 1 then v_wsd_1 := i; end if;
+    if public.week_days_remaining(v_today, i) = 0 then v_wsd_0 := i; end if;
   end loop;
 
-  if v_wsd_6 is null or v_wsd_2 is null or v_wsd_1 is null then
+  if v_wsd_6 is null or v_wsd_2 is null or v_wsd_1 is null or v_wsd_0 is null then
     raise exception using message =
-      'Could not find a week_start_day giving days_remaining of 6, 2 and 1 for today. '
+      'Could not find a week_start_day giving days_remaining of 6, 2, 1 and 0 for today. '
       'week_days_remaining''s range is 0-6, so one of each must exist across 1-7.';
   end if;
 
@@ -105,6 +111,11 @@ begin
                                  weekly_target, week_start_day)
   values (v_user, gen_random_uuid(), 'Meditation', 'do', 'weekly_quota', 2, v_wsd_2)
   returning id into v_met;
+
+  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
+                                 weekly_target, week_start_day)
+  values (v_user, gen_random_uuid(), 'Yoga', 'do', 'weekly_quota', 3, v_wsd_0)
+  returning id into v_met_zero;
 
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
                                  weekly_target, week_start_day)
@@ -133,6 +144,7 @@ begin
   declare
     v_week_start_2 date := v_today - ((v_isodow - v_wsd_2 + 7) % 7);
     v_week_start_1 date := v_today - ((v_isodow - v_wsd_1 + 7) % 7);
+    v_week_start_0 date := v_today - ((v_isodow - v_wsd_0 + 7) % 7);
   begin
     insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
     values
@@ -140,6 +152,12 @@ begin
        (v_week_start_2 + 1 + time '07:00') at time zone 'Asia/Ho_Chi_Minh'),
       (v_user, v_met, gen_random_uuid(), 'held',
        (v_week_start_2 + 1 + interval '1 day' + time '07:00') at time zone 'Asia/Ho_Chi_Minh'),
+      (v_user, v_met_zero, gen_random_uuid(), 'held',
+       (v_week_start_0 + 1 + time '07:00') at time zone 'Asia/Ho_Chi_Minh'),
+      (v_user, v_met_zero, gen_random_uuid(), 'held',
+       (v_week_start_0 + 2 + time '07:00') at time zone 'Asia/Ho_Chi_Minh'),
+      (v_user, v_met_zero, gen_random_uuid(), 'held',
+       (v_week_start_0 + 3 + time '07:00') at time zone 'Asia/Ho_Chi_Minh'),
       (v_user, v_tight, gen_random_uuid(), 'held',
        (v_week_start_2 + 1 + time '07:00') at time zone 'Asia/Ho_Chi_Minh'),
       (v_user, v_overdue, gen_random_uuid(), 'held',
@@ -166,10 +184,18 @@ begin
        where commitment_id = v_overdue) >= 0 then
     raise exception using message = 'Fixture error: v_overdue does not read negative slack.';
   end if;
+  if (select days_remaining from public.weekly_quota_progress
+       where commitment_id = v_met_zero) <> 0 then
+    raise exception using message = 'Fixture error: v_met_zero does not read days_remaining = 0.';
+  end if;
+  if (select held from public.weekly_quota_progress
+       where commitment_id = v_met_zero) <> 3 then
+    raise exception using message = 'Fixture error: v_met_zero does not read held = target (3).';
+  end if;
 
   raise notice using message =
     'Fixtures ok: comfortable and met read positive slack, tight reads exactly 0, overdue '
-    'reads negative.';
+    'reads negative, met_zero reads days_remaining = 0 with held = target.';
 
   -- -------------------------------------------------------------------------------
   -- 1. First pass, at the real current hour (slot 0 for every commitment: morning_hour was
@@ -191,6 +217,16 @@ begin
       'A commitment with its target already met enqueued %s rows rather than 0.', v_count);
   end if;
 
+  select count(*) into v_count from public.outbox
+   where dedupe_key like 'weekly-' || v_user::text || '-' || v_met_zero::text || '-%';
+  if v_count <> 0 then
+    raise exception using message = format(
+      'A commitment meeting its target exactly on the week''s last day (days_remaining = 0) '
+      'enqueued %s rows rather than 0 — this is the boundary the 2026-08-23 review found '
+      'unguarded: slack computed as days_remaining - (target - held) = 0 - 0 = 0, which '
+      '`continue when slack > 0` alone does not catch.', v_count);
+  end if;
+
   select count(*), max(payload ->> 'body') into v_count, v_body from public.outbox
    where dedupe_key = 'weekly-' || v_user::text || '-' || v_tight::text || '-' || v_today::text
                       || '-0';
@@ -198,16 +234,21 @@ begin
     raise exception using message = format(
       'Slack = 0 enqueued %s rows at slot 0 rather than exactly 1.', v_count);
   end if;
-  if v_body !~ '^Gym, 1 of 3, 2 days? left this week, as of \w+ \d{2}:\d{2}\.$' then
+  if v_body !~ '^Gym, 1 of 3, 2 days left this week, as of \w+ \d{2}:\d{2}\.$' then
     raise exception using message = format('Slot-0 body read "%s", not the expected shape.', v_body);
   end if;
 
-  select count(*) into v_count from public.outbox
+  select count(*), max(payload ->> 'body') into v_count, v_body from public.outbox
    where dedupe_key = 'weekly-' || v_user::text || '-' || v_overdue::text || '-' || v_today::text
                       || '-0';
   if v_count <> 1 then
     raise exception using message = format(
       'Slack < 0 enqueued %s rows at slot 0 rather than exactly 1.', v_count);
+  end if;
+  if v_body !~ '^Swim, 1 of 3, 1 day left this week, as of \w+ \d{2}:\d{2}\.$' then
+    raise exception using message = format(
+      'Slot-0 body for the singular day case read "%s", not the expected shape (must read '
+      '"1 day", not "1 days").', v_body);
   end if;
 
   select count(*) into v_count from public.outbox
@@ -236,9 +277,10 @@ begin
   end if;
 
   raise notice using message =
-    'Step 1 ok: comfortable and met slack stay silent, slack = 0 enqueues exactly one '
-    'named, self-dated push at slot 0, slack < 0 enqueues slot 0 but not yet slot 1, a '
-    'poisoned name is skipped without enqueuing, and an archived commitment never appears.';
+    'Step 1 ok: comfortable and met slack stay silent (including a target met exactly on '
+    'the week''s last day), slack = 0 enqueues exactly one named, self-dated, correctly '
+    'pluralized push at slot 0, slack < 0 enqueues slot 0 but not yet slot 1, a poisoned '
+    'name is skipped without enqueuing, and an archived commitment never appears.';
 
   -- -------------------------------------------------------------------------------
   -- 2. A retried pass at the same hour is a no-op — dedupe holds, per AD-3's own promise
@@ -274,13 +316,16 @@ begin
       'at 1. It must never reach the second slot.', v_count);
   end if;
 
-  select count(*) into v_count from public.outbox
+  select count(*), max(payload ->> 'body') into v_count, v_body from public.outbox
    where dedupe_key = 'weekly-' || v_user::text || '-' || v_overdue::text || '-' || v_today::text
                       || '-1';
   if v_count <> 1 then
     raise exception using message = format(
       'Slack < 0 read %s rows at slot 1 after the twelve-hours-later pass rather than '
       'exactly 1.', v_count);
+  end if;
+  if v_body !~ '^Swim, 1 of 3, 1 day left this week, as of \w+ \d{2}:\d{2}\.$' then
+    raise exception using message = format('Slot-1 body read "%s", not the expected shape.', v_body);
   end if;
 
   select count(*) into v_count from public.outbox
@@ -290,16 +335,27 @@ begin
       'Slack < 0 read %s rows total across both slots rather than 2.', v_count);
   end if;
 
-  raise notice using message =
-    'Step 3 ok: twelve hours later, slack = 0 still reads exactly one row total (never '
-    'reaches slot 1), and slack < 0 gains its second push, two rows total across the day.';
+  select count(*) into v_count from public.outbox
+   where dedupe_key like 'weekly-' || v_user::text || '-' || v_met_zero::text || '-%';
+  if v_count <> 0 then
+    raise exception using message = format(
+      'A commitment meeting its target exactly on the week''s last day enqueued %s rows '
+      'after the twelve-hours-later pass rather than staying at 0.', v_count);
+  end if;
 
   raise notice using message =
-    'PASS. Comfortable slack and an already-met target stay silent; slack = 0 sends one '
-    'named, self-dated push at the morning hour and never a second; slack < 0 sends a '
-    'second twelve hours later; a repeated pass at the same hour is a no-op; a poisoned '
-    'commitment name is skipped without harming any other row; an archived commitment '
-    'never appears.';
+    'Step 3 ok: twelve hours later, slack = 0 still reads exactly one row total (never '
+    'reaches slot 1), slack < 0 gains its second push with a correctly-pluralized body, two '
+    'rows total across the day, and a target met exactly on the week''s last day stays '
+    'silent throughout.';
+
+  raise notice using message =
+    'PASS. Comfortable slack and an already-met target stay silent, including a target met '
+    'exactly on the week''s last day; slack = 0 sends one named, self-dated, correctly '
+    'pluralized push at the morning hour and never a second; slack < 0 sends a correctly '
+    'pluralized second push twelve hours later; a repeated pass at the same hour is a '
+    'no-op; a poisoned commitment name is skipped without harming any other row; an '
+    'archived commitment never appears.';
 end $$;
 
 rollback;

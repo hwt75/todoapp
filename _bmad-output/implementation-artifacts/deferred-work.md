@@ -231,3 +231,13 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-2-know-where-the-hours-stand-without-opening-anything.md`
   summary: "`bankedPercent()` in `lib/focus-session.ts` has no explicit guard against non-finite (`NaN`/`Infinity`) input propagating into the rendered bar's `width` style."
   evidence: Raised by the 2026-08-21 review (blind-hunter). Deferred — defensive-only; `targetMinutes` is guaranteed positive by `commitment_daily_hours_target`'s biconditional check and `bankedSeconds` always comes from a real numeric read, so the condition cannot occur in practice today.
+
+## Deferred from: code review of spec-3-5-the-loudest-thing-on-the-phone (2026-08-23)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-5-the-loudest-thing-on-the-phone.md`
+  summary: "D4's day-scoped dedupe key fix (keying on `today` rather than `week_start`, so a commitment doesn't claim slot 0 only once for the whole week) is never proven by a test that actually advances to a second calendar day — the suite only exercises a same-hour retry and a same-day (simulated) twelve-hours-later pass."
+  evidence: Raised by the 2026-08-23 review (blind-hunter). Deferred — correctness is supported by direct inspection (the dedupe key literally includes `today`), and unlike the hour-shifting trick already used for slots, there's no cheap way to advance the simulated calendar day without a mockable clock function. Revisit if a clock-mocking utility is ever added for this test suite.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-5-the-loudest-thing-on-the-phone.md`
+  summary: "Slot 1 matches purely on hour-of-day (`(morning_hour + 12) % 24`), not on \"twelve hours after slot 0 fired\" — for a `morning_hour` late in the day (e.g. 20:00), slot 1's hour falls on the next calendar day, reading `weekly_quota_progress`'s numbers as of that later day (potentially a different week per D6) rather than continuing the day slot 0 fired on."
+  evidence: Raised by the 2026-08-23 review (blind-hunter). Deferred — likely self-limiting since `morning_hour` is semantically a morning hour throughout the product (used the same way by `enqueue_gate_reminders`/`enqueue_focus_prompts`), but nothing in this diff constrains its value or discusses the boundary. Revisit if an account is ever observed setting an evening `morning_hour`.

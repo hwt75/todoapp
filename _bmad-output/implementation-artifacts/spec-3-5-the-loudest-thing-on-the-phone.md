@@ -2,7 +2,7 @@
 title: 'Story 3.5 — The loudest thing on the phone'
 type: 'feature'
 created: '2026-08-22'
-status: 'approved'
+status: 'done'
 baseline_commit: '0c4e8fe6'
 review_loop_iteration: 0
 story_key: '3-5-the-loudest-thing-on-the-phone'
@@ -197,6 +197,13 @@ never observe the same period at the same time by construction.
 - Given the reminder body, when read on a lock screen, then it self-dates with a weekday and clock
   time and states no present-tense claim, per the outbox's own check constraint.
 
+### Review Findings
+
+- [x] [Review][Patch] Met target on the week's last day still fires a reminder push [supabase/migrations/20260822090000_weekly_quota_reminder_slack_is_the_trigger.sql:60,64] — fixed by `supabase/migrations/20260823090000_a_met_target_is_maximally_slack.sql`, with a regression fixture (`v_met_zero`) added to `supabase/tests/3-5-weekly-quota-reminder.sql`.
+- [x] [Review][Patch] Pluralization and slot-1 body text are never actually asserted [supabase/tests/3-5-weekly-quota-reminder.sql:201-203] — fixed: `v_tight`'s regex now requires the literal plural, and `v_overdue`'s slot-0 and slot-1 bodies are now asserted for the singular "1 day" form.
+- [x] [Review][Defer] D4's day-scoped dedupe key fix is never proven across two calendar days [supabase/tests/3-5-weekly-quota-reminder.sql] — deferred, pre-existing
+- [x] [Review][Defer] Slot 1 can cross into a new calendar day (and week) when morning_hour is late in the day [supabase/migrations/20260822090000_weekly_quota_reminder_slack_is_the_trigger.sql:68] — deferred, pre-existing
+
 ## Design Notes
 
 **The body names the commitment, unlike the D3 draft.** Written during implementation: the draft's
@@ -241,6 +248,22 @@ re-deriving its formula, so the fixture can never drift from what the function a
   five pre-existing jobs, and `get_advisors(type=security)` is clean.
 - `npm run lint`, `npx tsc --noEmit`, `npm run format:check` — clean (no TypeScript touched by this
   story).
+
+**Commands, re-run 2026-08-23 after code review's patch fixes:**
+- `npx supabase start` → `npx supabase db reset` — all 30 local migrations applied clean, including
+  the new `20260823090000_a_met_target_is_maximally_slack.sql`.
+- All 15 files under `supabase/tests/` run via `docker exec supabase_db_todoapp psql -v
+  ON_ERROR_STOP=1` — **14/15 pass**; `3-2-focus-prompt.sql` did not run (it requires the local wall
+  clock to fall between 07:00–20:00 Asia/Ho_Chi_Minh by its own guard, and it was 21:00 at run
+  time) — pre-existing constraint, unrelated to this change. `3-5-weekly-quota-reminder.sql` passes
+  with the new `v_met_zero` regression fixture (`held = target`, `days_remaining = 0`, must stay
+  silent — the exact boundary the review found unguarded) and the tightened body assertions for
+  both slots' pluralization.
+- Applied to the live project (`hxzalpnlrunctbajgtkv`) via the Supabase MCP server's
+  `apply_migration` — re-checked after: `enqueue_weekly_quota_reminders`'s definition in `pg_proc`
+  contains the new `continue when progress.held >= progress.target` guard, and
+  `get_advisors(type=security)` shows only the pre-existing, unrelated
+  `auth_leaked_password_protection` warning.
 
 **Manual checks (only the author can do these) — not yet performed:**
 - With a Weekly Quota commitment at `slack = 0`, wait past `morning_hour` on the installed app and
