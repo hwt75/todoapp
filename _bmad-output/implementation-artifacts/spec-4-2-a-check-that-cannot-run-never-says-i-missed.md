@@ -169,6 +169,33 @@ with the human after the first review round found both gaps (see Spec Change Log
   formula between this function and `resolve_auto_checks`; no test at the exact 96-hour boundary)
   recorded in `deferred-work.md` rather than expanding this story further.
 
+- **2026-08-24, round 3 (patch, post-push): ** After commit `574d838` was pushed, an independent
+  `code-review` pass (8 finder angles, 1-vote verify) against that commit found `auto_check_pending()`
+  never checked the commitment's `created_at` against `p_day` — unlike its sibling
+  `resolve_auto_checks()` (20260824090000), which explicitly added that exact guard for the exact
+  same reason. Since `commitments_owing()` also has no `created_at` filter, a brand-new,
+  Auto-check-linked commitment could read as "pending" for an OLDER day it never existed on — and
+  because that older day is typically still well within `auto_check_pending`'s own 96-hour grace
+  window, this could block `settle_day` (and `settle_week`) for up to 96 hours over a commitment
+  that was never owed for that day at all, including collateral delay to genuinely unrelated,
+  already-owed commitments sharing the account. **CONFIRMED** by an independent verifier before
+  fixing. Fixed by adding `(c.created_at at time zone 'Asia/Ho_Chi_Minh')::date <= p_day` to
+  `auto_check_pending`, mirroring `resolve_auto_checks`'s own guard. **New test added:** Step 5d
+  (a brand-new Auto-check commitment never blocks an older, unrelated day) plus `c_g`/`day_g` in
+  Step 1 (the boolean read directly). Fixing this also surfaced that nearly every existing
+  Auto-check test fixture in this file relied on `created_at` defaulting to "today" while testing a
+  "yesterday"-or-older day — every one of those fixtures now explicitly backdates `created_at`
+  (matching the pattern `4-1-account-elsewhere.sql` already established for `resolve_auto_checks`'s
+  own guard), so this fix doesn't silently make earlier steps pass for the wrong reason. A second
+  finding from the same review (`auto_check_pending`'s unconditional `archived_at is null`, vs.
+  `commitments_owing()`'s `p_day`-scoped archived check) was investigated and **REFUTED** — the
+  same-review's own resolver-exclusion means an archived commitment's check can never resolve
+  again either way, so the eventual settlement outcome (verdict, penalty) is identical whether the
+  guard falls through immediately or waits the full 96h; only timing differs, not correctness. Three
+  further findings (guard/quota-loop filter duplication in `settle_week`; guard-eligibility logic
+  duplicated across `settle_day`/`settle_week`; two minor redundant-query efficiency notes) recorded
+  in `deferred-work.md` rather than expanding this story to a fourth round.
+
 ## Design Notes
 
 **`auto_check_pending`, in full:**
@@ -185,6 +212,7 @@ as $$
      where c.id = p_commitment_id
        and c.auto_check_kind is not null
        and c.archived_at is null
+       and (c.created_at at time zone 'Asia/Ho_Chi_Minh')::date <= p_day
        and not exists (
          select 1 from public.declaration d
           where d.commitment_id = c.id and d.for_day = p_day
@@ -223,15 +251,17 @@ enough to always dominate the existing deadline, short enough to still be a boun
 - `npx supabase db reset` -- all 33 migrations, including
   `20260824100000_a_check_that_cannot_run_never_says_i_missed.sql`, applied clean.
 - All 17 files under `supabase/tests/` via `docker exec supabase_db_todoapp psql -v
-  ON_ERROR_STOP=1` -- **17/17 pass**, including `4-2-unavailable-is-not-missed.sql`'s 14 steps:
-  `auto_check_pending` in isolation; daily block + retry; **Step 2b: still blocks past its own
-  `declaration_deadline`, proving the 96h grace is genuinely load-bearing on the daily path, not
-  merely checked**; resolved-via-declaration; **Step 5b: resolved via a bare stamp with nothing
-  declared (the actual "unavailable" production shape) unblocks immediately, not only once grace
-  fully expires**; grace-expiry fallthrough; already-answered-never-blocks; **Step 5c: a pending
-  Weekly Quota Auto-check never blocks `settle_day` at all — re-verified by temporarily reverting
-  the `cadence <> 'weekly_quota'` fix and confirming this exact step fails, then restoring it and
-  confirming it passes, not merely written to pass once**; the same shape for `settle_week` —
+  ON_ERROR_STOP=1` -- **17/17 pass**, including `4-2-unavailable-is-not-missed.sql`'s 15 steps:
+  `auto_check_pending` in isolation, including **created-after-the-day never reads pending, even
+  well within its own 96h grace (`c_g`)**; daily block + retry; **Step 2b: still blocks past its
+  own `declaration_deadline`, proving the 96h grace is genuinely load-bearing on the daily path,
+  not merely checked**; resolved-via-declaration; **Step 5b: resolved via a bare stamp with
+  nothing declared (the actual "unavailable" production shape) unblocks immediately, not only
+  once grace fully expires**; grace-expiry fallthrough; already-answered-never-blocks; **Step 5c:
+  a pending Weekly Quota Auto-check never blocks `settle_day` at all — re-verified by temporarily
+  reverting the `cadence <> 'weekly_quota'` fix and confirming this exact step fails, then
+  restoring it and confirming it passes**; **Step 5d: a brand-new Auto-check commitment never
+  blocks an older, unrelated day it did not exist on**; the same shape for `settle_week` —
   whole-period block + retry, terminal-unblocks, grace-expiry fallthrough, fully-declared-never-
   blocks; AD-16 sanity on both rewritten functions. `2-1-roles-and-rls.sql` confirms `anon`/
   `authenticated` cannot execute `auto_check_pending`. `2-5-settlement.sql`, `2-7-supersession.sql`,
@@ -253,6 +283,16 @@ above it. Step 5c was written to prove the fix, then verified the other directio
 re-run confirmed it fails with exactly the predicted error, then the filter was restored and the
 full suite re-confirmed green — both directions recorded so this isn't a test that merely never
 fails.
+
+**Note on the created_at guard (round 3, after 574d838 was pushed):** an independent `code-review`
+pass against the pushed commit found `auto_check_pending` had no `created_at` check, unlike its
+sibling `resolve_auto_checks`. Fixed, and Step 5d added to prove it. Fixing this exposed that most
+existing Auto-check fixtures in this test file relied on `created_at` defaulting to today while
+testing an earlier day — every one was updated to explicitly backdate `created_at`, otherwise
+several earlier steps would have started passing for the wrong reason (a `created_at` mismatch
+masking the actual behavior under test) rather than silently failing, which is exactly how this
+review caught it: `c_b`'s own direct boolean check failed first, before any settlement-level test
+did. Full suite (all 17 files, lint/tsc/format, `npm test`) re-confirmed green after the fix.
 
 **Manual checks (if no CLI):** _None — pure backend/settlement change, no UI surface._
 

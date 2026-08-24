@@ -64,7 +64,8 @@ declare
   c_d uuid; -- linked, undeclared, checked_at terminal for the day -> not pending
   c_e uuid; -- linked, undeclared, checked_at stamps an EARLIER day -> still pending
   c_f uuid; -- linked, undeclared, never checked, grace already expired -> not pending
-  day_a date; day_b date; day_c date; day_d date; day_e date; day_f date;
+  c_g uuid; -- linked, undeclared, never checked, created AFTER p_day -> not pending
+  day_a date; day_b date; day_c date; day_d date; day_e date; day_f date; day_g date;
 
   -- Steps 2-5: settle_day.
   v_d_block    uuid := gen_random_uuid(); -- blocks, retried still blocks
@@ -74,10 +75,12 @@ declare
   v_d_grace    uuid := gen_random_uuid(); -- grace expired -> falls through
   v_d_answered uuid := gen_random_uuid(); -- already answered -> never blocks
   v_d_weekly   uuid := gen_random_uuid(); -- pending weekly_quota commitment -> never blocks settle_day
+  v_d_newcheck uuid := gen_random_uuid(); -- brand-new Auto-check commitment -> never blocks an OLDER day
   c_dblock uuid; c_dlate uuid; c_dresolved uuid; c_dunavail uuid; c_dgrace uuid;
   c_danswered uuid; c_dweekly_wq uuid; c_dweekly_daily uuid;
+  c_dnewcheck_old uuid; c_dnewcheck_new uuid;
   d_block date; d_late date; d_resolved date; d_unavail date; d_grace date; d_answered date;
-  d_weekly date;
+  d_weekly date; d_newcheck date;
 
   -- Steps 6-9: settle_week.
   v_w_block    uuid := gen_random_uuid(); -- blocks the whole period, retried still blocks
@@ -121,8 +124,8 @@ begin
          now(), now(), now(),
          '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb
     from unnest(array[v_unit, v_d_block, v_d_late, v_d_resolved, v_d_unavail, v_d_grace,
-                       v_d_answered, v_d_weekly, v_w_block, v_w_grace, v_w_answered,
-                       v_live]) as t(id);
+                       v_d_answered, v_d_weekly, v_d_newcheck, v_w_block, v_w_grace,
+                       v_w_answered, v_live]) as t(id);
 
   -- -------------------------------------------------------------------------------
   -- 1. auto_check_pending() in isolation — the shared helper's own boundary logic,
@@ -135,16 +138,16 @@ begin
 
   day_b := v_today - 1;
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
-                                 auto_check_kind, auto_check_account_ref)
+                                 auto_check_kind, auto_check_account_ref, created_at)
   values (v_unit, gen_random_uuid(), 'Undeclared, unchecked', 'do', 'daily',
-          'account_elsewhere', 'handle-b')
+          'account_elsewhere', 'handle-b', v_today - 30)
   returning id into c_b;
 
   day_c := v_today - 1;
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
-                                 auto_check_kind, auto_check_account_ref)
+                                 auto_check_kind, auto_check_account_ref, created_at)
   values (v_unit, gen_random_uuid(), 'Already declared', 'do', 'daily',
-          'account_elsewhere', 'handle-c')
+          'account_elsewhere', 'handle-c', v_today - 30)
   returning id into c_c;
   insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
   values (v_unit, c_c, gen_random_uuid(), 'held',
@@ -153,31 +156,41 @@ begin
   day_d := v_today - 1;
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
                                  auto_check_kind, auto_check_account_ref,
-                                 auto_check_last_checked_at)
+                                 auto_check_last_checked_at, created_at)
   values (v_unit, gen_random_uuid(), 'Terminal for day_d', 'do', 'daily',
           'account_elsewhere', 'handle-d',
           -- checked_at's own HCM date is day_d + 1: (checked_at date - 1) = day_d,
           -- which is NOT < day_d -- exactly resolve_auto_checks's own "terminal" identity.
-          (day_d + 1)::timestamp at time zone 'Asia/Ho_Chi_Minh')
+          (day_d + 1)::timestamp at time zone 'Asia/Ho_Chi_Minh', v_today - 30)
   returning id into c_d;
 
   day_e := v_today - 2;
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
                                  auto_check_kind, auto_check_account_ref,
-                                 auto_check_last_checked_at)
+                                 auto_check_last_checked_at, created_at)
   values (v_unit, gen_random_uuid(), 'Checked for an earlier day only', 'do', 'daily',
           'account_elsewhere', 'handle-e',
           -- checked_at's own HCM date is day_e: (checked_at date - 1) = day_e - 1,
           -- which IS < day_e -- the pass has not reached day_e yet.
-          (day_e)::timestamp at time zone 'Asia/Ho_Chi_Minh')
+          (day_e)::timestamp at time zone 'Asia/Ho_Chi_Minh', v_today - 30)
   returning id into c_e;
 
   day_f := v_today - 10;
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
-                                 auto_check_kind, auto_check_account_ref)
+                                 auto_check_kind, auto_check_account_ref, created_at)
   values (v_unit, gen_random_uuid(), 'Grace expired, never checked', 'do', 'daily',
-          'account_elsewhere', 'handle-f')
+          'account_elsewhere', 'handle-f', v_today - 30)
   returning id into c_f;
+
+  -- day_g is well within its own 96h grace (only 2 days old) and never checked -- exactly
+  -- the shape that would read pending, EXCEPT the commitment itself does not exist yet on
+  -- day_g: created_at defaults to now() (today), strictly after day_g.
+  day_g := v_today - 2;
+  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
+                                 auto_check_kind, auto_check_account_ref)
+  values (v_unit, gen_random_uuid(), 'Created after the day in question', 'do', 'daily',
+          'account_elsewhere', 'handle-g')
+  returning id into c_g;
 
   v_pending := public.auto_check_pending(c_a, day_a);
   if v_pending then
@@ -223,10 +236,19 @@ begin
       'false regardless of check state, bounding the block instead of holding it forever.';
   end if;
 
+  v_pending := public.auto_check_pending(c_g, day_g);
+  if v_pending then
+    raise exception using message =
+      'auto_check_pending() read true for a commitment asked about a day BEFORE its own '
+      'created_at, even though that day is well within the 96-hour grace window that '
+      'would otherwise apply -- mirroring resolve_auto_checks'' own created_at guard '
+      '(20260824090000), a commitment can never be pending for a day it did not exist on.';
+  end if;
+
   raise notice using message =
     'Step 1 ok: auto_check_pending() reads false for no-Auto-check/already-declared/'
-    'terminal/grace-expired, and true for a genuinely undeclared, unresolved, '
-    'still-in-grace commitment.';
+    'terminal/grace-expired/created-after-the-day, and true for a genuinely undeclared, '
+    'unresolved, still-in-grace, already-existing commitment.';
 
   -- -------------------------------------------------------------------------------
   -- 2. settle_day: an unanswered, owed, Auto-check-linked Daily commitment blocks the
@@ -235,9 +257,10 @@ begin
   -- -------------------------------------------------------------------------------
   d_block := v_today - 1;
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
-                                 carries_penalty, auto_check_kind, auto_check_account_ref)
+                                 carries_penalty, auto_check_kind, auto_check_account_ref,
+                                 created_at)
   values (v_d_block, gen_random_uuid(), 'TryHackMe', 'do', 'daily', true,
-          'account_elsewhere', 'handle-block')
+          'account_elsewhere', 'handle-block', v_today - 30)
   returning id into c_dblock;
 
   perform public.settle_day(d_block, true);
@@ -267,9 +290,10 @@ begin
   -- genuinely load-bearing on the daily path, not merely redundant with the deadline.
   d_late := v_today - 4;
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
-                                 carries_penalty, auto_check_kind, auto_check_account_ref)
+                                 carries_penalty, auto_check_kind, auto_check_account_ref,
+                                 created_at)
   values (v_d_late, gen_random_uuid(), 'TryHackMe', 'do', 'daily', true,
-          'account_elsewhere', 'handle-late')
+          'account_elsewhere', 'handle-late', v_today - 30)
   returning id into c_dlate;
   update public.profile set morning_hour = 0 where id = v_d_late;
 
@@ -297,9 +321,10 @@ begin
   -- -------------------------------------------------------------------------------
   d_resolved := v_today - 1;
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
-                                 carries_penalty, auto_check_kind, auto_check_account_ref)
+                                 carries_penalty, auto_check_kind, auto_check_account_ref,
+                                 created_at)
   values (v_d_resolved, gen_random_uuid(), 'TryHackMe', 'do', 'daily', true,
-          'account_elsewhere', 'handle-resolved')
+          'account_elsewhere', 'handle-resolved', v_today - 30)
   returning id into c_dresolved;
 
   perform public.file_auto_check_result(c_dresolved, v_d_resolved, 'held');
@@ -337,9 +362,10 @@ begin
   -- -------------------------------------------------------------------------------
   d_grace := v_today - 10;
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
-                                 carries_penalty, auto_check_kind, auto_check_account_ref)
+                                 carries_penalty, auto_check_kind, auto_check_account_ref,
+                                 created_at)
   values (v_d_grace, gen_random_uuid(), 'TryHackMe', 'do', 'daily', true,
-          'account_elsewhere', 'handle-grace')
+          'account_elsewhere', 'handle-grace', v_today - 30)
   returning id into c_dgrace;
 
   perform public.settle_day(d_grace, true);
@@ -382,9 +408,10 @@ begin
   -- -------------------------------------------------------------------------------
   d_answered := v_today - 1;
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
-                                 carries_penalty, auto_check_kind, auto_check_account_ref)
+                                 carries_penalty, auto_check_kind, auto_check_account_ref,
+                                 created_at)
   values (v_d_answered, gen_random_uuid(), 'TryHackMe', 'do', 'daily', true,
-          'account_elsewhere', 'handle-answered')
+          'account_elsewhere', 'handle-answered', v_today - 30)
   returning id into c_danswered;
 
   insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
@@ -422,9 +449,10 @@ begin
   -- -------------------------------------------------------------------------------
   d_unavail := v_today - 4;
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
-                                 carries_penalty, auto_check_kind, auto_check_account_ref)
+                                 carries_penalty, auto_check_kind, auto_check_account_ref,
+                                 created_at)
   values (v_d_unavail, gen_random_uuid(), 'TryHackMe', 'do', 'daily', true,
-          'account_elsewhere', 'handle-unavail')
+          'account_elsewhere', 'handle-unavail', v_today - 30)
   returning id into c_dunavail;
   update public.profile set morning_hour = 0 where id = v_d_unavail;
 
@@ -499,9 +527,10 @@ begin
   -- -------------------------------------------------------------------------------
   d_weekly := v_today - 4;
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
-                                 carries_penalty, auto_check_kind, auto_check_account_ref)
+                                 carries_penalty, auto_check_kind, auto_check_account_ref,
+                                 created_at)
   values (v_d_weekly, gen_random_uuid(), 'TryHackMe', 'do', 'daily', true,
-          'account_elsewhere', 'handle-weekly-daily')
+          'account_elsewhere', 'handle-weekly-daily', v_today - 30)
   returning id into c_dweekly_daily;
   update public.profile set morning_hour = 0 where id = v_d_weekly;
   insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
@@ -510,9 +539,9 @@ begin
 
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
                                  carries_penalty, weekly_target, week_start_day,
-                                 auto_check_kind, auto_check_account_ref)
+                                 auto_check_kind, auto_check_account_ref, created_at)
   values (v_d_weekly, gen_random_uuid(), 'Gym', 'do', 'weekly_quota', true, 3, v_isodow,
-          'account_elsewhere', 'handle-weekly-wq')
+          'account_elsewhere', 'handle-weekly-wq', v_today - 30)
   returning id into c_dweekly_wq;
 
   perform public.settle_day(d_weekly, true);
@@ -542,6 +571,57 @@ begin
     'Step 5c ok: a pending Auto-check on a Weekly Quota commitment never blocks '
     'settle_day -- the day settles `expired` on schedule via the pre-existing deadline '
     'path, with no penalty, proving the AD-13 guard itself never saw the weekly-quota row.';
+
+  -- -------------------------------------------------------------------------------
+  -- 5d. settle_day: a brand-new, Auto-check-linked commitment never blocks an OLDER day it
+  --     did not exist on. commitments_owing() has no created_at filter, so without
+  --     auto_check_pending's own created_at guard (added in this same migration), the
+  --     account's genuinely-late, unrelated commitment for that older day would get
+  --     dragged into a 96-hour block purely because a second, brand-new commitment
+  --     happened to be created after it -- proven with `c_dnewcheck_old` still unanswered
+  --     and past its own deadline, exactly Step 2b's shape, but blocked now only by
+  --     `c_dnewcheck_new`, created today, with nothing to do with that older day at all.
+  -- -------------------------------------------------------------------------------
+  d_newcheck := v_today - 4;
+  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
+                                 carries_penalty)
+  values (v_d_newcheck, gen_random_uuid(), 'Older, unrelated, genuinely late', 'do', 'daily',
+          true)
+  returning id into c_dnewcheck_old;
+  update public.profile set morning_hour = 0 where id = v_d_newcheck;
+
+  -- Created "today" (default created_at), Auto-check attached, never checked -- well
+  -- within its own 96h grace window for d_newcheck, which is only 4 days old.
+  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
+                                 auto_check_kind, auto_check_account_ref)
+  values (v_d_newcheck, gen_random_uuid(), 'Just created, unrelated', 'do', 'daily',
+          'account_elsewhere', 'handle-newcheck')
+  returning id into c_dnewcheck_new;
+
+  perform public.settle_day(d_newcheck, true);
+
+  select verdict, missed_count into v_verdict, v_missed
+    from public.settlement
+   where subject = v_d_newcheck and period = d_newcheck and kind = 'day' and supersedes is null;
+  if v_verdict is distinct from 'expired' then
+    raise exception using message = format(
+      'A brand-new, Auto-check-linked commitment must never block settle_day for an older '
+      'day it did not exist on. The account''s older, unrelated, genuinely-late commitment '
+      'should have settled `expired` on schedule. Got `%s` (or no row: blocked by a '
+      'commitment that was never owed for this day at all).', v_verdict);
+  end if;
+  if v_missed <> 1 then
+    raise exception using message = format(
+      'The older commitment carries the penalty and stayed silent, so missed_count must '
+      'be 1, not %s -- the brand-new commitment (no penalty) must not be counted either.',
+      v_missed);
+  end if;
+
+  raise notice using message =
+    'Step 5d ok: a brand-new, Auto-check-linked commitment never blocks settle_day for an '
+    'older day it did not exist on -- auto_check_pending''s own created_at guard keeps it '
+    'out of a day it was never owed for, even though that day is well within its 96-hour '
+    'grace window.';
 
   -- -------------------------------------------------------------------------------
   -- 6. settle_week: a pending check on ANY SINGLE DAY inside [p_period, p_period+6] blocks
@@ -740,8 +820,9 @@ begin
     'retries change nothing; it unblocks the moment a check resolves, whether via a '
     'declaration or a bare stamp with nothing to declare, with no wait for grace; a '
     'grace-expired check falls through and settles exactly as if no Auto-check were '
-    'attached, on both paths; and a pending Weekly Quota check never blocks settle_day, '
-    'only settle_week.';
+    'attached, on both paths; a pending Weekly Quota check never blocks settle_day, only '
+    'settle_week; and a brand-new Auto-check commitment never blocks an older day it did '
+    'not exist on.';
 end $$;
 
 rollback;

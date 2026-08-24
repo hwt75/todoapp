@@ -37,6 +37,14 @@
 -- `declaration_derive_day` uses, 20260819200000:87-96), not from `now()` at
 -- guard-evaluation time, so it expires at a fixed point regardless of how many settlement
 -- passes retry in between.
+--
+-- `auto_check_pending` also carries its own `created_at <= p_day` guard, mirroring
+-- `resolve_auto_checks`'s own predates-the-day fix (20260824090000) — `commitments_owing()`
+-- (20260820140000) has no such filter, so without this a brand-new, Auto-check-linked
+-- commitment would read as pending for an OLDER day it never existed on, blocking that
+-- day's settlement (including unrelated, genuinely-late commitments) for up to 96 hours
+-- purely because it happened to be created recently. Found in code review, patched before
+-- this migration was ever applied to the live project.
 
 create function public.auto_check_pending(p_commitment_id uuid, p_day date)
 returns boolean
@@ -49,6 +57,7 @@ as $$
      where c.id = p_commitment_id
        and c.auto_check_kind is not null
        and c.archived_at is null
+       and (c.created_at at time zone 'Asia/Ho_Chi_Minh')::date <= p_day
        and not exists (
          select 1 from public.declaration d
           where d.commitment_id = c.id and d.for_day = p_day
@@ -60,13 +69,16 @@ as $$
 $$;
 
 comment on function public.auto_check_pending(uuid, date) is
-  'AD-13: true when p_commitment_id has an Auto-check attached, is not archived, is still '
-  'undeclared for p_day, that check has not reached a terminal result for p_day (the same '
-  'auto_check_last_checked_at day-boundary identity resolve_auto_checks computes for its '
-  'own target_day), and less than 96 hours have passed since p_day closed. Past the grace '
-  'window this reads false regardless of check state, bounding the settlement block '
-  'instead of leaving it indefinite. Self-contained on archived_at rather than relying on '
-  'callers to pre-filter it, unlike its other two callable-alone conditions which do need '
+  'AD-13: true when p_commitment_id has an Auto-check attached, is not archived, existed on '
+  'or before p_day (mirroring resolve_auto_checks own created_at guard, 20260824090000 — '
+  'commitments_owing() has no such filter, so a brand-new commitment could otherwise read '
+  'as pending for a day before it existed), is still undeclared for p_day, that check has '
+  'not reached a terminal result for p_day (the same auto_check_last_checked_at '
+  'day-boundary identity resolve_auto_checks computes for its own target_day), and less '
+  'than 96 hours have passed since p_day closed. Past the grace window this reads false '
+  'regardless of check state, bounding the settlement block instead of leaving it '
+  'indefinite. Self-contained on archived_at/created_at rather than relying on callers to '
+  'pre-filter them, unlike its other two callable-alone conditions which do need '
   'a p_day/commitment context only a caller has. Called only from settle_day/settle_week — '
   'never duplicated inline, never in application code.';
 
