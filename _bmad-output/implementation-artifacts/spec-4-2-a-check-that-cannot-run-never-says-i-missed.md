@@ -294,6 +294,13 @@ masking the actual behavior under test) rather than silently failing, which is e
 review caught it: `c_b`'s own direct boolean check failed first, before any settlement-level test
 did. Full suite (all 17 files, lint/tsc/format, `npm test`) re-confirmed green after the fix.
 
+Applied to the live project (`hxzalpnlrunctbajgtkv`) via the Supabase MCP server's
+`apply_migration`, with the round-3 `created_at` fix already folded in (this migration had not
+been applied live before the fix landed, so no follow-up migration was needed) — re-checked after:
+`auto_check_pending`/`settle_day`/`settle_week` all exist with the expected shape, and
+`get_advisors(type=security)` shows only the pre-existing, unrelated
+`auth_leaked_password_protection` warning.
+
 **Manual checks (if no CLI):** _None — pure backend/settlement change, no UI surface._
 
 ## Suggested Review Order
