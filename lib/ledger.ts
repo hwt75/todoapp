@@ -120,11 +120,14 @@ export function buildLedger(
       amountDong: penalty?.amount_dong ?? null,
       state: penalty?.state ?? null,
       missed: kind === 'day' ? (missedByDay.get(settlement.period) ?? []).slice().sort() : [],
-      // Only an `owed` Penalty is still contestable — one already `held`, `dropped` or
-      // otherwise resolved has nothing left for Contest to do, and a week row never
-      // carries an appeal at all (Weekly Quota is out of Story 4.4's scope).
+      // Only an `owed` Penalty on a `failed` day is still contestable — `appeal_hold_penalty()`
+      // requires the same `verdict = 'failed'` server-side (a day that closed on the clock,
+      // not on his word, is a different fact from an admitted slip and is never appealable,
+      // even when one of its frozen outcomes happens to read `missed`); one already `held`,
+      // `dropped` or otherwise resolved has nothing left for Contest to do; and a week row
+      // never carries an appeal at all (Weekly Quota is out of Story 4.4's scope).
       appealable:
-        kind === 'day' && penalty?.state === 'owed'
+        kind === 'day' && settlement.verdict === 'failed' && penalty?.state === 'owed'
           ? (appealableByDay.get(settlement.period) ?? [])
               .slice()
               .sort((a, b) => a.commitmentName.localeCompare(b.commitmentName))

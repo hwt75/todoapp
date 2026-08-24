@@ -242,7 +242,61 @@ transcript in this session's tool history.
   - **Deferred, deployment step, not a code change:** the `appeal-evidence` bucket is created from
     `supabase/config.toml` only on `supabase start`/`db reset` (local dev) — the live project needs
     it provisioned directly (dashboard or Management API) as part of applying this story's
-    migrations, tracked as a manual step below rather than a schema change.
+    migrations, tracked as a manual step below rather than a schema change. **Done**: provisioned
+    on the live project via `insert into storage.buckets` matching `config.toml` exactly (private,
+    10MiB, the same three MIME types) as part of this round's live deployment.
+
+- **2026-08-24, round 3 (standalone `/code-review`, 8 finder angles against the pushed commit,
+  after the story's migrations had already reached the live project):**
+  - **Fixed, critical (money-trust):** `appeal_hold_penalty()`'s eligibility lookup read the wrong
+    settlement in two compounding ways. First, it filtered `s.supersedes is null` to mean "the
+    current settlement," which only holds for a day never corrected by `supersede_expiries()` — for
+    a corrected day, the row that stands is the *correction* (`supersedes is not null`), not the
+    original the query actually matched. A day that closed `expired` on one commitment's silence
+    while another commitment's own machine-filed `missed` was already frozen, later corrected to
+    `failed` once the silent commitment's late-but-timely answer arrived, leaves two separate
+    Penalty rows — the original's (now historical) and the correction's (the only one
+    `penalty_current`/the Ledger ever read). An appeal filed after such a correction matched the
+    stale original and held *its* Penalty — not the live one — so the author would see "held" on the
+    Appeal screen while the Ledger kept naming the same money as owed, completely untouched. Second,
+    the query never checked `s.verdict` at all, so a day that closed `expired` (silence from a
+    *different* commitment) but still froze one machine-filed `missed` outcome could be appealed
+    server-side, even though `lib/ledger.ts`'s pill/aria-label logic has no branch that ever reflects
+    `held`/`dropped` for an `expired` verdict — the row would have stayed permanently mislabeled
+    "Expired ... owed X" regardless of what the appeal actually did. One fix closes both: the query
+    now reads the settlement that is genuinely current (mirroring `settlement_current`'s own
+    "nothing supersedes it" definition directly) and requires `verdict = 'failed'`. Shipped as a new
+    migration (`20260824150000_an_appeal_reads_the_day_that_stands.sql`) rather than editing
+    `20260824130000` in place, since that migration had already reached the live project by the time
+    this was found. `lib/ledger.ts`'s own `appealable` gate was narrowed to match in the same round,
+    so the client mirror and the trigger it mirrors agree on scope again. Found independently by two
+    of the eight finder angles (line-by-line and cross-file-tracer), and a third (removed-behavior)
+    independently found the downstream display symptom — triangulated confirmation before any fix
+    was written. Reproduced directly against the local stack before fixing (reverted the query,
+    confirmed the appeal silently held the wrong, disconnected penalty exactly as predicted, restored
+    it), and proven with a new regression test in both layers: `supabase/tests/4-4-...sql` Step 7
+    (a full expire-then-correct fixture, asserting the appeal's `penalty_id` matches
+    `penalty_current`'s row, not the historical one) and a new `lib/ledger.test.ts` case for the
+    `verdict = 'expired'` exclusion — both independently confirmed to fail against the reverted code
+    and pass with the fix restored.
+  - **Fixed:** `lib/appeal.ts`'s `formatDeadline()` hardcoded the literal `'Asia/Ho_Chi_Minh'`
+    instead of importing the shared `ZONE` constant `lib/declaration.ts` already exports and
+    `lib/expiry.ts` already reuses for the identical purpose — closed by importing it.
+  - **Deferred (7 findings, all recorded in `deferred-work.md` under "independent code-review of
+    commit bbcca81"):** `void_expired_appeals()`'s timeout guard isn't scoped to the appeal
+    currently holding a Penalty (unreachable until Story 4.6's ruling can move a Penalty
+    `held → owed`, which doesn't exist yet); `appeal_hold_penalty()` re-reads `carries_penalty`
+    live rather than from a frozen snapshot (no UI path to exploit it, and toggling could only ever
+    hurt the toggler); the `storage.objects` ownership check is duplicated across two policies
+    (only two call sites exist; revisit when a third, e.g. a referee's read, arrives); the evidence
+    filename sanitizer strips file extensions (no consumer reads them back yet); `lib/ledger.ts`'s
+    pill label/family and `components/ledger.tsx`'s aria-label independently re-derive the same
+    decision tree three times (a real duplication risk, but a deliberate refactor rather than a
+    late addition to this round); `components/appeal-form.tsx` builds the same held-state shape and
+    the same evidence-failure error at multiple call sites with no behavioral difference; and four
+    small efficiency notes (extra round trips in the trigger, an indexed-column cast in the storage
+    policies, an O(n²) array build in `buildLedger`) — all real but immaterial at this app's current
+    single-doer-per-account scale.
 
 ## Design Notes
 
@@ -357,3 +411,20 @@ coverage it doesn't have.
   `appealable[0]` unconditionally), confirmed the test failed with the expected diff, restored the
   real code, confirmed 749/749 passes again.
 - `npm run lint`, `npx tsc --noEmit`, `npm run format:check` -- clean.
+
+**Commands, round 3 (post-review fixes, standalone code-review), run 2026-08-24:**
+- `npx supabase db reset` -- clean, 40 migrations including the new
+  `20260824150000_an_appeal_reads_the_day_that_stands.sql`.
+- All 19 files under `supabase/tests/` -- **19/19 pass**, including a new Step 7 in
+  `4-4-...sql` (an expire-then-correct fixture proving an appeal against a corrected day holds
+  the CURRENT penalty, not a disconnected historical one). Proven to actually catch the bug:
+  reverted the fix, confirmed the appeal silently held the wrong penalty exactly as the finding
+  predicted, restored the fix, confirmed the test passes again.
+- `npm test` -- **753/753 pass** across 35 files (749 + 1 new `lib/ledger.test.ts` case for the
+  `verdict = 'expired'` exclusion, plus the `lib/appeal.ts` ZONE-import fix). The new test proven
+  to catch the bug the same way: reverted `lib/ledger.ts`'s `appealable` gate, confirmed the test
+  failed with the expected diff, restored the real code, confirmed 753/753 passes again.
+- `npm run lint`, `npx tsc --noEmit`, `npm run format:check` -- clean.
+- Live project (`hxzalpnlrunctbajgtkv`): `20260824150000` applied via `apply_migration`;
+  `get_advisors(type=security)` re-checked -- clean, only the known pre-existing
+  `auth_leaked_password_protection` warning.

@@ -306,6 +306,24 @@ describe('which misses can still be contested (Story 4.4)', () => {
     ]);
   });
 
+  it('never offers a miss on a day that closed `expired`, even with an owed, machine-filed Penalty', () => {
+    // A day can close `expired` on a different commitment's silence while still freezing
+    // one commitment's own machine-filed `missed` and creating an owed Penalty from it
+    // (`settle_day`'s "an expired day costs exactly what an admitted one costs"). Appeal
+    // exists to contest what the machine *said* on a day that closed on someone's word
+    // (`failed`) — never a day that closed on someone else's silence — matching the same
+    // `verdict = 'failed'` requirement `appeal_hold_penalty()` enforces server-side
+    // (`20260824150000_an_appeal_reads_the_day_that_stands.sql`). Offering Contest here
+    // would render a button the server is guaranteed to refuse.
+    const expiredDay: SettlementRecord = {
+      period: '2026-08-18',
+      verdict: 'expired',
+      missed_count: 1,
+    };
+    const row = buildLedger([expiredDay], [penalty], [machineFiled])[0];
+    expect(row.appealable).toEqual([]);
+  });
+
   it('never offers the author’s own honest slip — nothing to contest', () => {
     const row = buildLedger([failedDay], [penalty], [selfDeclared])[0];
     expect(row.appealable).toEqual([]);

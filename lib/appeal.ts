@@ -12,6 +12,7 @@
  */
 
 import { formatDong } from './money';
+import { ZONE } from './declaration';
 
 export interface AppealDraft {
   commitmentId: string;
@@ -91,7 +92,7 @@ export function holdStateCopy(amountDong: number, deadline: Date): string {
  *  date — never a time — never drops information the boundary actually carries. */
 export function formatDeadline(deadline: Date): string {
   return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Ho_Chi_Minh',
+    timeZone: ZONE,
     month: 'short',
     day: 'numeric',
   }).format(deadline);

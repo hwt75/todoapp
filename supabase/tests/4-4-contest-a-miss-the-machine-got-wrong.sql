@@ -58,6 +58,15 @@ declare
   v_user4     uuid := gen_random_uuid();
   v_c6        uuid;
 
+  -- Account 5: a day that closed `expired` (a different commitment's silence), later
+  -- corrected to `failed` by `supersede_expiries()` -- proving the eligibility lookup reads
+  -- the CURRENT settlement (the correction), not the original it superseded, and that the
+  -- Penalty it holds is the one `penalty_current`/the Ledger actually shows as owed, not a
+  -- disconnected historical row.
+  v_user5      uuid := gen_random_uuid();
+  v_c7         uuid; -- auto_check, carries_penalty -- machine-filed missed, appealed after correction
+  v_c8         uuid; -- plain, carries_penalty -- silent past deadline, then a timely-but-late answer
+
   v_day        date;
   v_settlement uuid;
   v_penalty1   uuid;
@@ -74,6 +83,18 @@ declare
   v_refused    boolean;
   v_message    text;
   v_voided     integer;
+
+  -- Account 5's own working variables.
+  v_day5          date;
+  v_deadline5     timestamptz;
+  v_answered7     timestamptz;
+  v_answered8     timestamptz;
+  v_original5     uuid;
+  v_correction5   uuid;
+  v_verdict5      public.day_verdict;
+  v_livepenalty5  uuid;
+  v_appeal5       uuid;
+  v_appeal5_pen   uuid;
 begin
   if exists (select 1 from public.profile where is_live_doer) then
     raise exception using message =
@@ -481,12 +502,141 @@ begin
     'Step 6 ok: appeal_evidence.storage_path must lead with its own appeal_id -- a '
     'mismatched path is refused, a correctly-scoped one is accepted.';
 
+  -- -------------------------------------------------------------------------------
+  -- 7. A day that closed `expired` (a different commitment's silence), corrected to
+  --    `failed` once the silent commitment's own timely-but-late answer arrives. The
+  --    eligibility lookup must read the CURRENT (correction) settlement, not the original
+  --    it superseded -- and the Penalty it holds must be the one `penalty_current` (and
+  --    therefore the Ledger) actually shows, not a disconnected historical row still
+  --    attached to the superseded original.
+  -- -------------------------------------------------------------------------------
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
+                          email_confirmed_at, created_at, updated_at,
+                          raw_app_meta_data, raw_user_meta_data)
+  values (v_user5, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+         'retro-4-4-' || v_user5::text || '@example.test',
+         'not-a-real-password-this-account-never-signs-in',
+         now(), now(), now(),
+         '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb);
+
+  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
+                                 carries_penalty, auto_check_kind, auto_check_account_ref)
+  values (v_user5, gen_random_uuid(), 'TryHackMe', 'do', 'daily', true,
+          'account_elsewhere', 'handle-c7')
+  returning id into v_c7;
+
+  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence, carries_penalty)
+  values (v_user5, gen_random_uuid(), 'Gym', 'do', 'daily', true)
+  returning id into v_c8;
+
+  -- Four days back, so the deadline (the morning hour on day+3) has already passed and the
+  -- day can genuinely expire -- mirrors `2-7-supersession.sql`'s own fixture exactly.
+  v_day5 := (now() at time zone 'Asia/Ho_Chi_Minh')::date - 4;
+  v_deadline5 := public.declaration_deadline(v_day5, 7);
+
+  if v_deadline5 >= now() then
+    raise exception using message = format(
+      'Fixture is wrong: the deadline %s has not passed at %s.', v_deadline5, now());
+  end if;
+
+  -- v_c7's machine-filed miss, inserted directly (not through file_auto_check_result,
+  -- which always stamps answered_at = now() and so could never derive for_day = v_day5) --
+  -- timely, and on record before settle_day's first pass over this day.
+  v_answered7 := ((v_day5 + 1)::timestamp + interval '6 hours') at time zone 'Asia/Ho_Chi_Minh';
+  insert into public.declaration
+    (owner_id, commitment_id, idempotency_key, answer, answered_at, filed_by)
+  values
+    (v_user5, v_c7, gen_random_uuid(), 'slipped', v_answered7, 'auto_check');
+
+  -- v_c8 stays silent. The day closes `expired` on the clock -- a different fact about him
+  -- from v_c7's admitted (machine-filed) slip, and the two must not be merged.
+  perform public.settle_day(v_day5, true);
+
+  select id, verdict into v_original5, v_verdict5
+    from public.settlement
+   where subject = v_user5 and period = v_day5 and kind = 'day' and supersedes is null;
+
+  if v_original5 is null or v_verdict5 <> 'expired' then
+    raise exception using message = format(
+      'Fixture setup failed: expected an `expired` settlement for account 5''s day, found '
+      '%s / %s.', v_original5, v_verdict5);
+  end if;
+
+  -- v_c8's own answer, given in time but delivered late (the offline-queue scenario
+  -- `supersede_expiries()` exists for) -- `held`, so it admits nothing of its own; v_c7
+  -- alone carries the correction's Penalty.
+  v_answered8 := ((v_day5 + 1)::timestamp + interval '7 hours 31 minutes')
+                 at time zone 'Asia/Ho_Chi_Minh';
+  if v_answered8 >= v_deadline5 then
+    raise exception using message = 'Fixture is wrong: v_c8''s answer is not inside the deadline.';
+  end if;
+
+  insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
+  values (v_user5, v_c8, gen_random_uuid(), 'held', v_answered8);
+
+  if public.supersede_expiries() <> 1 then
+    raise exception using message = 'supersede_expiries() did not correct account 5''s day.';
+  end if;
+
+  select id, verdict into v_correction5, v_verdict5
+    from public.settlement where supersedes = v_original5;
+
+  if v_correction5 is null or v_verdict5 <> 'failed' then
+    raise exception using message = format(
+      'Fixture setup failed: expected a `failed` correction for account 5''s day, found '
+      '%s / %s.', v_correction5, v_verdict5);
+  end if;
+
+  select id into v_livepenalty5 from public.penalty_current where subject = v_user5;
+  if v_livepenalty5 is null then
+    raise exception using message = 'Fixture setup failed: no live penalty for account 5.';
+  end if;
+
+  raise notice using message =
+    'Fixture ok: account 5''s day closed `expired` on a different commitment''s silence, '
+    'then corrected to `failed` once that answer turned out to be timely -- two penalty '
+    'rows now exist, only one of them live.';
+
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', v_user5, 'role', 'authenticated', 'app_role', 'doer')::text, true);
+
+  insert into public.appeal (owner_id, commitment_id, idempotency_key, for_day)
+  values (v_user5, v_c7, gen_random_uuid(), v_day5)
+  returning id, penalty_id into v_appeal5, v_appeal5_pen;
+
+  perform set_config('role', 'postgres', true);
+
+  if v_appeal5_pen <> v_livepenalty5 then
+    raise exception using message = format(
+      'The appeal held penalty %s, but %s is the one penalty_current (and therefore the '
+      'Ledger) actually reads as owed for this day. The eligibility lookup read the '
+      'superseded original''s settlement rather than the correction that stands.',
+      v_appeal5_pen, v_livepenalty5);
+  end if;
+
+  select state into v_state from public.penalty_current where subject = v_user5;
+  if v_state <> 'held' then
+    raise exception using message = format(
+      'The Penalty the Ledger actually displays for account 5''s day still reads `%s` after '
+      'a successful-looking appeal -- the money the author sees as owed never moved.',
+      v_state);
+  end if;
+
+  raise notice using message =
+    'Step 7 ok: an appeal against a machine-filed miss on a day that was corrected from '
+    '`expired` to `failed` holds the CURRENT (correction) Penalty -- the one penalty_current '
+    'and the Ledger actually show -- not a disconnected historical row left on the '
+    'superseded original.';
+
   raise notice using message =
     'PASS. An eligible appeal holds the Penalty atomically; a self-declared slip and a '
     'second claim on an already-held Penalty are both refused with nothing changed; a '
     'duplicate appeal is refused by the unique constraint itself; the timeout path '
     'voids to dropped, idempotently, and is a no-op from either direction of the AD-15 '
-    'race; and evidence metadata cannot be pointed outside its own appeal.';
+    'race; evidence metadata cannot be pointed outside its own appeal; and an appeal '
+    'against a corrected day holds the Penalty that actually stands, not the one it '
+    'superseded.';
 end $$;
 
 rollback;
