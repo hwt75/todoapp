@@ -248,6 +248,13 @@ column gap — already deferred from Story 4.1 — is now also what this story's
 to work around in prose) were investigated and recorded in `deferred-work.md` rather than
 expanding this story's scope further.
 
+Applied to the live project (`hxzalpnlrunctbajgtkv`) via the Supabase MCP server's
+`apply_migration`, with the round-3 client-side fixes included in the same push (the migration
+itself was unchanged by round 3 — those fixes were TypeScript-only) — re-checked after:
+`file_auto_check_result` exists with the expected `missed`/`held` branches, and
+`get_advisors(type=security)` shows only the pre-existing, unrelated
+`auth_leaked_password_protection` warning.
+
 **Manual checks (if no CLI):** _None — the conflict path is timing-dependent (a machine result
 landing between the gate's load and the author's tap) and only exercisable in the local suite via
 a mocked/seeded conflict, not by hand._
