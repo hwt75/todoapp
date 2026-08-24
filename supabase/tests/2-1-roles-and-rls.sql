@@ -224,7 +224,8 @@ begin
     'public.enqueue_gate_reminders()',
     'public.resolve_account_elsewhere(uuid)',
     'public.file_auto_check_result(uuid, uuid, public.auto_check_result)',
-    'public.resolve_auto_checks()'
+    'public.resolve_auto_checks()',
+    'public.auto_check_pending(uuid, date)'
   ]
   loop
     foreach r in array array['anon', 'authenticated'] loop
