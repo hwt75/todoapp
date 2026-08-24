@@ -19,9 +19,17 @@ import type { OwedCommitment } from '@/lib/declaration';
  */
 
 const insert = vi.fn();
+const maybeSingle = vi.fn();
 
 vi.mock('@/lib/supabase/client', () => ({
-  createClient: () => ({ from: () => ({ insert }) }),
+  createClient: () => ({
+    from: () => ({
+      insert,
+      // The follow-up read Story 4.3 adds after a 23505: whose idempotency_key actually
+      // won the day, `declaration: read own`'s own shape (`select(...).eq(...).eq(...)`).
+      select: () => ({ eq: () => ({ eq: () => ({ maybeSingle }) }) }),
+    }),
+  }),
 }));
 
 const gym: OwedCommitment = { id: 'c1', name: 'Gym', cadence: 'daily' };
@@ -39,6 +47,8 @@ let user: ReturnType<typeof userEvent.setup>;
 beforeEach(() => {
   insert.mockReset();
   insert.mockResolvedValue({ error: null });
+  maybeSingle.mockReset();
+  maybeSingle.mockResolvedValue({ data: null, error: null });
   window.localStorage.clear();
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(morning);
@@ -146,6 +156,68 @@ describe('the morning gate', () => {
 
     expect(await screen.findByText(/Failed\./)).toBeInTheDocument();
     expect(onAnswered).not.toHaveBeenCalled();
+  });
+
+  it('lets him past when a 23505 turns out to be his own retry', async () => {
+    // The finding this closes half of: a bare 23505 used to mean "my own answer, arrived
+    // out of order" unconditionally. It still does when the row that won really is his own
+    // — confirmed here by asking, not assumed from the error code alone (Story 4.3).
+    insert.mockResolvedValue({ error: { code: '23505', message: 'duplicate key' } });
+    // The follow-up select reads back whatever key actually won — here, made to match
+    // whatever key this very attempt happens to send, generated only once the tap fires.
+    maybeSingle.mockImplementation(() =>
+      Promise.resolve({
+        data: { idempotency_key: insert.mock.calls[0]?.[0]?.idempotency_key ?? null },
+        error: null,
+      }),
+    );
+    const onAnswered = vi.fn();
+    render(<MorningGate ownerId="u1" owing={[gym]} now={morning} onAnswered={onAnswered} />);
+
+    await user.click(screen.getByRole('button', { name: 'It held' }));
+
+    expect(onAnswered).toHaveBeenCalledWith('c1');
+    expect(screen.queryByText(/Failed\./)).not.toBeInTheDocument();
+  });
+
+  it('does not let him past when a 23505 is someone else already deciding the day', async () => {
+    // FR-2a's gap: a Penalty-carrying commitment's Auto-check filed the day first. The tap
+    // must not look like it succeeded, and the message must say something distinct from a
+    // generic server refusal. Copy names both possible causes — an Auto-check, or the same
+    // author from a second device — because classifyConflict cannot tell them apart
+    // (`declaration` carries nothing that marks a row machine- vs. human-filed).
+    insert.mockResolvedValue({ error: { code: '23505', message: 'duplicate key' } });
+    maybeSingle.mockResolvedValue({
+      data: { idempotency_key: 'someone-elses-key' },
+      error: null,
+    });
+    const onAnswered = vi.fn();
+    render(<MorningGate ownerId="u1" owing={[gym]} now={morning} onAnswered={onAnswered} />);
+
+    await user.click(screen.getByRole('button', { name: 'It held' }));
+
+    expect(await screen.findByText(/already been answered/)).toBeInTheDocument();
+    expect(onAnswered).not.toHaveBeenCalled();
+  });
+
+  it('keeps the answer queued rather than reporting a conflict when the follow-up read fails', async () => {
+    // The read that disambiguates "my own retry" from "someone else's row" can itself fail
+    // — the same flaky connection that produced the retry in the first place. A failed read
+    // must never be reported as a conflict: that would discard a real, honest answer and
+    // tell him something false decided the day. Kept queued and retried later, same as any
+    // other unreachable write (line ~141's own "Saved on this device" case) — he is still
+    // trusted to have answered; only delivery is pending.
+    insert.mockResolvedValue({ error: { code: '23505', message: 'duplicate key' } });
+    maybeSingle.mockResolvedValue({ data: null, error: { message: 'network error' } });
+    const onAnswered = vi.fn();
+    render(<MorningGate ownerId="u1" owing={[gym]} now={morning} onAnswered={onAnswered} />);
+
+    await user.click(screen.getByRole('button', { name: 'It held' }));
+
+    expect(await screen.findByText(/Saved on this device/)).toBeInTheDocument();
+    expect(screen.queryByText(/already been answered/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Failed\./)).not.toBeInTheDocument();
+    expect(onAnswered).toHaveBeenCalledWith('c1');
   });
 
   it('refuses to file an answer against a day it was not asked about', async () => {

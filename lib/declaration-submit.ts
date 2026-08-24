@@ -47,6 +47,35 @@ export function shouldRetry(outcome: WriteOutcome): boolean {
 }
 
 /**
+ * What a `23505` on `declaration` actually means: my own retry, or someone else's answer.
+ *
+ * `classifyWriteError` calls every unique-violation `'duplicate'` — "my own answer,
+ * arrived out of order" — which is only true when the row that won the race carries the
+ * *same* idempotency key as the attempt that just failed. FR-2a changes what else can
+ * win that race: once a Penalty-carrying commitment's Auto-check has filed a `slipped`
+ * declaration for a day, the author's own contradicting tap hits the exact same
+ * `23505` — but it is not his own answer arriving late, it is the machine's answer
+ * standing. Postgres's error carries the violated constraint, not the winning row's key,
+ * so the only way to tell these apart is to ask what that row actually is.
+ *
+ * A `'conflict'` only proves the winning row wasn't filed by *this* attempt — never who
+ * actually filed it. It could be an Auto-check, or the same author answering from a
+ * second device; `declaration` carries nothing that tells the two apart (a recorded,
+ * deferred gap — see `deferred-work.md`). Callers must not word a `'conflict'` as
+ * Auto-check-specific.
+ *
+ * The caller is responsible for only calling this once the read that produced
+ * `existingIdempotencyKey` is known to have succeeded — a `null` here must mean "no row",
+ * never "the read failed," or a transient read failure reads as a permanent conflict.
+ */
+export function classifyConflict(
+  existingIdempotencyKey: string | null,
+  attemptedIdempotencyKey: string,
+): 'duplicate' | 'conflict' {
+  return existingIdempotencyKey === attemptedIdempotencyKey ? 'duplicate' : 'conflict';
+}
+
+/**
  * Whether the local day turned over between the question being drawn and answered.
  *
  * The gate renders the day from the instant the screen loaded; the database derives it

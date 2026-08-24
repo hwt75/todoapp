@@ -171,6 +171,44 @@ describe('the commitment form', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
+  it('discloses the machine-stands rule only once both the Penalty and an Auto-check are on', async () => {
+    // FR-2a's disclosure has to be seen at setup time, before it ever costs money — not
+    // discovered the day it first matters. Guarded by exactly the same "both toggles" that
+    // decides whether FR-2a can even apply, no more and no less.
+    render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    const disclosure = /the Auto-check's result will stand once it reports a miss/;
+
+    // Neither toggle on.
+    expect(screen.queryByText(disclosure)).not.toBeInTheDocument();
+
+    // Penalty on, no Auto-check yet.
+    await userEvent.click(screen.getByLabelText(/Missing this costs money/));
+    expect(screen.queryByText(disclosure)).not.toBeInTheDocument();
+
+    // Both on.
+    await userEvent.click(screen.getByLabelText('Account elsewhere'));
+    expect(screen.getByText(disclosure)).toBeInTheDocument();
+
+    // Auto-check back off, Penalty still on: gone again.
+    await userEvent.click(screen.getByLabelText('Account elsewhere'));
+    expect(screen.queryByText(disclosure)).not.toBeInTheDocument();
+  });
+
+  it('never discloses the machine-stands rule on a commitment nothing can check', async () => {
+    // An abstain commitment can carry a Penalty but never an Auto-check (no sensor for a
+    // thing not done) -- checksPossible being false must suppress the disclosure even with
+    // carriesPenalty on, the same guard commitment-form.tsx itself uses.
+    render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.click(screen.getByLabelText(/Missing this costs money/));
+    await userEvent.selectOptions(screen.getByLabelText('Kind'), 'abstain');
+
+    expect(
+      screen.queryByText(/the Auto-check's result will stand once it reports a miss/),
+    ).not.toBeInTheDocument();
+  });
+
   it('never deletes on the first tap, and says the history stays', async () => {
     const onDelete = vi.fn();
     render(

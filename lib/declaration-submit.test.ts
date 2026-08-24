@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { classifyWriteError, dayRolledOver, shouldRetry } from './declaration-submit';
+import {
+  classifyConflict,
+  classifyWriteError,
+  dayRolledOver,
+  shouldRetry,
+} from './declaration-submit';
 
 /** Ho Chi Minh City is UTC+7 all year. */
 function hcm(day: string, hour: number, minute = 0): Date {
@@ -88,5 +93,26 @@ describe('the day turning over between question and answer', () => {
     const justAfterLocalMidnight = hcm('2026-08-20', 0, 30);
     expect(justAfterLocalMidnight.toISOString().slice(0, 10)).toBe('2026-08-19');
     expect(dayRolledOver('2026-08-18', justAfterLocalMidnight)).toBe(true);
+  });
+});
+
+describe('what a 23505 on declaration actually means (FR-2a)', () => {
+  it('is my own retry when the existing row carries the same idempotency key', () => {
+    expect(classifyConflict('key-1', 'key-1')).toBe('duplicate');
+  });
+
+  it('is a conflict when the existing row carries a different key', () => {
+    // Not my own answer arriving late — something else, on this day, already decided it.
+    // Story 4.3's own shape: a Penalty-carrying commitment's Auto-check filed `slipped`
+    // first, and this attempt is the author's own, honest, contradicting tap.
+    expect(classifyConflict('machine-key', 'my-key')).toBe('conflict');
+  });
+
+  it('reads a null existing key as a conflict, the safe default', () => {
+    // Not reachable today — declaration has no delete policy, so a row that won a unique
+    // violation cannot vanish before the follow-up select reads it back. If that ever
+    // changed, treating "can't tell" as "assume the worst" is the direction that cannot
+    // silently let a wrong answer through.
+    expect(classifyConflict(null, 'my-key')).toBe('conflict');
   });
 });

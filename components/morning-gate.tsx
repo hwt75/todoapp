@@ -4,7 +4,12 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { dayInQuestion, questionFor, type OwedCommitment } from '@/lib/declaration';
 import { enqueue, flush, removeFromQueue, type QueuedDeclaration } from '@/lib/offline-queue';
-import { classifyWriteError, dayRolledOver, shouldRetry } from '@/lib/declaration-submit';
+import {
+  classifyConflict,
+  classifyWriteError,
+  dayRolledOver,
+  shouldRetry,
+} from '@/lib/declaration-submit';
 
 type Sending =
   { kind: 'idle' } | { kind: 'sending' } | { kind: 'queued' } | { kind: 'failed'; reason: string };
@@ -97,6 +102,48 @@ export function MorningGate({
         });
 
         const result = classifyWriteError(error);
+
+        // A 23505 alone doesn't say whether this is my own answer arriving out of order or
+        // someone else's already sitting there — Postgres's error carries the violated
+        // constraint, not the winning row's key. FR-2a changes what else can win that race:
+        // once a Penalty-carrying commitment's Auto-check has filed the day, a contradicting
+        // tap here must not look like it succeeded (Story 4.3).
+        if (result === 'duplicate') {
+          const { data: existing, error: readError } = await createClient()
+            .from('declaration')
+            .select('idempotency_key')
+            .eq('commitment_id', pending.commitmentId)
+            .eq('for_day', day)
+            .maybeSingle();
+
+          // The read that tells "my own retry" apart from "someone else's row" can itself
+          // fail — the same flaky connection that produced this retry in the first place.
+          // Treat that like any other unreachable write: stay queued, try again later.
+          // Never report a conflict on a read that did not actually complete.
+          if (readError) return 'failed';
+
+          const conflict = classifyConflict(
+            existing?.idempotency_key ?? null,
+            pending.idempotencyKey,
+          );
+
+          if (conflict === 'conflict') {
+            if (pending.idempotencyKey === queued.idempotencyKey) {
+              // Not "an Auto-check" specifically: `classifyConflict` only proves the row
+              // wasn't filed by this attempt, never who actually filed it — it could just
+              // as well be the same author answering from a second device.
+              rejection =
+                'This day has already been answered — from another device, or by an ' +
+                'Auto-check if one is attached — before this reached the server. Reopen ' +
+                "the app and it will be gone from today's questions.";
+            }
+            // Retrying changes nothing — this row will never accept it. Leaving it queued
+            // would retry forever against a day that is already, and permanently, decided.
+            removeFromQueue(window.localStorage, pending.idempotencyKey);
+          }
+
+          return 'sent';
+        }
 
         // A refusal is permanent. Keeping it queued would retry forever against a rule that
         // will never accept it, while the author is told it is safely saved.

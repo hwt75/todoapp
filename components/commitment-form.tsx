@@ -232,6 +232,13 @@ export function CommitmentForm({
         ))}
       </p>
 
+      {draft.carriesPenalty && checksPossible && draft.autoCheckEnabled && (
+        <p className="row-muted">
+          Because this costs money and has an Auto-check attached, the Auto-check&apos;s result will
+          stand once it reports a miss — you won&apos;t be able to correct it yourself.
+        </p>
+      )}
+
       {problems.length > 0 && (
         <ul className="row-muted">
           {problems.map((problem) => (

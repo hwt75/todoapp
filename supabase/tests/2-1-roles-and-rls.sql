@@ -194,6 +194,56 @@ begin
   end if;
 
   raise notice using message = 'Step 5 ok: a cross-account write is refused.';
+
+  -- -------------------------------------------------------------------------------
+  -- 5b. `declaration: read own` covers a machine-filed row exactly like a human-typed
+  --     one — nothing distinguishes them at the RLS layer, which is exactly the layer
+  --     `morning-gate.tsx`'s FR-2a conflict check (Story 4.3) depends on to read back
+  --     whichever row won a 23505 race. Filed here via file_auto_check_result() itself
+  --     (not a hand-built insert), so this proves the same path the app actually takes.
+  -- -------------------------------------------------------------------------------
+  declare
+    v_c uuid;
+    v_key uuid;
+  begin
+    insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
+                                   carries_penalty, auto_check_kind, auto_check_account_ref)
+    values (v_a, gen_random_uuid(), 'TryHackMe', 'do', 'daily', true,
+            'account_elsewhere', 'handle-rls')
+    returning id into v_c;
+
+    perform public.file_auto_check_result(v_c, v_a, 'missed');
+
+    perform set_config('role', 'authenticated', true);
+    perform set_config('request.jwt.claims',
+      json_build_object('sub', v_a, 'role', 'authenticated', 'app_role', 'doer')::text, true);
+
+    select idempotency_key into v_key from public.declaration where commitment_id = v_c;
+
+    if v_key is null then
+      perform set_config('role', 'postgres', true);
+      raise exception using message =
+        'The owning account could not read back a machine-filed declaration through '
+        '`declaration: read own` -- the exact read morning-gate.tsx''s conflict check '
+        '(Story 4.3) depends on to tell its own retry from someone else''s row.';
+    end if;
+
+    perform set_config('request.jwt.claims',
+      json_build_object('sub', v_b, 'role', 'authenticated', 'app_role', 'doer')::text, true);
+
+    select count(*) into v_count from public.declaration where commitment_id = v_c;
+    perform set_config('role', 'postgres', true);
+
+    if v_count <> 0 then
+      raise exception using message = format(
+        'A different account read %s row(s) of another account''s declaration -- '
+        '`declaration: read own` leaked a machine-filed row across accounts.', v_count);
+    end if;
+  end;
+
+  raise notice using message =
+    'Step 5b ok: the owning account reads a machine-filed declaration through '
+    '`declaration: read own` exactly like its own; a different account sees nothing.';
 end $$;
 
 -- ---------------------------------------------------------------------------------
