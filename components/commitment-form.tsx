@@ -60,6 +60,7 @@ export function CommitmentForm({
   const problems = draftProblems(draft);
   const targets = requiredTargets(draft.cadence);
   const checksPossible = autoChecksPossible(draft.kind);
+  const autoCheckActive = checksPossible && draft.autoCheckEnabled;
 
   function set<K extends keyof CommitmentDraft>(key: K, value: CommitmentDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -205,7 +206,7 @@ export function CommitmentForm({
           Account elsewhere
         </label>
 
-        {checksPossible && draft.autoCheckEnabled && (
+        {autoCheckActive && (
           <>
             <label htmlFor="commitment-auto-check-ref">Account</label>
             <input
@@ -232,7 +233,7 @@ export function CommitmentForm({
         ))}
       </p>
 
-      {draft.carriesPenalty && checksPossible && draft.autoCheckEnabled && (
+      {draft.carriesPenalty && autoCheckActive && (
         <p className="row-muted">
           Because this costs money and has an Auto-check attached, the Auto-check&apos;s result will
           stand once it reports a miss — you won&apos;t be able to correct it yourself.

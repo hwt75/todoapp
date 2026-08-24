@@ -109,11 +109,15 @@ export function MorningGate({
         // once a Penalty-carrying commitment's Auto-check has filed the day, a contradicting
         // tap here must not look like it succeeded (Story 4.3).
         if (result === 'duplicate') {
+          // `flush` walks every item still in the queue, not only the one just tapped — a
+          // stale item from an earlier offline session carries its own day, which need not
+          // be today's. Derived from `pending.answeredAt` itself (the same instant its own
+          // insert above already used), not the single `day` this render started with.
           const { data: existing, error: readError } = await createClient()
             .from('declaration')
             .select('idempotency_key')
             .eq('commitment_id', pending.commitmentId)
-            .eq('for_day', day)
+            .eq('for_day', dayInQuestion(new Date(pending.answeredAt)))
             .maybeSingle();
 
           // The read that tells "my own retry" apart from "someone else's row" can itself

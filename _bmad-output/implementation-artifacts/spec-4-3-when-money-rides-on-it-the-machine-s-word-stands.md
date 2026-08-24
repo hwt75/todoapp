@@ -229,6 +229,25 @@ proving the RLS policy this whole mechanism depends on (`declaration: read own`)
 the owning account read a machine-filed row and blocks a different account, exercised as
 `authenticated`, not assumed or run only as `postgres`.
 
+**Note on round 3 (independent `code-review`, post-push against commit `a6c92f9`):** 3
+correctness angles (line-by-line, removed-behavior, cross-file) found nothing survive
+verification. One simplification finding landed: the disclosure's guard re-spelled
+`checksPossible && draft.autoCheckEnabled`, already used to gate the account-ref input a few
+lines above — extracted to one `autoCheckActive` constant, reused at both sites. A second,
+independently-raised-but-investigated candidate (the follow-up conflict select using the
+component's single render-time `day` rather than each queued item's own actual day) was traced
+end-to-end and **REFUTED as an observable bug** — the callback always returns `'sent'` on this
+path regardless of the classification, and `flush()`'s own outer loop removes any `'sent'` item
+from the queue unconditionally, so the imprecision changes nothing today. Fixed anyway (cheap,
+removes a latent fragility that would only bite if that redundant removal were ever "cleaned
+up") — the select now derives the day from `pending.answeredAt` itself, the same instant its own
+`insert` already uses, instead of the outer closure. Three architectural observations (an RPC
+would make conflict-detection atomic instead of insert-then-select; the extra round-trip costs a
+little latency on every legitimate retry, not only genuine conflicts; the machine/human marker
+column gap — already deferred from Story 4.1 — is now also what this story's conflict copy has
+to work around in prose) were investigated and recorded in `deferred-work.md` rather than
+expanding this story's scope further.
+
 **Manual checks (if no CLI):** _None — the conflict path is timing-dependent (a machine result
 landing between the gate's load and the author's tap) and only exercisable in the local suite via
 a mocked/seeded conflict, not by hand._
