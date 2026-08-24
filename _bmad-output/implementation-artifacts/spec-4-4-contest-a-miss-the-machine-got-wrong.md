@@ -2,7 +2,7 @@
 title: 'Story 4.4 — Contest a miss the machine got wrong'
 type: 'feature'
 created: '2026-08-24'
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 0
 baseline_commit: '906d6ae4ba00ae6de32b38e0b41b814ddbe506db'
 story_key: '4-4-contest-a-miss-the-machine-got-wrong'
@@ -428,3 +428,43 @@ coverage it doesn't have.
 - Live project (`hxzalpnlrunctbajgtkv`): `20260824150000` applied via `apply_migration`;
   `get_advisors(type=security)` re-checked -- clean, only the known pre-existing
   `auth_leaked_password_protection` warning.
+
+## Suggested Review Order
+
+**Why `declaration.filed_by` had to be unforgeable (DB)**
+
+- The exploit it closes, and the fix: a client insert cannot override the trigger's own
+  `filed_by := 'doer'`.
+  [`20260824120000...sql:50`](../../supabase/migrations/20260824120000_a_slip_the_machine_filed_is_not_a_slip_he_typed.sql#L50)
+
+**The eligibility trigger, and the settlement it has to read correctly (DB)**
+
+- Entry point: `appeal_hold_penalty` — ownership, the machine-filed check, and the atomic hold.
+  [`20260824130000...sql:130`](../../supabase/migrations/20260824130000_contest_a_miss_the_machine_got_wrong.sql#L130)
+
+- The round-3 fix: reads the *current* settlement (not one `supersede_expiries()` superseded)
+  and requires `verdict = 'failed'`.
+  [`20260824150000...sql:39`](../../supabase/migrations/20260824150000_an_appeal_reads_the_day_that_stands.sql#L39)
+
+- The timeout-favors-the-author path, and the AD-15 guard it shares with every other terminal
+  transition in this schema.
+  [`20260824140000...sql:14`](../../supabase/migrations/20260824140000_void_expired_appeals.sql#L14)
+
+**The client mirror, and where it has to agree with the trigger (lib + UI)**
+
+- `appealable`'s own eligibility gate — `verdict = 'failed'` and `state = 'owed'`, mirroring the
+  trigger exactly.
+  [`ledger.ts:126`](../../lib/ledger.ts#L126)
+
+- The Contest affordance, one button per appealable miss on a Failed Day.
+  [`ledger.tsx:168`](../../components/ledger.tsx#L168)
+
+- `AppealForm` — submission, the 23505 own-retry/second-appeal split, and the optional
+  evidence upload as a separate step after the hold.
+  [`appeal-form.tsx:1`](../../components/appeal-form.tsx#L1)
+
+**Verification**
+
+- The regression test proving the round-3 fix: an expire-then-correct fixture, asserting the
+  appeal holds the *live* penalty, not a disconnected historical one.
+  [`4-4-...sql:465`](../../supabase/tests/4-4-contest-a-miss-the-machine-got-wrong.sql#L465)
