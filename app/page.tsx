@@ -6,10 +6,11 @@ import { MorningGate } from '@/components/morning-gate';
 import { PushProbe } from '@/components/push-probe';
 import { SignIn } from '@/components/sign-in';
 import { Today } from '@/components/today';
-import { Ledger } from '@/components/ledger';
+import { Ledger, type AppealTarget } from '@/components/ledger';
 import { Settings } from '@/components/settings';
 import { ChainsDetail } from '@/components/chains-detail';
 import { FocusSession } from '@/components/focus-session';
+import { AppealForm } from '@/components/appeal-form';
 import { readInstallSignals, resolveInstallState, type InstallState } from '@/lib/install-state';
 import { useGate } from '@/lib/use-gate';
 
@@ -21,6 +22,7 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const [chainOf, setChainOf] = useState<{ id: string; name: string } | null>(null);
   const [focusOf, setFocusOf] = useState<{ id: string; name: string } | null>(null);
+  const [appealOf, setAppealOf] = useState<AppealTarget | null>(null);
 
   useEffect(() => {
     try {
@@ -74,8 +76,17 @@ export default function Home() {
             name={chainOf.name}
             onClose={() => setChainOf(null)}
           />
+        ) : appealOf ? (
+          <AppealForm
+            ownerId={ownerId}
+            commitmentId={appealOf.commitmentId}
+            commitmentName={appealOf.commitmentName}
+            forDay={appealOf.forDay}
+            amountDong={appealOf.amountDong}
+            onClose={() => setAppealOf(null)}
+          />
         ) : showLedger ? (
-          <Ledger onClose={() => setShowLedger(false)} />
+          <Ledger onClose={() => setShowLedger(false)} onOpenAppeal={setAppealOf} />
         ) : showSettings ? (
           <Settings
             ownerId={ownerId}

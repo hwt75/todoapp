@@ -16,7 +16,10 @@
 import { PENALTY_DONG, totalOwed } from './money';
 
 export type DayVerdict = 'clean' | 'failed' | 'expired';
-export type PenaltyState = 'owed';
+/** `held` and `dropped` arrive with Story 4.4 (Appeal): a machine-filed miss under appeal
+ *  moves its Penalty to `held`, and one whose deadline passed with no ruling to `dropped`
+ *  — never back to `owed` on its own. `collected` (4.7) and `waived` (5.1) are still ahead. */
+export type PenaltyState = 'owed' | 'held' | 'dropped';
 export type LedgerKind = 'day' | 'week';
 
 /** The rows as they come back from the database, before folding. Shared shape for a day's
@@ -39,6 +42,17 @@ export interface PenaltyRecord {
 export interface MissRecord {
   for_day: string;
   commitment_name: string;
+  /** Story 4.4: which commitment this is, and who filed the day's `slipped` declaration for
+   *  it — the exact two facts `appeal_hold_penalty()`'s own trigger checks server-side.
+   *  Both optional so every pre-4.4 caller (and fixture) that never selected these columns
+   *  keeps compiling and simply never offers Contest. */
+  commitment_id?: string;
+  filed_by?: 'doer' | 'auto_check';
+}
+
+export interface AppealableMiss {
+  commitmentId: string;
+  commitmentName: string;
 }
 
 export interface LedgerRow {
@@ -51,6 +65,12 @@ export interface LedgerRow {
   /** Names of the penalty-carrying commitments that were missed. Always empty on a week
    *  row — Week Close freezes no per-commitment outcome (3.4's own "Never"). */
   missed: string[];
+  /** Which of this day's misses can still be contested: machine-filed (`filed_by ===
+   *  'auto_check'`) and the day's Penalty is still `owed` — the same two conditions
+   *  `appeal_hold_penalty()` enforces server-side, mirrored here only to decide whether the
+   *  Contest affordance renders at all. Always empty on a week row (no appeal exists for
+   *  Weekly Quota) and once the Penalty has moved off `owed`. */
+  appealable: AppealableMiss[];
 }
 
 /**
@@ -80,8 +100,15 @@ export function buildLedger(
   for (const p of weekPenalties) penaltyByKey.set(`week:${p.period}`, p);
 
   const missedByDay = new Map<string, string[]>();
+  const appealableByDay = new Map<string, AppealableMiss[]>();
   for (const miss of misses) {
     missedByDay.set(miss.for_day, [...(missedByDay.get(miss.for_day) ?? []), miss.commitment_name]);
+    if (miss.filed_by === 'auto_check' && miss.commitment_id) {
+      appealableByDay.set(miss.for_day, [
+        ...(appealableByDay.get(miss.for_day) ?? []),
+        { commitmentId: miss.commitment_id, commitmentName: miss.commitment_name },
+      ]);
+    }
   }
 
   const toRow = (kind: LedgerKind, settlement: SettlementRecord): LedgerRow => {
@@ -93,6 +120,15 @@ export function buildLedger(
       amountDong: penalty?.amount_dong ?? null,
       state: penalty?.state ?? null,
       missed: kind === 'day' ? (missedByDay.get(settlement.period) ?? []).slice().sort() : [],
+      // Only an `owed` Penalty is still contestable — one already `held`, `dropped` or
+      // otherwise resolved has nothing left for Contest to do, and a week row never
+      // carries an appeal at all (Weekly Quota is out of Story 4.4's scope).
+      appealable:
+        kind === 'day' && penalty?.state === 'owed'
+          ? (appealableByDay.get(settlement.period) ?? [])
+              .slice()
+              .sort((a, b) => a.commitmentName.localeCompare(b.commitmentName))
+          : [],
     };
   };
 
@@ -128,12 +164,30 @@ export function ledgerPillLabel(row: LedgerRow): string {
   // something he never said.
   if (row.verdict === 'expired') return 'Expired';
   if (row.verdict === 'clean') return 'Clean';
+  // Held and Dropped both name a real, distinct fact — a Held Penalty is not yet decided
+  // (still Owed in every sense that matters until it is), and Dropped is not the same fact
+  // as Owed either: money that was never actually collected must never read the same as
+  // money that stands.
+  if (row.state === 'held') return 'Held';
+  if (row.state === 'dropped') return 'Dropped';
   return row.state === 'owed' ? 'Owed' : 'Failed';
 }
 
-/** Whether a row's colour should come from the failed family. Expired costs the same. */
-export function isFailedFamily(row: LedgerRow): boolean {
-  return row.verdict !== 'clean';
+/**
+ * Which pill family a row's colour comes from.
+ *
+ * `held` (a Penalty on hold pending appeal) is deliberately the **urgent** family, never
+ * `failed` and never the `held` *colour* family either — that name means good/complete
+ * elsewhere in this design system (a chain that held, a grace day that waived a miss), and
+ * a Held Penalty is "sort this out", not "you lost this" (epic-4-context.md's own note).
+ * `dropped` — the timeout resolved in his favour — takes the `held` colour family instead,
+ * alongside `waived`: both are a bad day that ended up costing nothing.
+ */
+export function ledgerPillFamily(row: LedgerRow): 'held' | 'urgent' | 'failed' {
+  if (row.verdict === 'clean') return 'held';
+  if (row.state === 'held') return 'urgent';
+  if (row.state === 'dropped') return 'held';
+  return 'failed';
 }
 
 /** How much one failed day costs, for anywhere that needs to say it before it has happened. */

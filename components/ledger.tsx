@@ -2,11 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { buildLedger, isFailedFamily, ledgerPillLabel, type LedgerRow } from '@/lib/ledger';
+import { buildLedger, ledgerPillFamily, ledgerPillLabel, type LedgerRow } from '@/lib/ledger';
 import { formatDong } from '@/lib/money';
 
 type View =
   { kind: 'loading' } | { kind: 'ready'; rows: LedgerRow[] } | { kind: 'failed'; reason: string };
+
+export interface AppealTarget {
+  commitmentId: string;
+  commitmentName: string;
+  forDay: string;
+  amountDong: number;
+}
 
 /**
  * Every day that has been judged, newest first.
@@ -17,7 +24,17 @@ type View =
  * The author's documented failure is retreating from the sight of his own record. Colour
  * lives in the pill and nowhere else.
  */
-export function Ledger({ onClose }: { onClose: () => void }) {
+export function Ledger({
+  onClose,
+  onOpenAppeal,
+}: {
+  onClose: () => void;
+  /** Story 4.4. Reachable the same way Chains detail and Focus Session are: a callback this
+   *  component invokes itself, never a route the caller renders beside it. Optional so every
+   *  caller that has not wired the Appeal screen yet keeps compiling — the Contest control
+   *  simply does not render without it. */
+  onOpenAppeal?: (target: AppealTarget) => void;
+}) {
   const [view, setView] = useState<View>({ kind: 'loading' });
 
   useEffect(() => {
@@ -37,7 +54,7 @@ export function Ledger({ onClose }: { onClose: () => void }) {
         supabase.from('penalty_current').select('amount_dong,state,period').eq('kind', 'day'),
         supabase
           .from('declaration')
-          .select('for_day,commitment:commitment_id(name,carries_penalty)')
+          .select('for_day,commitment_id,filed_by,commitment:commitment_id(name,carries_penalty)')
           .eq('answer', 'slipped'),
         supabase
           .from('settlement_current')
@@ -60,7 +77,7 @@ export function Ledger({ onClose }: { onClose: () => void }) {
       const toPenaltyRecord = (p: { amount_dong: unknown; state: unknown; period: unknown }) => ({
         period: p.period as string,
         amount_dong: p.amount_dong as number,
-        state: p.state as 'owed',
+        state: p.state as 'owed' | 'held' | 'dropped',
       });
 
       setView({
@@ -74,7 +91,9 @@ export function Ledger({ onClose }: { onClose: () => void }) {
             )
             .map((m) => ({
               for_day: m.for_day as string,
+              commitment_id: m.commitment_id as string,
               commitment_name: (m.commitment as unknown as { name: string }).name,
+              filed_by: m.filed_by as 'doer' | 'auto_check',
             })),
           weekSettlements ?? [],
           (weekPenalties ?? []).map(toPenaltyRecord),
@@ -122,7 +141,11 @@ export function Ledger({ onClose }: { onClose: () => void }) {
                   ? `${row.day}, clean`
                   : row.verdict === 'expired'
                     ? `${row.day}, expired unanswered, owed ${formatDong(row.amountDong ?? 0)}`
-                    : `${row.day}, owed ${formatDong(row.amountDong ?? 0)}, for ${row.missed.join(' and ')}`
+                    : row.state === 'held'
+                      ? `${row.day}, ${formatDong(row.amountDong ?? 0)} on hold pending appeal, for ${row.missed.join(' and ')}`
+                      : row.state === 'dropped'
+                        ? `${row.day}, dropped, for ${row.missed.join(' and ')}`
+                        : `${row.day}, owed ${formatDong(row.amountDong ?? 0)}, for ${row.missed.join(' and ')}`
             }
           >
             <div className="row-main">
@@ -138,12 +161,31 @@ export function Ledger({ onClose }: { onClose: () => void }) {
                       ? 'Everything held'
                       : `${row.missed.join(' · ')}${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`}
               </div>
+
+              {/* Contest: only on an eligible owed failed-day row (a machine-filed miss whose
+                  Penalty has not already moved to held/dropped/anything else). One control
+                  per contestable commitment — a Failed Day can carry more than one. */}
+              {row.kind === 'day' &&
+                onOpenAppeal &&
+                row.appealable.map((miss) => (
+                  <button
+                    key={miss.commitmentId}
+                    type="button"
+                    onClick={() =>
+                      onOpenAppeal({
+                        commitmentId: miss.commitmentId,
+                        commitmentName: miss.commitmentName,
+                        forDay: row.day,
+                        amountDong: row.amountDong ?? 0,
+                      })
+                    }
+                  >
+                    Contest {miss.commitmentName}
+                  </button>
+                ))}
             </div>
             {/* The pill carries the colour. The row never does. */}
-            <span
-              className={`pill ${isFailedFamily(row) ? 'pill-failed' : 'pill-held'}`}
-              aria-hidden="true"
-            >
+            <span className={`pill pill-${ledgerPillFamily(row)}`} aria-hidden="true">
               {ledgerPillLabel(row)}
             </span>
           </div>

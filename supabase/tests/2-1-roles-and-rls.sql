@@ -30,8 +30,19 @@ begin;
 
 -- The environment's part, made explicit rather than assumed. Rolled back with everything else.
 grant select on table public.profile, public.commitment, public.declaration,
-                   public.settlement, public.settlement_commitment
+                   public.settlement, public.settlement_commitment,
+                   public.appeal, public.appeal_evidence
   to authenticated;
+
+-- Steps 5c/5d are the first things in this file that need a genuinely *successful* client
+-- insert rather than only a refused one -- every earlier step either inserts as postgres
+-- and only reads back as authenticated, or expects the insert itself to fail either way.
+-- On the author's own project `authenticated` already carries INSERT from Supabase's own
+-- platform defaults; this fixture grants it explicitly for the same reason it grants
+-- SELECT above -- to give `appeal: file own`'s policy, and `declaration_derive_day()`'s
+-- own `filed_by` guard (5d), something real to be tested through, never widened beyond
+-- the tables this file's own steps need it for.
+grant insert on table public.appeal, public.appeal_evidence, public.declaration to authenticated;
 
 do $$
 declare
@@ -244,6 +255,173 @@ begin
   raise notice using message =
     'Step 5b ok: the owning account reads a machine-filed declaration through '
     '`declaration: read own` exactly like its own; a different account sees nothing.';
+
+  -- -------------------------------------------------------------------------------
+  -- 5c. `appeal`/`appeal_evidence` (Story 4.4): read-own and file-own RLS, and a
+  --     cross-account attempt at either is refused. Filed against the exact machine-
+  --     filed miss 5b just proved is readable -- settled here for the first time in
+  --     this file, so `appeal_hold_penalty()`'s own eligibility join has something
+  --     real to find.
+  -- -------------------------------------------------------------------------------
+  declare
+    v_c        uuid; -- 5b's own scope ended at its `end;` above; re-fetched rather than shared.
+    v_no_fap   uuid; -- step 4's own commitment for v_a, still undeclared until now.
+    v_day      date;
+    v_appeal   uuid;
+    v_evidence uuid;
+  begin
+    perform set_config('role', 'postgres', true);
+    select id into v_c from public.commitment where owner_id = v_a and name = 'TryHackMe';
+    select id into v_no_fap from public.commitment where owner_id = v_a and name = 'No fap';
+    v_day := (now() at time zone 'Asia/Ho_Chi_Minh')::date - 1;
+
+    -- Step 4 left "No fap" undeclared for v_a. settle_day refuses to close a day any of
+    -- its commitments are still silent on, deadline or not (FR-10) -- so it has to be
+    -- answered here too, or the day this step needs settled never closes.
+    insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
+    values (v_a, v_no_fap, gen_random_uuid(), 'held', now());
+
+    perform public.settle_day(v_day, true);
+
+    -- v_a: the owning account files the appeal on its own eligible miss.
+    perform set_config('role', 'authenticated', true);
+    perform set_config('request.jwt.claims',
+      json_build_object('sub', v_a, 'role', 'authenticated', 'app_role', 'doer')::text, true);
+
+    insert into public.appeal (owner_id, commitment_id, idempotency_key, for_day)
+    values (v_a, v_c, gen_random_uuid(), v_day)
+    returning id into v_appeal;
+
+    select count(*) into v_count from public.appeal where id = v_appeal;
+    if v_count <> 1 then
+      perform set_config('role', 'postgres', true);
+      raise exception using message =
+        '`appeal: read own` did not let the owning account read back its own appeal.';
+    end if;
+
+    insert into public.appeal_evidence (appeal_id, storage_path)
+    values (v_appeal, v_appeal::text || '/one.jpg')
+    returning id into v_evidence;
+
+    select count(*) into v_count from public.appeal_evidence where id = v_evidence;
+    if v_count <> 1 then
+      perform set_config('role', 'postgres', true);
+      raise exception using message =
+        '`appeal_evidence: read own` did not let the owning account read back its own evidence.';
+    end if;
+
+    -- v_b: a different account reads neither row.
+    perform set_config('request.jwt.claims',
+      json_build_object('sub', v_b, 'role', 'authenticated', 'app_role', 'doer')::text, true);
+
+    select count(*) into v_count from public.appeal where id = v_appeal;
+    if v_count <> 0 then
+      perform set_config('role', 'postgres', true);
+      raise exception using message = format(
+        'A different account read %s row(s) of another account''s appeal.', v_count);
+    end if;
+
+    select count(*) into v_count from public.appeal_evidence where id = v_evidence;
+    if v_count <> 0 then
+      perform set_config('role', 'postgres', true);
+      raise exception using message = format(
+        'A different account read %s row(s) of another account''s appeal_evidence -- NFR4 '
+        'requires evidence visible only to the submitting account (and, once Story 4.5/4.6 '
+        'exist, the ruling referee).', v_count);
+    end if;
+
+    -- v_b cannot attach evidence to v_a's appeal either: `appeal_evidence_derive_owner()`
+    -- overwrites owner_id with the appeal's own (v_a), so v_b's `with check
+    -- (auth.uid() = owner_id)` fails even though v_b never claimed to be anyone else.
+    v_refused := false;
+    begin
+      insert into public.appeal_evidence (appeal_id, storage_path)
+      values (v_appeal, v_appeal::text || '/planted.jpg');
+    exception when others then
+      v_refused := true;
+    end;
+
+    if not v_refused then
+      perform set_config('role', 'postgres', true);
+      raise exception using message =
+        'A different account inserted appeal_evidence against another account''s appeal -- '
+        'NFR4''s owner-derivation should have refused it.';
+    end if;
+
+    -- v_b cannot appeal v_a's own commitment either -- refused by
+    -- `appeal_hold_penalty()`'s own ownership check (mirroring `focus_session_derive_day`),
+    -- the same defence-in-depth step 5b already exercises for `declaration`.
+    v_refused := false;
+    begin
+      insert into public.appeal (owner_id, commitment_id, idempotency_key, for_day)
+      values (v_b, v_c, gen_random_uuid(), v_day - 1);
+    exception when others then
+      v_refused := true;
+    end;
+
+    perform set_config('role', 'postgres', true);
+
+    if not v_refused then
+      raise exception using message =
+        'A session authenticated as one account inserted an appeal against another '
+        'account''s commitment -- appeal_hold_penalty()''s ownership check is the only '
+        'thing standing between two accounts here.';
+    end if;
+  end;
+
+  raise notice using message =
+    'Step 5c ok: appeal/appeal_evidence are readable and writable only by their own '
+    'account -- a different account reads neither and cannot write into either.';
+
+  -- -------------------------------------------------------------------------------
+  -- 5d. `declaration.filed_by` cannot be forged by a client insert (Story 4.4). The
+  --     table's own INSERT grant to `authenticated` is table-wide, not scoped to a
+  --     column allowlist the way `profile.morning_hour`'s own grant already is -- a
+  --     `default` alone would not have stopped a client from sending
+  --     `filed_by: 'auto_check'` explicitly and appealing (then out-waiting the
+  --     timeout on) a Penalty for a miss he genuinely admitted to himself. This is
+  --     exactly the exploit `declaration_derive_day()`'s own `current_user in
+  --     ('anon', 'authenticated')` guard (20260824120000) exists to close.
+  -- -------------------------------------------------------------------------------
+  declare
+    v_forge_c uuid;
+    v_filed   public.declaration_filed_by;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.commitment (owner_id, idempotency_key, name, kind, cadence, carries_penalty)
+    values (v_a, gen_random_uuid(), 'Forged filed_by target', 'do', 'daily', true)
+    returning id into v_forge_c;
+
+    perform set_config('role', 'authenticated', true);
+    perform set_config('request.jwt.claims',
+      json_build_object('sub', v_a, 'role', 'authenticated', 'app_role', 'doer')::text, true);
+
+    -- A hostile-but-otherwise-legitimate insert: v_a's own account, v_a's own commitment,
+    -- an honest-looking `slipped` answer -- except this client explicitly claims the
+    -- machine wrote it, which nothing about this insert makes true.
+    insert into public.declaration
+      (owner_id, commitment_id, idempotency_key, answer, answered_at, filed_by)
+    values
+      (v_a, v_forge_c, gen_random_uuid(), 'slipped', now(), 'auto_check');
+
+    select filed_by into v_filed
+      from public.declaration where commitment_id = v_forge_c;
+
+    perform set_config('role', 'postgres', true);
+
+    if v_filed is distinct from 'doer' then
+      raise exception using message = format(
+        'A client insert that explicitly sent filed_by=''auto_check'' produced a row '
+        'reading `%s`. declaration_derive_day() must force every client-originated row '
+        'back to ''doer'' regardless of what the client sent -- otherwise any account can '
+        'self-declare a slip, appeal it, and let Story 4.4''s timeout drop a Penalty that '
+        'was never actually the machine''s call.', v_filed);
+    end if;
+  end;
+
+  raise notice using message =
+    'Step 5d ok: a client insert cannot forge declaration.filed_by -- an explicit '
+    '''auto_check'' claim from an authenticated session is forced back to ''doer''.';
 end $$;
 
 -- ---------------------------------------------------------------------------------
@@ -275,7 +453,11 @@ begin
     'public.resolve_account_elsewhere(uuid)',
     'public.file_auto_check_result(uuid, uuid, public.auto_check_result)',
     'public.resolve_auto_checks()',
-    'public.auto_check_pending(uuid, date)'
+    'public.auto_check_pending(uuid, date)',
+    'public.appeal_hold_penalty()',
+    'public.appeal_deadline(timestamptz)',
+    'public.appeal_evidence_derive_owner()',
+    'public.void_expired_appeals()'
   ]
   loop
     foreach r in array array['anon', 'authenticated'] loop
@@ -301,7 +483,7 @@ begin
   end loop;
 
   raise notice using message =
-    'Step 6 ok: nine deciding functions and the outbox are all out of reach of anon and authenticated.';
+    'Step 6 ok: twenty deciding functions and the outbox are all out of reach of anon and authenticated.';
   raise notice using message =
     'PASS. A role is chosen server-side, cannot be raised from a session, and does not leak '
     'across accounts.';

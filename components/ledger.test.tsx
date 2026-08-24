@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ledger } from './ledger';
 
@@ -180,6 +180,185 @@ describe('the ledger', () => {
       expect(await screen.findByText(new RegExp(`${key} unreadable`))).toBeInTheDocument();
       unmount();
     }
+  });
+});
+
+describe('Contest, on an eligible owed failed-day row (Story 4.4)', () => {
+  it('offers Contest for a machine-filed miss when onOpenAppeal is wired up', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+      [
+        {
+          for_day: '2026-08-18',
+          commitment_id: 'commitment-1',
+          filed_by: 'auto_check',
+          commitment: { name: 'TryHackMe', carries_penalty: true },
+        },
+      ],
+    );
+
+    render(<Ledger onClose={vi.fn()} onOpenAppeal={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: 'Contest TryHackMe' })).toBeInTheDocument();
+  });
+
+  it('calls onOpenAppeal with the commitment, the day and the amount', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+      [
+        {
+          for_day: '2026-08-18',
+          commitment_id: 'commitment-1',
+          filed_by: 'auto_check',
+          commitment: { name: 'TryHackMe', carries_penalty: true },
+        },
+      ],
+    );
+
+    const onOpenAppeal = vi.fn();
+    render(<Ledger onClose={vi.fn()} onOpenAppeal={onOpenAppeal} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Contest TryHackMe' }));
+
+    expect(onOpenAppeal).toHaveBeenCalledWith({
+      commitmentId: 'commitment-1',
+      commitmentName: 'TryHackMe',
+      forDay: '2026-08-18',
+      amountDong: 500000,
+    });
+  });
+
+  it('never offers Contest without onOpenAppeal wired up', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+      [
+        {
+          for_day: '2026-08-18',
+          commitment_id: 'commitment-1',
+          filed_by: 'auto_check',
+          commitment: { name: 'TryHackMe', carries_penalty: true },
+        },
+      ],
+    );
+
+    render(<Ledger onClose={vi.fn()} />);
+
+    await screen.findByText('2026-08-18');
+    expect(screen.queryByRole('button', { name: /Contest/ })).not.toBeInTheDocument();
+  });
+
+  it('never offers Contest for the author’s own honest slip', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+      [
+        {
+          for_day: '2026-08-18',
+          commitment_id: 'commitment-1',
+          filed_by: 'doer',
+          commitment: { name: 'No fap', carries_penalty: true },
+        },
+      ],
+    );
+
+    render(<Ledger onClose={vi.fn()} onOpenAppeal={vi.fn()} />);
+
+    await screen.findByText('2026-08-18');
+    expect(screen.queryByRole('button', { name: /Contest/ })).not.toBeInTheDocument();
+  });
+
+  it('names Held and Dropped, distinct from Owed, once a Penalty has moved off owed', async () => {
+    withDays(
+      [
+        { period: '2026-08-19', verdict: 'failed', missed_count: 1 },
+        { period: '2026-08-18', verdict: 'failed', missed_count: 1 },
+      ],
+      [
+        { amount_dong: 500000, state: 'held', period: '2026-08-19' },
+        { amount_dong: 500000, state: 'dropped', period: '2026-08-18' },
+      ],
+    );
+
+    render(<Ledger onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Held')).toBeInTheDocument();
+    expect(screen.getByText('Dropped')).toBeInTheDocument();
+    expect(screen.queryByText('Owed')).not.toBeInTheDocument();
+  });
+
+  it('colours Held urgent rather than failed, and Dropped held rather than failed', async () => {
+    // `held`'s own colour family is deliberately `pill-urgent`, not `pill-held` — a Held
+    // Penalty still needs attention (epic-4-context.md's own naming-collision warning), so
+    // it must never share a class with either "resolved" (pill-held) or "lost" (pill-failed).
+    withDays(
+      [
+        { period: '2026-08-19', verdict: 'failed', missed_count: 1 },
+        { period: '2026-08-18', verdict: 'failed', missed_count: 1 },
+      ],
+      [
+        { amount_dong: 500000, state: 'held', period: '2026-08-19' },
+        { amount_dong: 500000, state: 'dropped', period: '2026-08-18' },
+      ],
+    );
+
+    const { container } = render(<Ledger onClose={vi.fn()} />);
+    await screen.findByText('Held');
+
+    const heldRow = screen.getByRole('group', { name: /2026-08-19/ });
+    const droppedRow = screen.getByRole('group', { name: /2026-08-18/ });
+
+    expect(heldRow.querySelector('.pill')?.className).toContain('pill-urgent');
+    expect(droppedRow.querySelector('.pill')?.className).toContain('pill-held');
+    expect(container.querySelectorAll('.pill-failed')).toHaveLength(0);
+  });
+
+  it('sends each Contest button on a multi-miss Failed Day to its own commitment', async () => {
+    // A Failed Day can carry more than one appealable machine-filed miss (FR-13's bundled
+    // Penalty). Every prior Contest test here fixtures exactly one, which cannot tell "the
+    // button's own data" apart from "the only miss's data" — this fixtures two, so a mixup
+    // between rows in the .map() (e.g. every button firing with the last iteration's miss)
+    // would fail here even though it would pass every single-miss test above.
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 2 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+      [
+        {
+          for_day: '2026-08-18',
+          commitment_id: 'commitment-1',
+          filed_by: 'auto_check',
+          commitment: { name: 'TryHackMe', carries_penalty: true },
+        },
+        {
+          for_day: '2026-08-18',
+          commitment_id: 'commitment-2',
+          filed_by: 'auto_check',
+          commitment: { name: 'No fap', carries_penalty: true },
+        },
+      ],
+    );
+
+    const onOpenAppeal = vi.fn();
+    render(<Ledger onClose={vi.fn()} onOpenAppeal={onOpenAppeal} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Contest No fap' }));
+    expect(onOpenAppeal).toHaveBeenCalledWith({
+      commitmentId: 'commitment-2',
+      commitmentName: 'No fap',
+      forDay: '2026-08-18',
+      amountDong: 500000,
+    });
+
+    onOpenAppeal.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Contest TryHackMe' }));
+    expect(onOpenAppeal).toHaveBeenCalledWith({
+      commitmentId: 'commitment-1',
+      commitmentName: 'TryHackMe',
+      forDay: '2026-08-18',
+      amountDong: 500000,
+    });
   });
 });
 

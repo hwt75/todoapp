@@ -124,6 +124,15 @@ file_size_limit = "50MiB"
 # allowed_mime_types = ["image/png", "image/jpeg"]
 # objects_path = "./images"
 
+# Story 4.4: private evidence attached to an Appeal. Never public -- access is derived from
+# the appeal's own owner_id by the storage.objects policies in
+# 20260824130000_contest_a_miss_the_machine_got_wrong.sql (NFR4). Camera-or-library photo
+# evidence only (EXPERIENCE.md), not arbitrary files.
+[storage.buckets.appeal-evidence]
+public = false
+file_size_limit = "10MiB"
+allowed_mime_types = ["image/png", "image/jpeg", "image/heic"]
+
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
 enabled = true

@@ -4,6 +4,7 @@ import {
   type PenaltyRecord,
   type SettlementRecord,
   buildLedger,
+  ledgerPillFamily,
   ledgerPillLabel,
   outstandingTotal,
 } from './ledger';
@@ -222,5 +223,122 @@ describe('what a pill says', () => {
       misses,
     );
     expect(rows.map((r) => r.amountDong)).toEqual([PENALTY_DONG, PENALTY_DONG]);
+  });
+});
+
+describe('a Penalty on hold, and one dropped by timeout (Story 4.4)', () => {
+  const heldPenalty: PenaltyRecord = {
+    period: '2026-08-18',
+    amount_dong: PENALTY_DONG,
+    state: 'held',
+  };
+  const droppedPenalty: PenaltyRecord = {
+    period: '2026-08-18',
+    amount_dong: PENALTY_DONG,
+    state: 'dropped',
+  };
+
+  it('says Held, never Owed and never Failed', () => {
+    const row = buildLedger([failedDay], [heldPenalty], misses)[0];
+    expect(ledgerPillLabel(row)).toBe('Held');
+  });
+
+  it('says Dropped, never Owed', () => {
+    const row = buildLedger([failedDay], [droppedPenalty], misses)[0];
+    expect(ledgerPillLabel(row)).toBe('Dropped');
+  });
+
+  it('colours Held urgent — never the failed family and never the held colour family', () => {
+    // epic-4-context.md's own note: "held" the colour token means good/complete elsewhere
+    // in this design system, so a Held Penalty (not yet decided) has to use a third family
+    // rather than either of the two a reader would otherwise assume.
+    const row = buildLedger([failedDay], [heldPenalty], misses)[0];
+    expect(ledgerPillFamily(row)).toBe('urgent');
+    expect(ledgerPillFamily(row)).not.toBe('failed');
+  });
+
+  it('colours Dropped the held (good/resolved) family, like a clean day', () => {
+    // The timeout resolved in his favour — the same family a chain that held or a grace
+    // day gets, not the failed family a row that still costs him money gets.
+    const row = buildLedger([failedDay], [droppedPenalty], misses)[0];
+    expect(ledgerPillFamily(row)).toBe('held');
+  });
+
+  it('excludes a Held Penalty from the outstanding total — it is not owed', () => {
+    const rows = buildLedger([failedDay], [heldPenalty], misses);
+    expect(outstandingTotal(rows)).toBe(0);
+  });
+
+  it('excludes a Dropped Penalty from the outstanding total', () => {
+    const rows = buildLedger([failedDay], [droppedPenalty], misses);
+    expect(outstandingTotal(rows)).toBe(0);
+  });
+
+  it('an owed day still colours failed, unaffected by held/dropped existing as states', () => {
+    const row = buildLedger([failedDay], [penalty], misses)[0];
+    expect(ledgerPillFamily(row)).toBe('failed');
+  });
+
+  it('a clean day still colours held, unaffected by held/dropped existing as states', () => {
+    const row = buildLedger([cleanDay], [], [])[0];
+    expect(ledgerPillFamily(row)).toBe('held');
+  });
+});
+
+describe('which misses can still be contested (Story 4.4)', () => {
+  const machineFiled: MissRecord = {
+    for_day: '2026-08-18',
+    commitment_id: 'commitment-tryhackme',
+    commitment_name: 'TryHackMe',
+    filed_by: 'auto_check',
+  };
+  const selfDeclared: MissRecord = {
+    for_day: '2026-08-18',
+    commitment_id: 'commitment-gym',
+    commitment_name: 'Gym',
+    filed_by: 'doer',
+  };
+
+  it('offers a machine-filed miss on an owed Penalty', () => {
+    const row = buildLedger([failedDay], [penalty], [machineFiled])[0];
+    expect(row.appealable).toEqual([
+      { commitmentId: 'commitment-tryhackme', commitmentName: 'TryHackMe' },
+    ]);
+  });
+
+  it('never offers the author’s own honest slip — nothing to contest', () => {
+    const row = buildLedger([failedDay], [penalty], [selfDeclared])[0];
+    expect(row.appealable).toEqual([]);
+  });
+
+  it('offers only the machine-filed one when both kinds missed the same day', () => {
+    const row = buildLedger([failedDay], [penalty], [machineFiled, selfDeclared])[0];
+    expect(row.appealable.map((a) => a.commitmentName)).toEqual(['TryHackMe']);
+  });
+
+  it('stops offering it once the Penalty has moved off owed', () => {
+    const held: PenaltyRecord = { period: '2026-08-18', amount_dong: PENALTY_DONG, state: 'held' };
+    const row = buildLedger([failedDay], [held], [machineFiled])[0];
+    expect(row.appealable).toEqual([]);
+  });
+
+  it('never appears on a week row — Weekly Quota carries no appeal', () => {
+    const failedWeek: SettlementRecord = {
+      period: '2026-08-18',
+      verdict: 'failed',
+      missed_count: 1,
+    };
+    const weekPenalty: PenaltyRecord = {
+      period: '2026-08-18',
+      amount_dong: PENALTY_DONG,
+      state: 'owed',
+    };
+    const rows = buildLedger([], [], [], [failedWeek], [weekPenalty]);
+    expect(rows[0].appealable).toEqual([]);
+  });
+
+  it('a pre-4.4 caller that never selected commitment_id/filed_by still compiles and offers nothing', () => {
+    const row = buildLedger([failedDay], [penalty], misses)[0];
+    expect(row.appealable).toEqual([]);
   });
 });
