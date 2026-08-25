@@ -10,6 +10,12 @@ import {
   isSendableHour,
   type PermissionState,
 } from '@/lib/settings';
+import {
+  REFEREE_PAIRING_COPY,
+  isPairableEmail,
+  isPairedReferee,
+  refereeFunctionErrorMessage,
+} from '@/lib/referee';
 import { createClient } from '@/lib/supabase/client';
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -18,6 +24,12 @@ type View =
   { kind: 'loading' } | { kind: 'ready'; hour: number } | { kind: 'failed'; reason: string };
 
 type Saving = { kind: 'idle' } | { kind: 'saving' } | { kind: 'failed'; reason: string };
+
+type Pairing =
+  | { kind: 'idle' }
+  | { kind: 'pairing' }
+  | { kind: 'paired'; email: string; password: string }
+  | { kind: 'failed'; reason: string };
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
@@ -31,10 +43,11 @@ const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
  * failure this product can least afford. The symptom of a dead delivery channel is silence, and
  * silence looks exactly like the product working while being ignored (spec 3.0, D2).
  *
- * Referee pairing and grace days are **absent rather than disabled**. There is no referee yet and
- * no grace day can be produced; a greyed-out row would be a promise with a date the author cannot
- * see, and this epic's own lesson is that an unbuildable control shown anyway is how a screen
- * starts lying quietly (D4).
+ * Referee pairing (Story 4.5) fills the row this comment used to mark absent — the Edge
+ * Function it calls, the account it creates, and the RLS it depends on all now exist. Grace
+ * days stay **absent rather than disabled**: no grace day can be produced yet, and a
+ * greyed-out row would be a promise with a date the author cannot see — this epic's own
+ * lesson that an unbuildable control shown anyway is how a screen starts lying quietly (D4).
  */
 export function Settings({
   ownerId,
@@ -50,6 +63,8 @@ export function Settings({
   const [permission, setPermission] = useState<PermissionState>('default');
   const [subscribing, setSubscribing] = useState(false);
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
+  const [refereeEmail, setRefereeEmail] = useState('');
+  const [pairing, setPairing] = useState<Pairing>({ kind: 'idle' });
   // Shared by `setHour` and `turnOnNotifications`, not only `load()`'s own effect: both fire a
   // request from a click and can still be in flight when `onClose` unmounts this screen.
   const mounted = useRef(true);
@@ -156,6 +171,38 @@ export function Settings({
     }
   }
 
+  /**
+   * Pairing (Story 4.5). One call to the `pair-referee` Edge Function — the one place in
+   * this codebase a service-role client may live — and nothing decided here: eligibility
+   * (live doer, no existing referee) is entirely the function's own call. This screen only
+   * sends the address and shows back whatever the server decided, verbatim on refusal, and
+   * the one-time password exactly once on success (Never boundary — it is never emailed,
+   * never stored, and this render is the only place it is ever shown).
+   */
+  async function pairReferee() {
+    if (!isPairableEmail(refereeEmail)) return;
+
+    setPairing({ kind: 'pairing' });
+
+    const { data, error } = await createClient().functions.invoke('pair-referee', {
+      body: { email: refereeEmail },
+    });
+
+    if (!mounted.current) return;
+
+    if (error) {
+      setPairing({ kind: 'failed', reason: await refereeFunctionErrorMessage(error) });
+      return;
+    }
+
+    if (!isPairedReferee(data)) {
+      setPairing({ kind: 'failed', reason: REFEREE_PAIRING_COPY.noPassword });
+      return;
+    }
+
+    setPairing({ kind: 'paired', email: data.email, password: data.password });
+  }
+
   const permissionRow = PERMISSION_ROWS[permission];
   const installRow = INSTALL_ROWS[installState];
   // The install row leads: a subscription made outside the installed app silently receives
@@ -237,6 +284,52 @@ export function Settings({
           <strong>Refused.</strong> {subscribeError}
         </p>
       )}
+
+      <div className="row" role="group" aria-label={REFEREE_PAIRING_COPY.rowName}>
+        <div className="row-main">
+          <div className="row-name">{REFEREE_PAIRING_COPY.rowName}</div>
+          <div className="row-muted">{REFEREE_PAIRING_COPY.consequence}</div>
+
+          {pairing.kind !== 'paired' && (
+            <>
+              <input
+                type="email"
+                inputMode="email"
+                autoComplete="off"
+                placeholder={REFEREE_PAIRING_COPY.emailPlaceholder}
+                value={refereeEmail}
+                disabled={pairing.kind === 'pairing'}
+                onChange={(event) => setRefereeEmail(event.target.value.trim())}
+              />
+              <button
+                type="button"
+                onClick={() => void pairReferee()}
+                disabled={pairing.kind === 'pairing' || !isPairableEmail(refereeEmail)}
+              >
+                {pairing.kind === 'pairing'
+                  ? REFEREE_PAIRING_COPY.pairing
+                  : REFEREE_PAIRING_COPY.pair}
+              </button>
+            </>
+          )}
+
+          {pairing.kind === 'failed' && (
+            <p role="status">
+              <strong>{REFEREE_PAIRING_COPY.failed}</strong> {pairing.reason}
+            </p>
+          )}
+
+          {pairing.kind === 'paired' && (
+            <div role="status">
+              <p>{REFEREE_PAIRING_COPY.paired(pairing.email)}</p>
+              <p>
+                <strong>{REFEREE_PAIRING_COPY.passwordLabel}</strong> {pairing.password}
+              </p>
+              <p className="row-muted">{REFEREE_PAIRING_COPY.shownOnce}</p>
+            </div>
+          )}
+        </div>
+      </div>
     </section>
   );
 }

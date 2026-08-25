@@ -21,9 +21,13 @@ vi.hoisted(() => {
 
 const update = vi.fn();
 const upsert = vi.fn();
+const invoke = vi.fn();
 let profileResult: unknown = { data: { morning_hour: 7 }, error: null };
 // What the write comes back with. Set per test; the default is a clean save.
 let updateResult: { error: { message: string } | null } = { error: null };
+// What `pair-referee` comes back with. Set per test; the default is never exercised
+// unless a test actually pairs.
+let invokeResult: unknown = { data: null, error: null };
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
@@ -38,6 +42,12 @@ vi.mock('@/lib/supabase/client', () => ({
         return Promise.resolve({ error: null });
       },
     }),
+    functions: {
+      invoke: (name: string, options: unknown) => {
+        invoke(name, options);
+        return Promise.resolve(invokeResult);
+      },
+    },
   }),
 }));
 
@@ -47,6 +57,8 @@ beforeEach(() => {
   update.mockReset();
   updateResult = { error: null };
   upsert.mockReset();
+  invoke.mockReset();
+  invokeResult = { data: null, error: null };
   profileResult = { data: { morning_hour: 7 }, error: null };
 
   subscribe.mockResolvedValue({
@@ -155,14 +167,54 @@ describe('the settings surface', () => {
     expect(screen.queryByRole('button', { name: 'Turn on notifications' })).not.toBeInTheDocument();
   });
 
-  it('leaves out the rows this epic cannot fill, rather than greying them out', async () => {
+  it('still leaves out grace days, which this epic cannot yet produce', async () => {
     render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
     await screen.findByLabelText('Morning hour');
 
-    // There is no referee and no grace day can be produced. A disabled row would be a promise
-    // with a date the author cannot see.
-    expect(screen.queryByText(/[Rr]eferee/)).not.toBeInTheDocument();
+    // No grace day can be produced yet. A disabled row would be a promise with a date the
+    // author cannot see. Referee pairing (Story 4.5) is no longer in this set — it now has
+    // its own row, covered by the pairing tests below.
     expect(screen.queryByText(/[Gg]race/)).not.toBeInTheDocument();
+  });
+
+  it('fills the referee row: pairs from an email, shows the one-time password once', async () => {
+    invokeResult = { data: { email: 'ref@example.com', password: 'p4ssw0rd12345' }, error: null };
+    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    await screen.findByLabelText('Morning hour');
+
+    expect(screen.getByRole('button', { name: 'Pair referee' })).toBeDisabled();
+
+    await userEvent.type(screen.getByPlaceholderText('referee@example.com'), 'ref@example.com');
+    expect(screen.getByRole('button', { name: 'Pair referee' })).toBeEnabled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Pair referee' }));
+
+    expect(invoke).toHaveBeenCalledWith('pair-referee', {
+      body: { email: 'ref@example.com' },
+    });
+    expect(await screen.findByText('Paired as ref@example.com.')).toBeInTheDocument();
+    expect(screen.getByText('p4ssw0rd12345')).toBeInTheDocument();
+    expect(screen.getByText(/never emailed/)).toBeInTheDocument();
+    // The form itself is gone once paired — nothing left to submit a second time.
+    expect(screen.queryByPlaceholderText('referee@example.com')).not.toBeInTheDocument();
+  });
+
+  it('shows the server refusal verbatim rather than a generic failure, and creates nothing', async () => {
+    invokeResult = {
+      data: null,
+      error: { message: 'A referee is already paired. There is no re-pairing yet.' },
+    };
+    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    await screen.findByLabelText('Morning hour');
+
+    await userEvent.type(screen.getByPlaceholderText('referee@example.com'), 'ref2@example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Pair referee' }));
+
+    expect(
+      await screen.findByText('A referee is already paired. There is no re-pairing yet.'),
+    ).toBeInTheDocument();
+    // Refused, so the form is still here for another attempt — not swapped for a success state.
+    expect(screen.getByPlaceholderText('referee@example.com')).toBeInTheDocument();
   });
 
   it('subscribes this device when permission is granted from here', async () => {

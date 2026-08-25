@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Home from './page';
 
 /**
@@ -24,6 +24,39 @@ vi.mock('@/lib/use-gate', () => ({
   useGate: () => ({ owing: [], now: new Date(), markAnswered: vi.fn() }),
 }));
 
+// This screen's own role read (Story 4.5 — a referee session is redirected to /referee).
+// `'doer'` here keeps every existing test on its original path; the redirect itself has its
+// own coverage below.
+let profileRole: string | null = 'doer';
+// Set by the render-time-reset test below to make one profile read hang until the test
+// resolves it by hand, rather than resolving immediately like every other test's reads do —
+// see that test's own comment for why.
+let nextReadIsDeferred = false;
+let pendingRoleRead:
+  ((value: { data: { role: string | null } | null; error: null }) => void) | null = null;
+vi.mock('@/lib/supabase/client', () => ({
+  createClient: () => ({
+    from: () => ({
+      select: () => ({
+        maybeSingle: () => {
+          if (nextReadIsDeferred) {
+            nextReadIsDeferred = false;
+            return new Promise((resolve) => {
+              pendingRoleRead = resolve;
+            });
+          }
+          return Promise.resolve({ data: { role: profileRole }, error: null });
+        },
+      }),
+    }),
+  }),
+}));
+
+const replace = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace }),
+}));
+
 vi.mock('@/components/sign-in', () => ({
   SignIn: ({ onAccountChange }: { onAccountChange: (id: string | null) => void }) => {
     // The real component resolves a session asynchronously; this mirrors that by reporting
@@ -31,7 +64,14 @@ vi.mock('@/components/sign-in', () => ({
     useEffect(() => {
       onAccountChange('u1');
     }, [onAccountChange]);
-    return null;
+    // A second account signing in without a sign-out between — exactly the case
+    // `app/page.tsx`'s own render-time role reset exists for. Only the render-time-reset
+    // test below ever clicks this; every other test leaves it alone.
+    return (
+      <button type="button" onClick={() => onAccountChange('u2')}>
+        Switch account
+      </button>
+    );
   },
 }));
 
@@ -90,7 +130,46 @@ vi.mock('@/components/settings', () => ({
   ),
 }));
 
+beforeEach(() => {
+  profileRole = 'doer';
+  nextReadIsDeferred = false;
+  pendingRoleRead = null;
+  replace.mockClear();
+});
+
 describe('the app shell', () => {
+  it('redirects a referee session to /referee and renders nothing of the doer screen', async () => {
+    profileRole = 'referee';
+    render(<Home />);
+
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/referee'));
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
+  });
+
+  it("resets away from the previous account's role the instant a second account signs in, before the new read resolves", async () => {
+    // u1 resolves to 'doer' immediately — the doer shell (Today, via its "Settings" stand-in)
+    // is on screen and `role` holds a real, resolved value: 'doer', not 'unknown'.
+    render(<Home />);
+    expect(await screen.findByRole('button', { name: 'Settings' })).toBeInTheDocument();
+
+    // Arm the *next* profile read to hang until this test resolves it by hand, then switch
+    // straight to a second account with no sign-out between — `SignIn`'s own mock reports u2
+    // via the same `onAccountChange` callback a real re-auth would use. If `app/page.tsx`'s
+    // reset only ran inside the Effect that starts this second read (the shape this story's
+    // review flagged, rather than the render-time guard that replaced it), `role` would still
+    // read u1's resolved 'doer' for at least one more render — and the doer shell below would
+    // still be on screen right here, one commit before this second read has any answer at all.
+    nextReadIsDeferred = true;
+    await userEvent.click(screen.getByRole('button', { name: 'Switch account' }));
+
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
+
+    // Only now does the second read get an answer — u2 is the referee, and the redirect this
+    // story exists to build completes.
+    pendingRoleRead?.({ data: { role: 'referee' }, error: null });
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/referee'));
+  });
+
   it('swaps Today for Settings and back, through the callbacks it owns', async () => {
     render(<Home />);
 
