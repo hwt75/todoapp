@@ -160,6 +160,16 @@ export function summarizeReferee(rows: readonly RefereePenaltyRow[]): RefereeSum
         break;
       case 'dropped':
         break;
+      // Story 4.6: a penalty the referee's own "He did it" ruling voided. Excluded from
+      // both counts for the same reason `dropped` is — resolved, and not owed — though in
+      // practice this state never actually reaches `penalty_current` (the read this
+      // function's only caller passes through): a voided penalty belongs to a settlement
+      // the ruling's own correction superseded, and penalty_current follows the chain
+      // (20260825090000). The case exists so this exhaustive switch still compiles now
+      // that PenaltyState carries it, and so a state that did somehow arrive here would
+      // read as resolved rather than crash the home screen.
+      case 'voided':
+        break;
       default: {
         const exhaustive: never = row.state;
         throw new Error(`summarizeReferee: unhandled penalty state ${String(exhaustive)}`);
@@ -182,4 +192,101 @@ export const REFEREE_HOME_COPY = {
   pendingAppeals: (count: number): string => `${count} appeal${count === 1 ? '' : 's'} pending.`,
   owedPenalties: (count: number, totalLabel: string): string =>
     `${count} penalt${count === 1 ? 'y' : 'ies'} owed, ${totalLabel} total.`,
+  appealsHeading: 'Pending appeals',
+  openAppeal: 'Open',
+} as const;
+
+/**
+ * One row of `components/referee-home.tsx`'s own pending-appeals list (Story 4.6) — day and
+ * commitment name, the two facts the list itself shows, and the id the detail link needs.
+ * `commitmentName` is always present in practice (the referee's own full-row `commitment`
+ * read, Story 4.5) — typed as possibly missing only because a PostgREST embed resolves to
+ * `null` when a joined row cannot be read, so a component reading it has one place to decide
+ * what an absent name renders as rather than every caller inventing its own fallback.
+ */
+export interface PendingAppealRow {
+  id: string;
+  forDay: string;
+  commitmentName: string | null;
+}
+
+/**
+ * What `components/referee-appeal-detail.tsx` reads for one appeal: the machine's call, the
+ * amount and day it names, the ruling's own current outcome, and the deadline the timeout
+ * note names. `penaltyState` is derived through `settlement_current`/`penalty_current` —
+ * never the base penalty table directly (this codebase's one-door-per-table rule,
+ * `lib/chain.test.ts`) — by checking whether the appeal's own settlement has since been
+ * superseded by the ruling's own correction (`20260825090000_the_referee_rules.sql`): a won
+ * appeal's original Penalty belongs to that superseded row and drops out of `penalty_current`
+ * entirely, so "approved" is read off the settlement having moved, not off a state value on
+ * a row that view can no longer see.
+ */
+export interface RefereeAppealDetail {
+  id: string;
+  forDay: string;
+  commitmentName: string | null;
+  amountDong: number;
+  penaltyState: PenaltyState;
+  deadline: string;
+}
+
+/** One piece of evidence, resolved to a URL the referee's own browser can actually load —
+ *  the bucket is private, so the row `appeal_evidence` carries is a storage path, never a
+ *  URL by itself. */
+export interface RefereeEvidenceItem {
+  id: string;
+  url: string;
+}
+
+/**
+ * Every string `components/referee-appeal-detail.tsx` says (Story 4.6, FR-20).
+ *
+ * Kept here for the reason every other `*_COPY` object in this codebase gives: copy rules,
+ * testable independent of a component.
+ */
+export const REFEREE_APPEAL_DETAIL_COPY = {
+  loading: 'Working…',
+  failed: 'Failed.',
+  notFound: 'No such appeal, or it is no longer yours to read.',
+  back: 'Back to appeals',
+
+  /** The machine's own call, stated the same way `lib/appeal.ts`'s own `APPEAL_COPY.claim`
+   *  is to the author — which commitment, which day, that the linked check reported it
+   *  missed. Never a fabricated observed/required figure (UX-DR25's own quantified example
+   *  — "Location saw you for 4 minutes. It needed 30." — does not apply: `account_elsewhere`,
+   *  the only Auto-check kind that exists, has no such numbers to show). */
+  machineCall: (commitmentName: string | null, forDay: string): string =>
+    `${commitmentName ?? 'A commitment'}, ${forDay}. Account elsewhere reported a miss.`,
+
+  evidenceHeading: 'Evidence',
+  noEvidence: 'No evidence attached.',
+  /** Distinguishes one attachment from another for a screen-reader user — identical alt
+   *  text on every image reads as one image repeated, not several. 1-indexed to match how
+   *  the count itself is said out loud ("photo 1 of 3"), never a 0-indexed position. */
+  evidenceAlt: (position: number, total: number): string =>
+    `Evidence photo ${position} of ${total} the doer submitted with this appeal.`,
+  /** Signing can fail per item (a stale/expired path, a transient storage error) without
+   *  failing the whole screen — surfaced as a count rather than silently shrinking the
+   *  list, which would be indistinguishable from nothing ever having been attached. */
+  evidenceLoadFailed: (count: number): string =>
+    `${count} evidence item${count === 1 ? '' : 's'} could not be loaded.`,
+
+  /** Written for the referee's own benefit (epic-4-context.md, UX & Interaction Patterns):
+   *  he is not a bottleneck, and the deadline already decides this without him. */
+  timeoutNote: (deadline: string): string =>
+    `Ignore this and it's dropped in his favor on ${deadline}.`,
+
+  /** UX-DR24: plain language, never "approve"/"reject". */
+  approve: 'He did it',
+  reject: "He didn't",
+  ruling: 'Ruling…',
+
+  approved: 'Voided. He has been notified.',
+  rejected: 'Converted to owed. He has been notified.',
+
+  /** The rare landing here after the buttons stopped rendering: the deadline (or a second
+   *  ruling call) already resolved this one in the author's favour before this one reached
+   *  it — FR-15's own promise, not a failure of this screen. */
+  timedOut:
+    'This one is no longer open — it timed out and dropped in his favor before you got to it.',
 } as const;

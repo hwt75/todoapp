@@ -99,4 +99,13 @@ describe('summarizeReferee', () => {
     const summary = summarizeReferee([{ state: 'dropped', amountDong: 500_000 }]);
     expect(summary).toEqual({ pendingAppeals: 0, owedCount: 0, owedTotalDong: 0 });
   });
+
+  it('excludes voided penalties from both counts — a won appeal resolved them, too', () => {
+    // Unreachable through a real penalty_current read (a voided penalty's own settlement is
+    // superseded by the ruling's own correction — 20260825090000), but the switch this
+    // function runs is exhaustive on PenaltyState, so this still has to compile and resolve
+    // sensibly rather than fall through to the `default` throw.
+    const summary = summarizeReferee([{ state: 'voided', amountDong: 500_000 }]);
+    expect(summary).toEqual({ pendingAppeals: 0, owedCount: 0, owedTotalDong: 0 });
+  });
 });

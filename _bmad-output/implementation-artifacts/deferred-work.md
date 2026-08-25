@@ -369,3 +369,41 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-5-the-referee-has-his-own-way-in.md`
   summary: "`pair-referee`'s cleanup path (`index.ts`, after a `profile_single_referee` race loses) calls `admin.auth.admin.deleteUser(created.user.id)` with no check of whether that call itself fails — if the cleanup delete also fails, the newly created `auth.users` row is left orphaned as an unpromoted, unreachable `role = 'doer'` account with no log of the failure."
   evidence: Raised by the 2026-08-25 review (edge-case-hunter). Deferred — narrow (requires the promote update to lose the `profile_single_referee` race *and* the subsequent delete to independently fail) and low-consequence (an orphaned ordinary `doer` row is clutter, not a security or correctness issue — `profile_single_referee` still guarantees only one real referee). Revisit alongside adding structured logging to Edge Functions generally, which this repo has none of today (`outbox-worker` doesn't either).
+
+## Deferred from: code review of spec-4-6-the-referee-rules (2026-08-25)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "`rule_appeal()`'s admitted/silent recompute (`20260825090000_the_referee_rules.sql`) is now a third independent hand-copy of the same 'what counts toward a day's verdict' formula, alongside `settle_day()` and `supersede_expiries()` — three places that must be kept in sync by hand if the formula ever changes (e.g. a future cadence exclusion)."
+  evidence: Raised by the 2026-08-25 review (blind-hunter). Deferred — matches the exact judgment already recorded for Story 4.2's own settlement-query duplication (`settle_day`/`settle_week` above): real, but a shared-formula extraction is a deliberate refactor better done as its own pass than folded into a fourth function's own diff. Revisit alongside a general settlement-formula consolidation pass, especially if a future cadence or verdict rule change has to be applied in three places at once.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "`rule_appeal()`'s `v_silent` (unanswered-commitment) branch of the admitted/silent recompute has no test exercising it — every fixture account's contested miss is machine-filed `'slipped'`, never left unanswered."
+  evidence: Raised by the 2026-08-25 review (blind-hunter). Deferred rather than patched — the migration's own comment argues this branch is structurally unreachable in practice: a Held Penalty only ever sits on a settlement that read `failed`, and `failed` only happens once every commitment for the day has already answered (`answered = total` in `settle_day()`), so `silent` is always 0 by construction here. A test would have to contrive a state the function's own preconditions already rule out. Revisit only if `appeal_hold_penalty()`'s own eligibility ever loosens to allow holding a penalty before the day is fully answered.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "`components/referee-appeal-detail.tsx` fetches each evidence item's signed URL sequentially inside a `for...of` loop with `await`, rather than in parallel with `Promise.all` — an appeal with several evidence photos pays their signed-URL round trips one at a time."
+  evidence: Raised by the 2026-08-25 review (blind-hunter). Deferred — real but low-impact at this app's typical evidence-per-appeal count (a handful of photos at most); worth a quick fix if evidence review is ever observed to feel slow in practice.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "The pending-appeals list (`components/referee-home.tsx`) orders only by `for_day` descending with no tiebreaker column (e.g. `id`) — ordering among two appeals filed the same day is left to whatever Postgres happens to return, not guaranteed stable across reloads."
+  evidence: Raised by the 2026-08-25 review (blind-hunter). Deferred — cosmetic (the list still shows both appeals, just possibly reordered between loads) and narrow (needs two appeals dated the same day, which the sole-live-referee/sole-live-doer scale of this product makes uncommon). Revisit if the author reports the list visibly reordering.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "`components/referee-appeal-detail.tsx` renders no message and no ruling controls if `penaltyState` is ever a value outside the four it explicitly branches on (`held`/`voided`/`owed`/`dropped`) — a silent blank screen rather than a stated failure."
+  evidence: Raised by the 2026-08-25 review (edge-case-hunter). Deferred — defensive-only; `penalty_state` is a closed Postgres enum this screen already reads exhaustively for every value that exists today, so this is unreachable unless a future migration adds a new state (`collected`, 4.7; `waived`, 5.1) without also updating this screen. Revisit when either of those states ships.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "`components/referee-appeal-detail.tsx`'s `settlement_current`/`penalty_current` reads (to infer whether this appeal was already ruled) are two separate round trips, not one atomic read — a ruling landing between them could theoretically render a momentarily inconsistent view."
+  evidence: Raised by the 2026-08-25 review (edge-case-hunter). Deferred — self-healing (a reload re-reads both consistently) and no money-safety consequence either way, since the actual ruling is enforced server-side by `rule_appeal()`'s own guarded transition regardless of what the client's read shows. Revisit only if this is ever observed causing real confusion.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "`components/referee-home.tsx`'s pending-appeals count (from `penalty_current`) and its pending-appeals list (a separate query) are two independent reads that could momentarily disagree if a ruling or timeout lands between them."
+  evidence: Raised by the 2026-08-25 review (edge-case-hunter). Deferred — matches the same accepted eventual-consistency pattern already recorded for `today.tsx`'s own parallel reads; self-heals on reload, no money-safety consequence.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "The new referee `storage.objects` read policy on `appeal-evidence` uses `role_from_token()`, so a referee demoted mid-session keeps reading private evidence (NFR4: visible to the submitting owner and the ruling referee, nobody else) until their JWT next refreshes."
+  evidence: Raised independently by the 2026-08-25 review's blind-hunter and edge-case-hunter layers. Not patched — this matches Story 4.5's own deliberate, already-established convention (every referee read-only policy uses the token helper; only money-guarding writes use `role_from_table()`, per `lib/roles.ts`'s own documented rule), not a new deviation this story introduced. Recorded here because evidence is the one referee-read surface NFR4 names explicitly as sensitive, so the trade-off is worth a written record even though it isn't a regression. Revisit only if this codebase ever needs demotion to take effect faster than a token refresh.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "`components/referee-appeal-detail.tsx` infers whether an appeal was approved by comparing `settlement_current`'s id against the appeal's own stored `settlement_id`, rather than reading an explicit ruling-status column — correct today only because approval is the sole thing that currently supersedes a day's settlement once a Held Penalty exists."
+  evidence: Raised by the 2026-08-25 review (blind-hunter). Deferred — the invariant holds under every mechanism that exists in this codebase today, and adding an explicit status column is a schema decision with its own migration cost, not a one-line fix. Revisit if a future story (e.g. a second correction mechanism) ever supersedes a `failed` day's settlement for a reason unrelated to an appeal ruling — at that point this inference would need to become an explicit column.

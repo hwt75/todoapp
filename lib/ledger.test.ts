@@ -285,6 +285,34 @@ describe('a Penalty on hold, and one dropped by timeout (Story 4.4)', () => {
   });
 });
 
+describe('a Penalty a won appeal voided (Story 4.6)', () => {
+  // Unreachable through a real penalty_current read in production — a voided penalty's own
+  // settlement is superseded by the ruling's own corrective row, so it drops out of
+  // penalty_current entirely (20260825090000). Exercised here anyway: PenaltyState is a
+  // shared union type, and both functions below are written as exhaustive checks over it.
+  const voidedPenalty: PenaltyRecord = {
+    period: '2026-08-18',
+    amount_dong: PENALTY_DONG,
+    state: 'voided',
+  };
+
+  it('says Voided, distinct from Dropped', () => {
+    const row = buildLedger([failedDay], [voidedPenalty], misses)[0];
+    expect(ledgerPillLabel(row)).toBe('Voided');
+    expect(ledgerPillLabel(row)).not.toBe('Dropped');
+  });
+
+  it('colours the held (good/resolved) family, the same as Dropped and a clean day', () => {
+    const row = buildLedger([failedDay], [voidedPenalty], misses)[0];
+    expect(ledgerPillFamily(row)).toBe('held');
+  });
+
+  it('excludes a voided Penalty from the outstanding total', () => {
+    const rows = buildLedger([failedDay], [voidedPenalty], misses);
+    expect(outstandingTotal(rows)).toBe(0);
+  });
+});
+
 describe('which misses can still be contested (Story 4.4)', () => {
   const machineFiled: MissRecord = {
     for_day: '2026-08-18',

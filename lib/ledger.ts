@@ -18,8 +18,19 @@ import { PENALTY_DONG, totalOwed } from './money';
 export type DayVerdict = 'clean' | 'failed' | 'expired';
 /** `held` and `dropped` arrive with Story 4.4 (Appeal): a machine-filed miss under appeal
  *  moves its Penalty to `held`, and one whose deadline passed with no ruling to `dropped`
- *  — never back to `owed` on its own. `collected` (4.7) and `waived` (5.1) are still ahead. */
-export type PenaltyState = 'owed' | 'held' | 'dropped';
+ *  — never back to `owed` on its own. `voided` arrives with Story 4.6: the referee's own
+ *  "He did it" ruling on a Held Penalty — distinct from `dropped` (nobody ruled; the clock
+ *  did) because a decided reversal and an unresolved timeout are different facts, even
+ *  though both cost nothing. A `voided` penalty belongs to a superseded settlement (the
+ *  ruling's own corrective row takes its place — `20260825090000`), so it structurally
+ *  never reaches `penalty_current`/the Ledger the way `held`/`dropped` do —
+ *  `components/referee-appeal-detail.tsx` infers it by comparing settlement ids rather than
+ *  reading it off any row (this codebase's one-door-per-table rule, `lib/chain.test.ts`,
+ *  forbids reading the base `penalty` table directly). The case exists here only so this
+ *  shared union type and every exhaustive switch over it — `summarizeReferee`,
+ *  `ledgerPillLabel`/`ledgerPillFamily` below — compile rather than silently misclassify a
+ *  state that now exists. `collected` (4.7) and `waived` (5.1) are still ahead. */
+export type PenaltyState = 'owed' | 'held' | 'dropped' | 'voided';
 export type LedgerKind = 'day' | 'week';
 
 /** The rows as they come back from the database, before folding. Shared shape for a day's
@@ -173,6 +184,10 @@ export function ledgerPillLabel(row: LedgerRow): string {
   // money that stands.
   if (row.state === 'held') return 'Held';
   if (row.state === 'dropped') return 'Dropped';
+  // Unreachable through penalty_current in practice (see the PenaltyState comment above) —
+  // kept distinct from `Dropped` per Story 4.6's own boundary: a decided reversal is not
+  // the same fact as an unresolved timeout, even where neither ever renders today.
+  if (row.state === 'voided') return 'Voided';
   return row.state === 'owed' ? 'Owed' : 'Failed';
 }
 
@@ -190,6 +205,9 @@ export function ledgerPillFamily(row: LedgerRow): 'held' | 'urgent' | 'failed' {
   if (row.verdict === 'clean') return 'held';
   if (row.state === 'held') return 'urgent';
   if (row.state === 'dropped') return 'held';
+  // A won appeal, same good/resolved family as `dropped` and a clean day — money that in
+  // the end cost nothing, never the failed family a row that still owes gets.
+  if (row.state === 'voided') return 'held';
   return 'failed';
 }
 
