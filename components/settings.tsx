@@ -16,6 +16,7 @@ import {
   isPairedReferee,
   refereeFunctionErrorMessage,
 } from '@/lib/referee';
+import { formatGraceAllowance } from '@/lib/grace';
 import { createClient } from '@/lib/supabase/client';
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -31,6 +32,16 @@ type Pairing =
   | { kind: 'paired'; email: string; password: string }
   | { kind: 'failed'; reason: string };
 
+/** Story 5.1. `'loading'` renders as "Working…"; `'failed'` surfaces the read's own reason
+ *  (mirroring `View`/`Saving`/`Pairing` above) rather than leaving the row stuck silently on
+ *  "Working…" forever — a real read failure used to be indistinguishable from "still
+ *  loading" here, since the read's own `error` went unchecked entirely. Never a bare
+ *  `number | null`: that conflated "still loading", "failed to load" and "no row at all"
+ *  into one value with no way to tell them apart, which is exactly what let the error go
+ *  unchecked in the first place. */
+type GraceView =
+  { kind: 'loading' } | { kind: 'ready'; remaining: number } | { kind: 'failed'; reason: string };
+
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
 /**
@@ -45,9 +56,10 @@ const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
  *
  * Referee pairing (Story 4.5) fills the row this comment used to mark absent — the Edge
  * Function it calls, the account it creates, and the RLS it depends on all now exist. Grace
- * days stay **absent rather than disabled**: no grace day can be produced yet, and a
- * greyed-out row would be a promise with a date the author cannot see — this epic's own
- * lesson that an unbuildable control shown anyway is how a screen starts lying quietly (D4).
+ * Days (Story 5.1) fills the other one: a read-only count, mirroring `grace_allowance_
+ * remaining`'s own one-source rule (AD-8) rather than a client-side tally — spending one
+ * happens from the Day summary or a Ledger row, never from here, so this row states the
+ * number and nothing else.
  */
 export function Settings({
   ownerId,
@@ -65,6 +77,7 @@ export function Settings({
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
   const [refereeEmail, setRefereeEmail] = useState('');
   const [pairing, setPairing] = useState<Pairing>({ kind: 'idle' });
+  const [grace, setGrace] = useState<GraceView>({ kind: 'loading' });
   // Shared by `setHour` and `turnOnNotifications`, not only `load()`'s own effect: both fire a
   // request from a click and can still be in flight when `onClose` unmounts this screen.
   const mounted = useRef(true);
@@ -108,6 +121,50 @@ export function Settings({
     }
 
     void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // A separate read from the morning-hour one above, and deliberately never blocks it: this
+  // row is one independent fact among several on this screen (the install/notification rows
+  // already tolerate their own failure without taking the rest of the page down with them),
+  // not a precondition for changing the hour. Its own failure is still surfaced, though,
+  // rather than left indistinguishable from "still loading" — the fix below makes: both a
+  // resolved `{ error }` and a genuine thrown rejection are handled, where an earlier
+  // version destructured only `data` from a bare `.then()` and had no `try`/`catch` at all.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadGrace() {
+      try {
+        const { data, error } = await createClient()
+          .from('grace_allowance_remaining')
+          .select('remaining')
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        if (error) {
+          setGrace({ kind: 'failed', reason: error.message });
+          return;
+        }
+
+        // A real doer session always has exactly one row here
+        // (`grace_allowance_remaining`'s own `where role = 'doer'`) — no row without an
+        // error is itself a failure to surface, never a silent "treat it as 0 remaining".
+        if (!data) {
+          setGrace({ kind: 'failed', reason: 'No Grace Days allowance found for this account.' });
+          return;
+        }
+
+        setGrace({ kind: 'ready', remaining: data.remaining as number });
+      } catch (err) {
+        if (!cancelled) setGrace({ kind: 'failed', reason: String(err) });
+      }
+    }
+
+    void loadGrace();
     return () => {
       cancelled = true;
     };
@@ -254,6 +311,28 @@ export function Settings({
           <strong>Not saved.</strong> {saving.reason}
         </p>
       )}
+
+      {/* Read-only (Story 5.1): spending one happens from the Day summary or a Ledger row,
+          never from here — this row only states the count, the same one source
+          (grace_allowance_remaining) every other surface that shows it reads (AD-8). */}
+      <div className="row" role="group" aria-label="Grace Days">
+        <div className="row-main">
+          <div className="row-name">Grace Days</div>
+          <div className="row-muted">
+            A limited, non-carrying monthly allowance that voids a Failed Day&rsquo;s Penalty.
+          </div>
+          {grace.kind === 'failed' && (
+            <p role="status">
+              <strong>Failed.</strong> {grace.reason}
+            </p>
+          )}
+        </div>
+        {grace.kind !== 'failed' && (
+          <span className="row-muted">
+            {grace.kind === 'loading' ? 'Working…' : formatGraceAllowance(grace.remaining)}
+          </span>
+        )}
+      </div>
 
       {/* Install state leads the two read-only rows. Without home-screen installation there is no
           push at all, and without push there is no product. */}

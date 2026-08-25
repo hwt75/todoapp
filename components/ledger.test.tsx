@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+﻿import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ledger } from './ledger';
 
@@ -23,6 +24,11 @@ const rows: Record<string, unknown> = {};
 // differently rather than returning the same canned rows to both. It tracks the last
 // `.eq('kind', …)` seen per table and keys the fixture lookup on it, falling back to the
 // bare table name for a read that carries no kind filter at all (`declaration`).
+const inserted: Array<{ table: string; payload: unknown }> = [];
+// What a `grace_day` insert comes back with. Set per test; the default is a clean success —
+// most tests here have nothing to do with spending one at all.
+let graceInsertResult: unknown = { error: null };
+
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     from: (table: string) => {
@@ -32,6 +38,13 @@ vi.mock('@/lib/supabase/client', () => ({
         eq: (column: string, value: string) => {
           if (column === 'kind') key = `${table}:${value}`;
           return query;
+        },
+        // `grace_allowance_remaining` is read with `.select('remaining').maybeSingle()` —
+        // no `.eq()` in between — so `key` stays the bare table name.
+        maybeSingle: () => Promise.resolve(rows[key] ?? { data: null, error: null }),
+        insert: (payload: unknown) => {
+          inserted.push({ table, payload });
+          return Promise.resolve(graceInsertResult);
         },
         then: (resolve: (value: unknown) => unknown) =>
           Promise.resolve(rows[key] ?? { data: [], error: null }).then(resolve),
@@ -43,6 +56,11 @@ vi.mock('@/lib/supabase/client', () => ({
 
 beforeEach(() => {
   for (const key of Object.keys(rows)) delete rows[key];
+  inserted.length = 0;
+  graceInsertResult = { error: null };
+  // A sane default so every test that never mentions Grace Days keeps compiling and
+  // rendering exactly as before — most of this file predates Story 5.1 entirely.
+  rows.grace_allowance_remaining = { data: { remaining: 2 }, error: null };
 });
 
 function withDays(settlements: unknown[], penalties: unknown[] = [], misses: unknown[] = []) {
@@ -56,6 +74,10 @@ function withWeeks(settlements: unknown[], penalties: unknown[] = []) {
   rows['penalty_current:week'] = { data: penalties, error: null };
 }
 
+function withGraceRemaining(remaining: number) {
+  rows.grace_allowance_remaining = { data: { remaining }, error: null };
+}
+
 describe('the ledger', () => {
   it('names the money once, after the fact, in đồng he would recognise', async () => {
     withDays(
@@ -64,7 +86,7 @@ describe('the ledger', () => {
       [{ for_day: '2026-08-18', commitment: { name: 'No fap', carries_penalty: true } }],
     );
 
-    render(<Ledger onClose={vi.fn()} />);
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
 
     // 500.000₫ — dots, not commas. The same rendering the evening summary uses, and the one
     // the two copies of that rule disagreed about once.
@@ -82,7 +104,7 @@ describe('the ledger', () => {
       ],
     );
 
-    render(<Ledger onClose={vi.fn()} />);
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
 
     // One flat penalty however many were missed (FR-13) — and the row still names both, so
     // the amount is explicable rather than something that merely happened to him.
@@ -98,7 +120,7 @@ describe('the ledger', () => {
       [{ amount_dong: 500000, state: 'owed', period: '2026-08-16' }],
     );
 
-    render(<Ledger onClose={vi.fn()} />);
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
 
     // Silence costs exactly what honesty costs, or silence becomes the cheaper answer. The
     // ledger charges the same and says a different thing, because they are different facts.
@@ -125,7 +147,7 @@ describe('the ledger', () => {
       ],
     );
 
-    const { container } = render(<Ledger onClose={vi.fn()} />);
+    const { container } = render(<Ledger ownerId="u1" onClose={vi.fn()} />);
     await screen.findByText('2026-08-16');
 
     for (const row of container.querySelectorAll('.row')) {
@@ -144,7 +166,7 @@ describe('the ledger', () => {
       [{ for_day: '2026-08-18', commitment: { name: 'Morning walk', carries_penalty: false } }],
     );
 
-    render(<Ledger onClose={vi.fn()} />);
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
 
     // A penalty-free slip is not a debt and must not appear as one on the money screen.
     expect(await screen.findByRole('group')).toHaveAccessibleName('2026-08-18, clean');
@@ -153,29 +175,30 @@ describe('the ledger', () => {
 
   it('tells an empty history apart from a broken read', async () => {
     withDays([]);
-    const { unmount } = render(<Ledger onClose={vi.fn()} />);
+    const { unmount } = render(<Ledger ownerId="u1" onClose={vi.fn()} />);
     expect(await screen.findByText('No day has been judged yet.')).toBeInTheDocument();
     unmount();
 
     rows['settlement_current:day'] = { data: null, error: { message: 'permission denied' } };
-    render(<Ledger onClose={vi.fn()} />);
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
 
     expect(await screen.findByText(/permission denied/)).toBeInTheDocument();
     expect(screen.queryByText('No day has been judged yet.')).not.toBeInTheDocument();
   });
 
-  it('surfaces a failed penalties, misses, or week read instead of rendering an incomplete ledger', async () => {
+  it('surfaces a failed penalties, misses, week, or Grace Days read instead of rendering an incomplete ledger', async () => {
     for (const key of [
       'penalty_current:day',
       'declaration',
       'settlement_current:week',
       'penalty_current:week',
+      'grace_allowance_remaining',
     ]) {
       withDays([]);
       withWeeks([]);
       rows[key] = { data: null, error: { message: `${key} unreadable` } };
 
-      const { unmount } = render(<Ledger onClose={vi.fn()} />);
+      const { unmount } = render(<Ledger ownerId="u1" onClose={vi.fn()} />);
 
       expect(await screen.findByText(new RegExp(`${key} unreadable`))).toBeInTheDocument();
       unmount();
@@ -198,7 +221,7 @@ describe('Contest, on an eligible owed failed-day row (Story 4.4)', () => {
       ],
     );
 
-    render(<Ledger onClose={vi.fn()} onOpenAppeal={vi.fn()} />);
+    render(<Ledger ownerId="u1" onClose={vi.fn()} onOpenAppeal={vi.fn()} />);
 
     expect(await screen.findByRole('button', { name: 'Contest TryHackMe' })).toBeInTheDocument();
   });
@@ -218,7 +241,7 @@ describe('Contest, on an eligible owed failed-day row (Story 4.4)', () => {
     );
 
     const onOpenAppeal = vi.fn();
-    render(<Ledger onClose={vi.fn()} onOpenAppeal={onOpenAppeal} />);
+    render(<Ledger ownerId="u1" onClose={vi.fn()} onOpenAppeal={onOpenAppeal} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Contest TryHackMe' }));
 
@@ -244,7 +267,7 @@ describe('Contest, on an eligible owed failed-day row (Story 4.4)', () => {
       ],
     );
 
-    render(<Ledger onClose={vi.fn()} />);
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
 
     await screen.findByText('2026-08-18');
     expect(screen.queryByRole('button', { name: /Contest/ })).not.toBeInTheDocument();
@@ -264,7 +287,7 @@ describe('Contest, on an eligible owed failed-day row (Story 4.4)', () => {
       ],
     );
 
-    render(<Ledger onClose={vi.fn()} onOpenAppeal={vi.fn()} />);
+    render(<Ledger ownerId="u1" onClose={vi.fn()} onOpenAppeal={vi.fn()} />);
 
     await screen.findByText('2026-08-18');
     expect(screen.queryByRole('button', { name: /Contest/ })).not.toBeInTheDocument();
@@ -282,7 +305,7 @@ describe('Contest, on an eligible owed failed-day row (Story 4.4)', () => {
       ],
     );
 
-    render(<Ledger onClose={vi.fn()} />);
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
 
     expect(await screen.findByText('Held')).toBeInTheDocument();
     expect(screen.getByText('Dropped')).toBeInTheDocument();
@@ -304,7 +327,7 @@ describe('Contest, on an eligible owed failed-day row (Story 4.4)', () => {
       ],
     );
 
-    const { container } = render(<Ledger onClose={vi.fn()} />);
+    const { container } = render(<Ledger ownerId="u1" onClose={vi.fn()} />);
     await screen.findByText('Held');
 
     const heldRow = screen.getByRole('group', { name: /2026-08-19/ });
@@ -341,7 +364,7 @@ describe('Contest, on an eligible owed failed-day row (Story 4.4)', () => {
     );
 
     const onOpenAppeal = vi.fn();
-    render(<Ledger onClose={vi.fn()} onOpenAppeal={onOpenAppeal} />);
+    render(<Ledger ownerId="u1" onClose={vi.fn()} onOpenAppeal={onOpenAppeal} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Contest No fap' }));
     expect(onOpenAppeal).toHaveBeenCalledWith({
@@ -362,6 +385,195 @@ describe('Contest, on an eligible owed failed-day row (Story 4.4)', () => {
   });
 });
 
+describe('Grace Day, on a Failed, owed day (Story 5.1)', () => {
+  it('offers the control and always states how many remain', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+    );
+    withGraceRemaining(2);
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: /Spend a Grace Day/ })).toBeInTheDocument();
+    expect(screen.getByText('2 Grace Days remaining this month.')).toBeInTheDocument();
+  });
+
+  it('never offers it on a clean or expired day, or once the Penalty has moved off owed', async () => {
+    withDays(
+      [
+        { period: '2026-08-20', verdict: 'clean', missed_count: 0 },
+        { period: '2026-08-19', verdict: 'expired', missed_count: 1 },
+        { period: '2026-08-18', verdict: 'failed', missed_count: 1 },
+      ],
+      [
+        { amount_dong: 500000, state: 'owed', period: '2026-08-19' },
+        { amount_dong: 500000, state: 'held', period: '2026-08-18' },
+      ],
+    );
+    withGraceRemaining(2);
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    await screen.findByText('2026-08-20');
+    expect(screen.queryByRole('button', { name: /Spend a Grace Day/ })).not.toBeInTheDocument();
+  });
+
+  it('sends owner_id and the row’s own for_day, and reports success without claiming Waived yet', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+    );
+    withGraceRemaining(2);
+
+    render(<Ledger ownerId="owner-42" onClose={vi.fn()} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Spend a Grace Day/ }));
+
+    expect(inserted).toEqual([
+      { table: 'grace_day', payload: { owner_id: 'owner-42', for_day: '2026-08-18' } },
+    ]);
+    expect(
+      await screen.findByText('Grace Day spent. This day clears within the hour.'),
+    ).toBeInTheDocument();
+    // The correction is folded in later, so the pill must not jump to Waived on its own —
+    // that would be a claim the server has not made yet.
+    expect(screen.queryByText('Waived')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Spend a Grace Day/ })).not.toBeInTheDocument();
+  });
+
+  it('decrements the shown allowance locally after a successful spend', async () => {
+    withDays(
+      [
+        { period: '2026-08-19', verdict: 'failed', missed_count: 1 },
+        { period: '2026-08-18', verdict: 'failed', missed_count: 1 },
+      ],
+      [
+        { amount_dong: 500000, state: 'owed', period: '2026-08-19' },
+        { amount_dong: 500000, state: 'owed', period: '2026-08-18' },
+      ],
+    );
+    withGraceRemaining(2);
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+    await screen.findAllByText('2 Grace Days remaining this month.');
+
+    // Each row's own control now has a distinguishing accessible name (day and/or amount) —
+    // no more falling back to array indexing to tell the two rows' buttons apart.
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Spend a Grace Day for 2026-08-18' }),
+    );
+
+    // Both rows share the one count, so the still-open row must show the new figure too.
+    expect(await screen.findByText('1 Grace Day remaining this month.')).toBeInTheDocument();
+    expect(screen.queryByText('2 Grace Days remaining this month.')).not.toBeInTheDocument();
+  });
+
+  it('gives each row a distinguishing accessible name, never sharing one identical name across rows', async () => {
+    withDays(
+      [
+        { period: '2026-08-19', verdict: 'failed', missed_count: 1 },
+        { period: '2026-08-18', verdict: 'failed', missed_count: 1 },
+      ],
+      [
+        { amount_dong: 500000, state: 'owed', period: '2026-08-19' },
+        { amount_dong: 500000, state: 'owed', period: '2026-08-18' },
+      ],
+    );
+    withGraceRemaining(2);
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    expect(
+      await screen.findByRole('button', { name: 'Spend a Grace Day for 2026-08-19' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Spend a Grace Day for 2026-08-18' }),
+    ).toBeInTheDocument();
+  });
+
+  it('disables the control once the allowance reads exhausted, but still names the reason', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+    );
+    withGraceRemaining(0);
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    expect(await screen.findByText('No Grace Days remaining this month.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Spend a Grace Day/ })).toBeDisabled();
+  });
+
+  it('shows the server’s own refusal verbatim, and leaves the control usable to try again', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+    );
+    withGraceRemaining(2);
+    graceInsertResult = {
+      error: { code: 'P0001', message: 'This day’s Penalty is not eligible for a Grace Day.' },
+    };
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Spend a Grace Day/ }));
+
+    expect(
+      await screen.findByText('This day’s Penalty is not eligible for a Grace Day.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Spend a Grace Day/ })).toBeEnabled();
+  });
+
+  it('never double-decrements the shown allowance on an already-spent (23505) outcome', async () => {
+    // No new row was actually written this time — the count the last read returned already
+    // accounts for that day's own earlier spend (this attempt's own retry, or a second one
+    // racing it). Decrementing again here would undercount what genuinely remains. A second,
+    // still-open row proves it: if the count had wrongly dropped, that row's own figure
+    // would say so even though this row's own control disappears once spent either way.
+    withDays(
+      [
+        { period: '2026-08-19', verdict: 'failed', missed_count: 1 },
+        { period: '2026-08-18', verdict: 'failed', missed_count: 1 },
+      ],
+      [
+        { amount_dong: 500000, state: 'owed', period: '2026-08-19' },
+        { amount_dong: 500000, state: 'owed', period: '2026-08-18' },
+      ],
+    );
+    withGraceRemaining(2);
+    graceInsertResult = { error: { code: '23505', message: 'duplicate key value' } };
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+    await screen.findAllByText('2 Grace Days remaining this month.');
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Spend a Grace Day for 2026-08-18' }),
+    );
+
+    expect(
+      await screen.findByText('Grace Day spent. This day clears within the hour.'),
+    ).toBeInTheDocument();
+    // The still-open row (2026-08-19) must keep reading 2, not drop to 1.
+    expect(await screen.findByText('2 Grace Days remaining this month.')).toBeInTheDocument();
+    expect(screen.queryByText('1 Grace Day remaining this month.')).not.toBeInTheDocument();
+  });
+
+  it('never appears on a week row', async () => {
+    withDays([]);
+    withWeeks(
+      [{ period: '2026-08-17', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-17' }],
+    );
+    withGraceRemaining(2);
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    await screen.findByText('Week of 2026-08-17');
+    expect(screen.queryByRole('button', { name: /Spend a Grace Day/ })).not.toBeInTheDocument();
+  });
+});
+
 describe('a week row (3.4)', () => {
   it('renders distinctly from a day row, both by class and by name', async () => {
     withDays([]);
@@ -370,7 +582,7 @@ describe('a week row (3.4)', () => {
       [{ amount_dong: 500000, state: 'owed', period: '2026-08-17' }],
     );
 
-    const { container } = render(<Ledger onClose={vi.fn()} />);
+    const { container } = render(<Ledger ownerId="u1" onClose={vi.fn()} />);
 
     expect(await screen.findByText('Week of 2026-08-17')).toBeInTheDocument();
     const weekRow = container.querySelector('.row-week');
@@ -385,7 +597,7 @@ describe('a week row (3.4)', () => {
       [{ amount_dong: 500000, state: 'owed', period: '2026-08-17' }],
     );
 
-    render(<Ledger onClose={vi.fn()} />);
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
 
     expect(await screen.findByRole('group')).toHaveAccessibleName(
       'Week of 2026-08-17, owed 500.000₫',
@@ -397,7 +609,7 @@ describe('a week row (3.4)', () => {
     withDays([]);
     withWeeks([{ period: '2026-08-10', verdict: 'clean', missed_count: 0 }]);
 
-    const { container } = render(<Ledger onClose={vi.fn()} />);
+    const { container } = render(<Ledger ownerId="u1" onClose={vi.fn()} />);
 
     expect(await screen.findByRole('group')).toHaveAccessibleName('Week of 2026-08-10, clean');
     for (const row of container.querySelectorAll('.row')) {
@@ -413,7 +625,7 @@ describe('a week row (3.4)', () => {
       [{ amount_dong: 500000, state: 'owed', period: '2026-08-17' }],
     );
 
-    render(<Ledger onClose={vi.fn()} />);
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
 
     expect(await screen.findByRole('group', { name: '2026-08-18, clean' })).toBeInTheDocument();
     expect(

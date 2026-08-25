@@ -8,37 +8,37 @@ import { RefereeAppealDetail } from './referee-appeal-detail';
  * component sends one RPC call and reads back whatever the database decided, including a
  * raced refusal, rather than pre-computing anything itself.
  *
- * The ruling's own outcome is read through `settlement_current`/`penalty_current` — never
- * `.from('penalty')` directly (this codebase's one-door-per-table rule, `lib/chain.test.ts`)
- * — by comparing the day's current settlement id against the one the appeal itself points
- * at: unchanged means the appeal's own Penalty still stands (held/owed/dropped); changed
- * means the ruling's own correction superseded it (voided). `settlementResult`/
- * `penaltyResult` below stand in for that pair of reads. Approved is a fact about the appeal
- * regardless of what the corrected day ends up owing, so the `penalty_current` read is
- * skipped entirely on that path — `penaltyCurrentEqSpy` proves it.
+ * The ruling's own outcome is read directly off this appeal's own `penalty` row, by its own
+ * fixed `penalty_id` — the one legal exception to this codebase's one-door-per-table rule
+ * (`lib/chain.test.ts`), granted by Story 4.5's own "penalty: referee reads day and week" RLS
+ * policy. An earlier version compared the day's *current* settlement id against the one this
+ * appeal points at ("moved" meant approved) — that broke the moment a second, independent
+ * thing (a later Grace Day, Story 5.1, spent on a residual non-appealed miss) could also move
+ * the same settlement. Reading this appeal's own fixed row sidesteps the whole class of bug:
+ * its `state` is a permanent record of what happened to *this* appeal, immune to anything
+ * that happens later to a *different* row on a *different* settlement. `penaltyEqSpy` proves
+ * every read queries by this exact `penalty_id`, never anything derived from the day's
+ * current settlement.
  */
 
 const getUser = vi.fn();
 const rpc = vi.fn();
-const penaltyCurrentEqSpy = vi.fn();
+const penaltyEqSpy = vi.fn();
 const createSignedUrlSpy = vi.fn();
 
-const ORIGINAL_SETTLEMENT = 'settlement-1';
-const CORRECTION_SETTLEMENT = 'settlement-2';
+const PENALTY_ID = 'penalty-1';
 
 let profileResult: unknown = { data: { role: 'referee' }, error: null };
 let appealResult: unknown = {
   data: {
     id: 'appeal-1',
-    owner_id: 'owner-1',
     for_day: '2026-08-18',
     deadline: '2026-08-20T00:00:00+07:00',
-    settlement_id: ORIGINAL_SETTLEMENT,
+    penalty_id: PENALTY_ID,
     commitment: { name: 'TryHackMe' },
   },
   error: null,
 };
-let settlementResult: unknown = { data: { id: ORIGINAL_SETTLEMENT }, error: null };
 let penaltyResult: unknown = { data: { state: 'held' }, error: null };
 let evidenceResult: unknown = { data: [], error: null };
 let signedUrlResult: unknown = {
@@ -59,19 +59,12 @@ vi.mock('@/lib/supabase/client', () => ({
           select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve(appealResult) }) }),
         };
       }
-      if (table === 'settlement_current') {
-        // .select().eq('subject', ...).eq('period', ...).eq('kind', 'day').maybeSingle()
-        const query = {
-          eq: () => query,
-          maybeSingle: () => Promise.resolve(settlementResult),
-        };
-        return { select: () => query };
-      }
-      if (table === 'penalty_current') {
+      if (table === 'penalty') {
+        // .select('state').eq('id', appealRow.penalty_id).maybeSingle()
         return {
           select: () => ({
             eq: (...args: unknown[]) => {
-              penaltyCurrentEqSpy(...args);
+              penaltyEqSpy(...args);
               return { maybeSingle: () => Promise.resolve(penaltyResult) };
             },
           }),
@@ -106,7 +99,7 @@ vi.mock('next/navigation', () => ({
 beforeEach(() => {
   getUser.mockResolvedValue({ data: { user: { id: 'ref-1' } }, error: null });
   rpc.mockClear();
-  penaltyCurrentEqSpy.mockClear();
+  penaltyEqSpy.mockClear();
   createSignedUrlSpy.mockClear();
   replace.mockClear();
   push.mockClear();
@@ -114,15 +107,13 @@ beforeEach(() => {
   appealResult = {
     data: {
       id: 'appeal-1',
-      owner_id: 'owner-1',
       for_day: '2026-08-18',
       deadline: '2026-08-20T00:00:00+07:00',
-      settlement_id: ORIGINAL_SETTLEMENT,
+      penalty_id: PENALTY_ID,
       commitment: { name: 'TryHackMe' },
     },
     error: null,
   };
-  settlementResult = { data: { id: ORIGINAL_SETTLEMENT }, error: null };
   penaltyResult = { data: { state: 'held' }, error: null };
   evidenceResult = { data: [], error: null };
   signedUrlResult = {
@@ -149,10 +140,9 @@ describe('the machine’s call', () => {
     appealResult = {
       data: {
         id: 'appeal-1',
-        owner_id: 'owner-1',
         for_day: '2026-08-18',
         deadline: '2026-08-20T00:00:00+07:00',
-        settlement_id: ORIGINAL_SETTLEMENT,
+        penalty_id: PENALTY_ID,
         commitment: null,
       },
       error: null,
@@ -263,32 +253,19 @@ describe('a Held Penalty, awaiting ruling', () => {
     });
   });
 
-  it('reloads and shows the resolved outcome once approval succeeds, skipping the penalty_current read entirely', async () => {
+  it('reloads and shows the resolved outcome once approval succeeds', async () => {
     renderDetail();
     await screen.findByRole('button', { name: 'He did it' });
 
-    // Approval superseded the day's own settlement with a correction — the day happens to
-    // read clean afterward, but "voided" follows from the settlement having moved, not from
-    // that.
-    settlementResult = { data: { id: CORRECTION_SETTLEMENT }, error: null };
-    penaltyCurrentEqSpy.mockClear();
+    // rule_appeal(true) moves this appeal's own penalty row to `voided`, unconditionally —
+    // 20260825090000_the_referee_rules.sql.
+    penaltyResult = { data: { state: 'voided' }, error: null };
+    penaltyEqSpy.mockClear();
     fireEvent.click(screen.getByRole('button', { name: 'He did it' }));
 
     expect(await screen.findByText('Voided. He has been notified.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'He did it' })).not.toBeInTheDocument();
-    // Approved is a fact about this appeal regardless of what the corrected day ends up
-    // owing — nothing the penalty_current read could answer is used, so it must not run.
-    expect(penaltyCurrentEqSpy).not.toHaveBeenCalled();
-  });
-
-  it('still reads voided when a different, non-appealed miss leaves the corrected day owing', async () => {
-    renderDetail();
-    await screen.findByRole('button', { name: 'He did it' });
-
-    settlementResult = { data: { id: CORRECTION_SETTLEMENT }, error: null };
-    fireEvent.click(screen.getByRole('button', { name: 'He did it' }));
-
-    expect(await screen.findByText('Voided. He has been notified.')).toBeInTheDocument();
+    expect(penaltyEqSpy).toHaveBeenCalledWith('id', PENALTY_ID);
   });
 
   it('reloads and shows the resolved outcome once rejection succeeds', async () => {
@@ -324,14 +301,14 @@ describe('a Held Penalty, awaiting ruling', () => {
 });
 
 describe('an already-resolved appeal', () => {
-  it('shows the voided outcome, with no ruling controls, and never reads penalty_current', async () => {
-    settlementResult = { data: { id: CORRECTION_SETTLEMENT }, error: null };
+  it('shows the voided outcome, with no ruling controls', async () => {
+    penaltyResult = { data: { state: 'voided' }, error: null };
     renderDetail();
 
     expect(await screen.findByText('Voided. He has been notified.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'He did it' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: "He didn't" })).not.toBeInTheDocument();
-    expect(penaltyCurrentEqSpy).not.toHaveBeenCalled();
+    expect(penaltyEqSpy).toHaveBeenCalledWith('id', PENALTY_ID);
   });
 
   it('shows the owed outcome, with no ruling controls', async () => {
@@ -355,6 +332,64 @@ describe('an already-resolved appeal', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'He did it' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: "He didn't" })).not.toBeInTheDocument();
+  });
+
+  it('shows a failed state when this appeal’s own penalty row cannot be found', async () => {
+    penaltyResult = { data: null, error: null };
+    renderDetail();
+
+    expect(
+      await screen.findByText("This appeal's own Penalty could not be found."),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('an approved appeal whose corrected day has a residual, non-appealed miss (Story 5.1)', () => {
+  it('still reads voided even after that residual amount is later spent as a Grace Day on a different settlement/penalty row', async () => {
+    // rule_appeal(true) sets *this* appeal's own penalty_id row to `voided`
+    // unconditionally (20260825090000_the_referee_rules.sql) — regardless of whether a
+    // second, non-appealed miss the same day leaves the correction itself still `failed`
+    // with its own fresh, `owed` penalty on a *different* settlement/penalty row. If that
+    // residual amount is later forgiven by a Grace Day, apply_grace_days() only ever
+    // touches that other row — never this appeal's own, which stays `voided` forever
+    // (append-only, AD-9). This is exactly the case the old settlement-comparison approach
+    // got wrong: it would have seen the day's settlement move (again) and had no way to
+    // tell that move apart from a rejection later graced. Reading this exact row by its
+    // own fixed penalty_id sidesteps the whole class of bug.
+    penaltyResult = { data: { state: 'voided' }, error: null };
+    renderDetail();
+
+    expect(await screen.findByText('Voided. He has been notified.')).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'Converted to owed. He has been notified. The day was later forgiven by a Grace Day, unrelated to this appeal.',
+      ),
+    ).not.toBeInTheDocument();
+    expect(penaltyEqSpy).toHaveBeenCalledWith('id', PENALTY_ID);
+  });
+});
+
+describe('a rejected appeal later forgiven by an unrelated Grace Day (Story 5.1)', () => {
+  it('never claims approved, and says the day was later forgiven instead', async () => {
+    // rule_appeal(false) ("He didn't") leaves this appeal's own penalty row `owed` — it
+    // never moves to a new settlement at all (Story 4.6's own boundary). A later Grace Day
+    // spent on the same day can only ever reach this exact row if it was still owed at
+    // fold-in time — grace_day_validate()'s own Never boundary excludes a `held` Penalty,
+    // so a Grace Day can never land on a day still under open appeal — and
+    // apply_grace_days() then waives it.
+    penaltyResult = { data: { state: 'waived' }, error: null };
+    renderDetail();
+
+    expect(
+      await screen.findByText(
+        'Converted to owed. He has been notified. The day was later forgiven by a Grace Day, unrelated to this appeal.',
+      ),
+    ).toBeInTheDocument();
+    // The false claim this fix exists to prevent.
+    expect(screen.queryByText('Voided. He has been notified.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'He did it' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "He didn't" })).not.toBeInTheDocument();
+    expect(penaltyEqSpy).toHaveBeenCalledWith('id', PENALTY_ID);
   });
 });
 

@@ -118,6 +118,14 @@ describe('summarizeReferee', () => {
     ]);
     expect(summary).toEqual({ pendingAppeals: 0, owedCount: 1, owedTotalDong: 500_000 });
   });
+
+  it('excludes waived penalties from both counts — a Grace Day resolved them, never owed (Story 5.1)', () => {
+    const summary = summarizeReferee([
+      { state: 'waived', amountDong: 500_000 },
+      { state: 'owed', amountDong: 500_000 },
+    ]);
+    expect(summary).toEqual({ pendingAppeals: 0, owedCount: 1, owedTotalDong: 500_000 });
+  });
 });
 
 describe('formatOwedDay', () => {

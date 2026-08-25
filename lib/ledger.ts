@@ -32,8 +32,12 @@ export type DayVerdict = 'clean' | 'failed' | 'expired';
  *  correctly counted the miss; paying it doesn't change what happened). The case exists here
  *  only so this shared union type and every exhaustive switch over it — `summarizeReferee`,
  *  `ledgerPillLabel`/`ledgerPillFamily` below — compile rather than silently misclassify a
- *  state that now exists. `waived` (5.1) is still ahead. */
-export type PenaltyState = 'owed' | 'held' | 'dropped' | 'voided' | 'collected';
+ *  state that now exists. `waived` arrives with Story 5.1: a Grace Day spent on this day.
+ *  Unlike `voided`, this one is NOT structurally unreachable — `apply_grace_days()` gives the
+ *  corrective settlement its own fresh penalty row, already `waived` from the start
+ *  (`20260825110000`), specifically so `penalty_current` — and therefore this row — actually
+ *  carries it, and the Ledger can read `Waived` rather than `Clean`. */
+export type PenaltyState = 'owed' | 'held' | 'dropped' | 'voided' | 'collected' | 'waived';
 export type LedgerKind = 'day' | 'week';
 
 /** The rows as they come back from the database, before folding. Shared shape for a day's
@@ -85,6 +89,17 @@ export interface LedgerRow {
    *  Contest affordance renders at all. Always empty on a week row (no appeal exists for
    *  Weekly Quota) and once the Penalty has moved off `owed`. */
   appealable: AppealableMiss[];
+  /** Whether a Grace Day control belongs on this row (Story 5.1, FR-17): a day row whose
+   *  current settlement reads `failed` and whose Penalty still reads `owed` — the same two
+   *  conditions `grace_day_validate()` enforces server-side (`20260825110000`), mirrored here
+   *  only to decide whether the control renders at all. Deliberately narrower than
+   *  `appealable`'s own `verdict === 'failed'` check in one respect: `appealable` also needs
+   *  a machine-filed miss to name, but a Grace Day applies to the whole day regardless of who
+   *  filed which miss, so this needs nothing from `misses` at all. Always `false` on a week
+   *  row — Grace Days are day-scoped only, matching Appeal's own day-only restriction
+   *  (Story 4.4) — and once the Penalty has moved off `owed` (held, dropped, voided,
+   *  collected, or already waived). */
+  graceable: boolean;
 }
 
 /**
@@ -146,6 +161,7 @@ export function buildLedger(
               .slice()
               .sort((a, b) => a.commitmentName.localeCompare(b.commitmentName))
           : [],
+      graceable: kind === 'day' && settlement.verdict === 'failed' && penalty?.state === 'owed',
     };
   };
 
@@ -180,6 +196,12 @@ export function ledgerPillLabel(row: LedgerRow): string {
   // say are different facts about him, and a record that merges them tells him he admitted
   // something he never said.
   if (row.verdict === 'expired') return 'Expired';
+  // Story 5.1: checked before the plain `clean` case below, because a waived day's own
+  // corrective settlement genuinely reads `verdict = 'clean'` (apply_grace_days() forgives
+  // the day whole) — without this branch first, a Grace Day he spent would render
+  // indistinguishable from a day that simply held, which is exactly the fact UX-DR13 needs
+  // this row to keep.
+  if (row.state === 'waived') return 'Waived';
   if (row.verdict === 'clean') return 'Clean';
   // Held and Dropped both name a real, distinct fact — a Held Penalty is not yet decided
   // (still Owed in every sense that matters until it is), and Dropped is not the same fact
@@ -211,6 +233,11 @@ export function ledgerPillLabel(row: LedgerRow): string {
  * gets.
  */
 export function ledgerPillFamily(row: LedgerRow): 'held' | 'urgent' | 'failed' {
+  // Story 5.1: checked ahead of the plain `clean` check for the identical reason
+  // `ledgerPillLabel` checks it first — both land on `held` either way, but the order keeps
+  // the two functions reading as the same rule rather than one relying on family/label
+  // happening to agree by coincidence.
+  if (row.state === 'waived') return 'held';
   if (row.verdict === 'clean') return 'held';
   if (row.state === 'held') return 'urgent';
   if (row.state === 'dropped') return 'held';

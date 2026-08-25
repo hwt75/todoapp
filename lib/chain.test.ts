@@ -130,9 +130,27 @@ describe('the chain rule itself', () => {
       penalty: 'penalty_current',
     };
 
+    // The one legal exception (Story 5.1): `referee-appeal-detail.tsx` reads this appeal's
+    // own Penalty by its own fixed `penalty_id` directly off the base table, never off
+    // whatever a day's *current* settlement happens to read. A later Grace Day can
+    // supersede the same settlement for a reason that has nothing to do with this appeal (a
+    // residual, non-appealed miss later forgiven) — `penalty_current`, which only ever
+    // answers "what does the *current* settlement owe", cannot tell that apart from this
+    // ruling's own correction. This appeal's own row is a single, permanent record of what
+    // happened to *it*, immune to anything that happens later to a different row on a
+    // different settlement — reading it directly is the fix, not a shortcut around one.
+    // Story 4.5's own "penalty: referee reads day and week" RLS policy
+    // (`20260824160000_the_referee_has_his_own_way_in.sql`) grants the referee exactly this
+    // read on the base table; it is not a door this rule exists to close.
+    const exempt: Record<string, string[]> = {
+      penalty: ['components/referee-appeal-detail.tsx'],
+    };
+
     for (const file of sourceFiles(['app', 'components', 'lib'])) {
+      const normalized = file.replace(/\\/g, '/');
       const source = readFileSync(file, 'utf8');
       for (const [base, view] of Object.entries(doors)) {
+        if (exempt[base]?.some((allowed) => normalized.endsWith(allowed))) continue;
         expect(source, `${file} reads ${base} directly; read ${view} instead`).not.toContain(
           `.from('${base}')`,
         );

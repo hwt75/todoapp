@@ -90,7 +90,7 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
 
       const { data: appealRow, error: appealError } = await supabase
         .from('appeal')
-        .select('id,owner_id,for_day,deadline,settlement_id,commitment:commitment_id(name)')
+        .select('id,for_day,deadline,penalty_id,commitment:commitment_id(name)')
         .eq('id', appealId)
         .maybeSingle();
       if (cancelled) return;
@@ -105,64 +105,54 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
         return;
       }
 
-      // The ruling's own outcome, derived through the same two doors every other screen
-      // reads settlement-derived state through (lib/chain.test.ts's "one door per table") —
-      // never the base penalty table directly. Approval supersedes the appeal's own
-      // settlement with a correction (`20260825090000_the_referee_rules.sql`); the original
-      // Penalty (now `voided`) belongs to that superseded row and drops out of
-      // `penalty_current` entirely, so "has the day's *current* settlement moved off the one
-      // this appeal points at" is what actually distinguishes "approved" from every other
-      // outcome — not a state value read off the original row, which a won appeal makes
-      // unreachable through either view.
-      const { data: currentSettlement, error: settlementError } = await supabase
-        .from('settlement_current')
-        .select('id')
-        .eq('subject', appealRow.owner_id as string)
-        .eq('period', appealRow.for_day as string)
-        .eq('kind', 'day')
+      // The ruling's own outcome, read directly off this appeal's own Penalty row —
+      // `penalty`, not `penalty_current` (Story 4.5's own "penalty: referee reads day and
+      // week" RLS policy, `20260824160000`, grants the referee that read on the base table
+      // directly; this is the one legal exception to the one-door-per-table rule
+      // `lib/chain.test.ts` otherwise holds every other screen to).
+      //
+      // An earlier version of this read compared the day's *current* settlement id against
+      // the one this appeal points at — "moved" meant approved. That broke the moment a
+      // second, independent thing could also move the same settlement: a later Grace Day
+      // (Story 5.1) spent on a *residual*, non-appealed miss that survived a partial
+      // approval creates its own fresh settlement and penalty, and grace-daying *that*
+      // residual debt supersedes the approval's own correction too — which the settlement-
+      // comparison approach could not tell apart from "this ruling itself never counted".
+      //
+      // This appeal's own `penalty_id` row is immune to that: it is a single, specific row
+      // whose `state` is a permanent record of what happened to *this appeal*, regardless of
+      // anything that later happens to a *different* penalty row on a *different*
+      // settlement.
+      //   'voided'    — approved. rule_appeal(true) sets this unconditionally, whether or
+      //                 not a residual miss left the corrected day still owing.
+      //   'owed'      — rejected, still standing (rejection never moves this row at all).
+      //   'waived'    — rejected, and later forgiven by a Grace Day. The only way
+      //                 apply_grace_days() ever reaches *this* row is if it was still `owed`
+      //                 at fold-in time, which only happens after a rejection — an approval
+      //                 already moved it to `voided` first, and grace_day_validate()'s own
+      //                 Never boundary excludes a `held` Penalty, so a Grace Day can never
+      //                 land on one still under open appeal either.
+      //   'held'      — still pending, no ruling yet.
+      //   'dropped'   — timed out (void_expired_appeals()).
+      //   'collected' — rejected, then later marked paid from the "Owed penalties" list.
+      const { data: penaltyRow, error: penaltyError } = await supabase
+        .from('penalty')
+        .select('state')
+        .eq('id', appealRow.penalty_id as string)
         .maybeSingle();
       if (cancelled) return;
 
-      if (settlementError) {
-        setView({ kind: 'failed', reason: settlementError.message });
+      if (penaltyError) {
+        setView({ kind: 'failed', reason: penaltyError.message });
         return;
       }
 
-      if (!currentSettlement) {
-        setView({
-          kind: 'failed',
-          reason: "This appeal's own day has no settlement on record.",
-        });
+      if (!penaltyRow) {
+        setView({ kind: 'failed', reason: "This appeal's own Penalty could not be found." });
         return;
       }
 
-      const approved = currentSettlement.id !== appealRow.settlement_id;
-
-      // Approved is a fact about this appeal regardless of what the corrected day ends up
-      // owing (a different, non-appealed miss can still leave it `failed`) — so there is
-      // nothing this read could change the answer to, and it is skipped entirely rather
-      // than issued and discarded. Only the non-approved path needs it: the appeal's own
-      // settlement still stands, so its own Penalty is exactly what penalty_current reads
-      // for it — held (pending), owed (rejected) or dropped (timed out).
-      let penaltyState: PenaltyState;
-
-      if (approved) {
-        penaltyState = 'voided';
-      } else {
-        const { data: penaltyRow, error: penaltyError } = await supabase
-          .from('penalty_current')
-          .select('state')
-          .eq('settlement_id', appealRow.settlement_id as string)
-          .maybeSingle();
-        if (cancelled) return;
-
-        if (penaltyError) {
-          setView({ kind: 'failed', reason: penaltyError.message });
-          return;
-        }
-
-        penaltyState = (penaltyRow?.state as PenaltyState | undefined) ?? 'owed';
-      }
+      const penaltyState = penaltyRow.state as PenaltyState;
 
       const { data: evidenceRows, error: evidenceError } = await supabase
         .from('appeal_evidence')
@@ -342,6 +332,15 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
                 screen afterward. Without this branch the outcome area silently went blank. */}
             {view.appeal.penaltyState === 'collected' && (
               <p role="status">{REFEREE_APPEAL_DETAIL_COPY.collected}</p>
+            )}
+
+            {/* Story 5.1: this appeal was rejected, and the day was later forgiven by a
+                Grace Day — unrelated to this appeal's own ruling, and never `approved`. The
+                settlement moved off this appeal's own row, the same signal `voided` above
+                reads, but the current settlement's own penalty reads `waived` rather than
+                `owed`/absent, which is what tells the two causes apart. */}
+            {view.appeal.penaltyState === 'waived' && (
+              <p role="status">{REFEREE_APPEAL_DETAIL_COPY.gracedAfterRejection}</p>
             )}
           </>
         )}

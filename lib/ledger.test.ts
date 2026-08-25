@@ -338,6 +338,91 @@ describe('a Penalty the referee marked Collected (Story 4.7)', () => {
   });
 });
 
+describe('a Penalty a Grace Day waived (Story 5.1)', () => {
+  // apply_grace_days() gives the corrective settlement its own fresh penalty row, already
+  // waived (20260825110000) — so unlike `voided`, this state genuinely reaches
+  // penalty_current, and its own settlement genuinely reads verdict `clean` (the day is
+  // forgiven whole). buildLedger has to read the two together correctly. A settlement of its
+  // own, sharing the waived penalty's own period — `cleanDay` above is a different day and
+  // would not fold together with it.
+  const correctedDay: SettlementRecord = {
+    period: '2026-08-18',
+    verdict: 'clean',
+    missed_count: 0,
+  };
+  const waivedPenalty: PenaltyRecord = {
+    period: '2026-08-18',
+    amount_dong: PENALTY_DONG,
+    state: 'waived',
+  };
+
+  it('says Waived, not Clean, even though the corrective settlement reads verdict clean', () => {
+    const row = buildLedger([correctedDay], [waivedPenalty], [])[0];
+    expect(ledgerPillLabel(row)).toBe('Waived');
+    expect(ledgerPillLabel(row)).not.toBe('Clean');
+  });
+
+  it('colours the held (good/resolved) family, the same as a clean day, Dropped, Voided and Collected', () => {
+    const row = buildLedger([correctedDay], [waivedPenalty], [])[0];
+    expect(ledgerPillFamily(row)).toBe('held');
+  });
+
+  it('excludes a waived Penalty from the outstanding total — it is not owed', () => {
+    const rows = buildLedger([correctedDay], [waivedPenalty], []);
+    expect(outstandingTotal(rows)).toBe(0);
+  });
+});
+
+describe('which day rows offer a Grace Day control (Story 5.1)', () => {
+  it('offers it on a Failed, owed day — the same two conditions grace_day_validate() checks', () => {
+    const row = buildLedger([failedDay], [penalty], misses)[0];
+    expect(row.graceable).toBe(true);
+  });
+
+  it('never offers it on a clean day — nothing to forgive', () => {
+    const row = buildLedger([cleanDay], [], [])[0];
+    expect(row.graceable).toBe(false);
+  });
+
+  it('never offers it on a day that closed expired — silence, not an admitted or machine-filed miss', () => {
+    const expiredDay: SettlementRecord = {
+      period: '2026-08-14',
+      verdict: 'expired',
+      missed_count: 1,
+    };
+    const itsPenalty: PenaltyRecord = {
+      period: '2026-08-14',
+      amount_dong: PENALTY_DONG,
+      state: 'owed',
+    };
+    const row = buildLedger([expiredDay], [itsPenalty], [])[0];
+    expect(row.graceable).toBe(false);
+  });
+
+  it('stops offering it once the Penalty has moved off owed', () => {
+    for (const state of ['held', 'dropped', 'voided', 'collected', 'waived'] as const) {
+      const p: PenaltyRecord = { period: '2026-08-18', amount_dong: PENALTY_DONG, state };
+      const row = buildLedger([failedDay], [p], misses)[0];
+      expect(row.graceable).toBe(false);
+    }
+  });
+
+  it('never appears on a week row — Grace Days are day-scoped only (Story 4.4’s own day-only restriction)', () => {
+    const failedWeek: SettlementRecord = {
+      period: '2026-08-18',
+      verdict: 'failed',
+      missed_count: 1,
+    };
+    const weekPenalty: PenaltyRecord = {
+      period: '2026-08-18',
+      amount_dong: PENALTY_DONG,
+      state: 'owed',
+    };
+    const rows = buildLedger([], [], [], [failedWeek], [weekPenalty]);
+    expect(rows[0].graceable).toBe(false);
+  });
+});
+
 describe('which misses can still be contested (Story 4.4)', () => {
   const machineFiled: MissRecord = {
     for_day: '2026-08-18',

@@ -28,11 +28,17 @@ let updateResult: { error: { message: string } | null } = { error: null };
 // What `pair-referee` comes back with. Set per test; the default is never exercised
 // unless a test actually pairs.
 let invokeResult: unknown = { data: null, error: null };
+// What `grace_allowance_remaining` comes back with (Story 5.1). Set per test; the default
+// leaves plenty of room so no test is coupled to the exact allowance unless it says so.
+let graceResult: unknown = { data: { remaining: 2 }, error: null };
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
-    from: () => ({
-      select: () => ({ maybeSingle: () => Promise.resolve(profileResult) }),
+    from: (table: string) => ({
+      select: () => ({
+        maybeSingle: () =>
+          Promise.resolve(table === 'grace_allowance_remaining' ? graceResult : profileResult),
+      }),
       update: (payload: unknown) => {
         update(payload);
         return { eq: () => Promise.resolve(updateResult) };
@@ -60,6 +66,7 @@ beforeEach(() => {
   invoke.mockReset();
   invokeResult = { data: null, error: null };
   profileResult = { data: { morning_hour: 7 }, error: null };
+  graceResult = { data: { remaining: 2 }, error: null };
 
   subscribe.mockResolvedValue({
     toJSON: () => ({
@@ -167,14 +174,75 @@ describe('the settings surface', () => {
     expect(screen.queryByRole('button', { name: 'Turn on notifications' })).not.toBeInTheDocument();
   });
 
-  it('still leaves out grace days, which this epic cannot yet produce', async () => {
+  it('shows the Grace Days remaining count, read-only (Story 5.1)', async () => {
+    graceResult = { data: { remaining: 1 }, error: null };
     render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
     await screen.findByLabelText('Morning hour');
 
-    // No grace day can be produced yet. A disabled row would be a promise with a date the
-    // author cannot see. Referee pairing (Story 4.5) is no longer in this set — it now has
-    // its own row, covered by the pairing tests below.
-    expect(screen.queryByText(/[Gg]race/)).not.toBeInTheDocument();
+    const row = await screen.findByRole('group', { name: 'Grace Days' });
+    expect(row).toHaveTextContent('1 Grace Day remaining this month.');
+    // Read-only: nothing here can be clicked to spend one — that control lives on the Day
+    // summary and a Ledger row instead.
+    expect(row.querySelector('button')).toBeNull();
+  });
+
+  it('says none remain rather than a bare 0', async () => {
+    graceResult = { data: { remaining: 0 }, error: null };
+    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    await screen.findByLabelText('Morning hour');
+
+    expect(await screen.findByText('No Grace Days remaining this month.')).toBeInTheDocument();
+  });
+
+  it('does not claim a count it has not read yet, and does not block the rest of the screen on it', async () => {
+    // Never resolves during this test — this is the genuine "still loading" case, which must
+    // stay distinguishable from the "failed" case below rather than the two sharing one
+    // ambiguous null.
+    graceResult = new Promise(() => {});
+    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+
+    // The morning hour still loads and is still usable — a slow Grace Days read is one
+    // independent fact among several on this screen, not a precondition for the rest.
+    expect(await screen.findByLabelText('Morning hour')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Grace Days' })).toHaveTextContent('Working…');
+  });
+
+  it('surfaces a failed Grace Days read rather than leaving the row stuck on "Working…" forever', async () => {
+    // An earlier version destructured only `data` from this read, silently swallowing
+    // `error` entirely — a real failure was indistinguishable from "still loading".
+    graceResult = { data: null, error: { message: 'permission denied' } };
+    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    await screen.findByLabelText('Morning hour');
+
+    const row = await screen.findByRole('group', { name: 'Grace Days' });
+    expect(row).toHaveTextContent('Failed.');
+    expect(row).toHaveTextContent('permission denied');
+    expect(row).not.toHaveTextContent('Working…');
+    // The morning hour is still usable — this row's own failure does not block the rest.
+    expect(screen.getByLabelText('Morning hour')).toBeInTheDocument();
+  });
+
+  it('surfaces a missing row the same way as an explicit error, never as 0 remaining', async () => {
+    // A real doer session always has exactly one row here (`grace_allowance_remaining`'s
+    // own `where role = 'doer'`) — no row without an error is itself a failure, not a
+    // silent "treat it as 0 remaining".
+    graceResult = { data: null, error: null };
+    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    await screen.findByLabelText('Morning hour');
+
+    const row = await screen.findByRole('group', { name: 'Grace Days' });
+    expect(row).toHaveTextContent('Failed.');
+    expect(row).not.toHaveTextContent('No Grace Days remaining this month.');
+  });
+
+  it('surfaces a genuine promise rejection, not only a resolved {error} pair', async () => {
+    graceResult = Promise.reject(new Error('network down'));
+    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    await screen.findByLabelText('Morning hour');
+
+    const row = await screen.findByRole('group', { name: 'Grace Days' });
+    expect(row).toHaveTextContent('Failed.');
+    expect(row).toHaveTextContent('network down');
   });
 
   it('fills the referee row: pairs from an email, shows the one-time password once', async () => {

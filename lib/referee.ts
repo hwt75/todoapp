@@ -177,6 +177,15 @@ export function summarizeReferee(rows: readonly RefereePenaltyRow[]): RefereeSum
       // debt has changed hands, not owed any longer.
       case 'collected':
         break;
+      // Story 5.1: the author's own Grace Day, folded in by apply_grace_days(). Excluded
+      // from both counts for the same reason `dropped`/`voided`/`collected` are — resolved,
+      // and never owed any longer. Unlike `voided`, a waived penalty is NOT structurally
+      // unreachable here: apply_grace_days() gives the corrective settlement its own fresh
+      // penalty row, already waived, specifically so penalty_current actually carries it
+      // (20260825110000) — so this case is reachable in practice, even though the referee
+      // never sees a waived Penalty as owed.
+      case 'waived':
+        break;
       default: {
         const exhaustive: never = row.state;
         throw new Error(`summarizeReferee: unhandled penalty state ${String(exhaustive)}`);
@@ -247,8 +256,20 @@ export interface OwedPenaltyRow {
  * `lib/chain.test.ts`) — by checking whether the appeal's own settlement has since been
  * superseded by the ruling's own correction (`20260825090000_the_referee_rules.sql`): a won
  * appeal's original Penalty belongs to that superseded row and drops out of `penalty_current`
- * entirely, so "approved" is read off the settlement having moved, not off a state value on
- * a row that view can no longer see.
+ * entirely, so "the settlement moved" is the first signal read, not a state value on a row
+ * that view can no longer see.
+ *
+ * **That signal alone is no longer sufficient (Story 5.1).** A later Grace Day can *also*
+ * supersede the same settlement, unrelated to this appeal's own ruling — and only ever on
+ * top of a *rejected* appeal (`grace_day_validate()`'s own Never boundary excludes a `held`
+ * Penalty, so a Grace Day can never land on one still under appeal). `apply_grace_days()`
+ * always gives its own correction a fresh penalty row already `waived`
+ * (`20260825110000`) — unlike an approval correction's own penalty, which is `owed` or
+ * absent entirely, never `waived` — so once the settlement is found to have moved, reading
+ * the *current* settlement's own penalty state is what actually tells the two causes apart:
+ * `'waived'` means a Grace Day did this, not the ruling, and `penaltyState` reads `'waived'`
+ * to say so; anything else (or no row at all) means the ruling itself approved it, and
+ * `penaltyState` reads `'voided'` exactly as before.
  */
 export interface RefereeAppealDetail {
   id: string;
@@ -266,6 +287,11 @@ export interface RefereeEvidenceItem {
   id: string;
   url: string;
 }
+
+/** The rejection sentence, named once — `REFEREE_APPEAL_DETAIL_COPY.gracedAfterRejection`
+ *  below composes from this rather than repeating its literal text, so the two can never
+ *  drift out of sync if the wording ever changes. */
+const REJECTED_SENTENCE = 'Converted to owed. He has been notified.';
 
 /**
  * Every string `components/referee-appeal-detail.tsx` says (Story 4.6, FR-20).
@@ -311,7 +337,7 @@ export const REFEREE_APPEAL_DETAIL_COPY = {
   ruling: 'Ruling…',
 
   approved: 'Voided. He has been notified.',
-  rejected: 'Converted to owed. He has been notified.',
+  rejected: REJECTED_SENTENCE,
 
   /** The rare landing here after the buttons stopped rendering: the deadline (or a second
    *  ruling call) already resolved this one in the author's favour before this one reached
@@ -325,6 +351,14 @@ export const REFEREE_APPEAL_DETAIL_COPY = {
    *  `penaltyState === 'collected'` matched none of the others above and the outcome area
    *  silently went blank. */
   collected: 'Collected. The referee marked this debt paid.',
+
+  /** Story 5.1: this appeal was rejected ("He didn't") — the ruling itself never changed —
+   *  and the day was *separately* forgiven afterward by the doer's own Grace Day, which can
+   *  only ever reach an `owed` Penalty (never a `held` one an appeal could still be open
+   *  against). Distinct from `approved` on purpose: the referee never ruled this one in the
+   *  doer's favour, and never received the "He did it" notification `approved` implies — the
+   *  Grace Day sends none at all (this story's own Never boundary). */
+  gracedAfterRejection: `${REJECTED_SENTENCE} The day was later forgiven by a Grace Day, unrelated to this appeal.`,
 } as const;
 
 /**

@@ -150,7 +150,11 @@ export default function Home() {
             onClose={() => setAppealOf(null)}
           />
         ) : showLedger ? (
-          <Ledger onClose={() => setShowLedger(false)} onOpenAppeal={setAppealOf} />
+          <Ledger
+            ownerId={ownerId}
+            onClose={() => setShowLedger(false)}
+            onOpenAppeal={setAppealOf}
+          />
         ) : showSettings ? (
           <Settings
             ownerId={ownerId}
@@ -159,6 +163,7 @@ export default function Home() {
           />
         ) : (
           <Today
+            ownerId={ownerId}
             onOpenLedger={() => setShowLedger(true)}
             onOpenChain={(c) => setChainOf({ id: c.id, name: c.name })}
             onOpenFocus={(c) => setFocusOf({ id: c.id, name: c.name })}

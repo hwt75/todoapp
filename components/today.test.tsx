@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+﻿import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Today } from './today';
@@ -20,21 +20,39 @@ import { Today } from './today';
 
 const rows: Record<string, unknown> = {};
 const seen: string[] = [];
-const seenEq: Array<{ table: string; column: string }> = [];
+// One entry per `.from()` call, carrying every column that call's own `.eq()` chain named —
+// distinct from a flat `{table, column}` list, because Story 5.1 reads `penalty_current`
+// twice for two different purposes (the aggregate figure, unfiltered by kind; a day-only,
+// state=owed read for Grace Day eligibility), and only a per-call record can still tell
+// "the unfiltered one" apart from "the filtered one" sharing the same table name.
+const fromCalls: Array<{ table: string; columns: string[] }> = [];
+const inserted: Array<{ table: string; payload: unknown }> = [];
+// What a `grace_day` insert comes back with (Story 5.1). Set per test; the default is a
+// clean success — most tests here have nothing to do with spending one at all.
+let graceInsertResult: unknown = { error: null };
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     from: (table: string) => {
       seen.push(table);
-      const result = () => rows[table] ?? { data: [], error: null };
+      let key = table;
+      const call = { table, columns: [] as string[] };
+      fromCalls.push(call);
+      const result = () => rows[key] ?? { data: [], error: null };
       const query = {
         select: () => query,
         is: () => query,
-        eq: (column: string) => {
-          seenEq.push({ table, column });
+        eq: (column: string, value: string) => {
+          call.columns.push(column);
+          if (column === 'kind') key = `${table}:${value}`;
           return query;
         },
         order: () => Promise.resolve(result()),
+        maybeSingle: () => Promise.resolve(result()),
+        insert: (payload: unknown) => {
+          inserted.push({ table, payload });
+          return Promise.resolve(graceInsertResult);
+        },
         then: (resolve: (value: unknown) => unknown) => Promise.resolve(result()).then(resolve),
       };
       return query;
@@ -53,18 +71,26 @@ const gym = {
 
 beforeEach(() => {
   seen.length = 0;
-  seenEq.length = 0;
+  fromCalls.length = 0;
+  inserted.length = 0;
+  graceInsertResult = { error: null };
   for (const key of Object.keys(rows)) delete rows[key];
   rows.commitment = { data: [gym], error: null };
   rows.penalty_current = { data: [], error: null };
   rows.chain_current = { data: [], error: null };
   rows.weekly_quota_progress = { data: [], error: null };
+  // Story 5.1 sane defaults so every pre-existing test here keeps rendering exactly as
+  // before: nothing graceable, and an allowance that never disables the control by surprise.
+  rows['settlement_current:day'] = { data: [], error: null };
+  rows['penalty_current:day'] = { data: [], error: null };
+  rows.grace_allowance_remaining = { data: { remaining: 2 }, error: null };
 });
 
 describe('the today screen', () => {
   it('reads the money and the chains through the views that follow a correction', async () => {
     render(
       <Today
+        ownerId="u1"
         onOpenLedger={vi.fn()}
         onOpenChain={vi.fn()}
         onOpenFocus={vi.fn()}
@@ -91,6 +117,7 @@ describe('the today screen', () => {
 
     const { container } = render(
       <Today
+        ownerId="u1"
         onOpenLedger={vi.fn()}
         onOpenChain={vi.fn()}
         onOpenFocus={vi.fn()}
@@ -110,6 +137,7 @@ describe('the today screen', () => {
   it('says nothing at all when nothing is owed', async () => {
     render(
       <Today
+        ownerId="u1"
         onOpenLedger={vi.fn()}
         onOpenChain={vi.fn()}
         onOpenFocus={vi.fn()}
@@ -132,6 +160,7 @@ describe('the today screen', () => {
 
     render(
       <Today
+        ownerId="u1"
         onOpenLedger={onOpenLedger}
         onOpenChain={vi.fn()}
         onOpenFocus={vi.fn()}
@@ -158,6 +187,7 @@ describe('the today screen', () => {
 
     render(
       <Today
+        ownerId="u1"
         onOpenLedger={vi.fn()}
         onOpenChain={vi.fn()}
         onOpenFocus={vi.fn()}
@@ -166,7 +196,12 @@ describe('the today screen', () => {
     );
 
     await screen.findByRole('button', { name: /Owed since you started/ });
-    expect(seenEq.filter((e) => e.table === 'penalty_current' && e.column === 'kind')).toEqual([]);
+    // Two `penalty_current` reads exist since Story 5.1 (the other one is day-only, for
+    // Grace Day eligibility) — this call is identified as the aggregate one specifically by
+    // carrying no `kind` filter at all, distinct from the other by its own column list.
+    expect(
+      fromCalls.some((c) => c.table === 'penalty_current' && !c.columns.includes('kind')),
+    ).toBe(true);
   });
 
   it('never claims a verdict for a day that has not ended', async () => {
@@ -174,6 +209,7 @@ describe('the today screen', () => {
 
     render(
       <Today
+        ownerId="u1"
         onOpenLedger={vi.fn()}
         onOpenChain={vi.fn()}
         onOpenFocus={vi.fn()}
@@ -205,6 +241,7 @@ describe('the today screen', () => {
 
     render(
       <Today
+        ownerId="u1"
         onOpenLedger={vi.fn()}
         onOpenChain={vi.fn()}
         onOpenFocus={vi.fn()}
@@ -249,6 +286,7 @@ describe('the today screen', () => {
 
     render(
       <Today
+        ownerId="u1"
         onOpenLedger={vi.fn()}
         onOpenChain={vi.fn()}
         onOpenFocus={vi.fn()}
@@ -277,6 +315,7 @@ describe('the today screen', () => {
     // merge must not invent a position for a commitment the view was never asked about.
     render(
       <Today
+        ownerId="u1"
         onOpenLedger={vi.fn()}
         onOpenChain={vi.fn()}
         onOpenFocus={vi.fn()}
@@ -293,6 +332,7 @@ describe('the today screen', () => {
     const onOpenChain = vi.fn();
     render(
       <Today
+        ownerId="u1"
         onOpenLedger={vi.fn()}
         onOpenChain={onOpenChain}
         onOpenFocus={vi.fn()}
@@ -324,6 +364,7 @@ describe('the today screen', () => {
 
     render(
       <Today
+        ownerId="u1"
         onOpenLedger={vi.fn()}
         onOpenChain={onOpenChain}
         onOpenFocus={onOpenFocus}
@@ -345,6 +386,7 @@ describe('the today screen', () => {
     const onOpenSettings = vi.fn();
     render(
       <Today
+        ownerId="u1"
         onOpenLedger={vi.fn()}
         onOpenChain={vi.fn()}
         onOpenFocus={vi.fn()}
@@ -360,6 +402,7 @@ describe('the today screen', () => {
     rows.commitment = { data: [], error: null };
     const { unmount } = render(
       <Today
+        ownerId="u1"
         onOpenLedger={vi.fn()}
         onOpenChain={vi.fn()}
         onOpenFocus={vi.fn()}
@@ -372,6 +415,7 @@ describe('the today screen', () => {
     rows.commitment = { data: null, error: { message: 'permission denied' } };
     render(
       <Today
+        ownerId="u1"
         onOpenLedger={vi.fn()}
         onOpenChain={vi.fn()}
         onOpenFocus={vi.fn()}
@@ -383,16 +427,27 @@ describe('the today screen', () => {
     expect(screen.queryByText(/Nothing set up yet/)).not.toBeInTheDocument();
   });
 
-  it('surfaces a failed penalties, chains, or quotas read instead of rendering as if nothing were owed or held', async () => {
-    for (const table of ['penalty_current', 'chain_current', 'weekly_quota_progress']) {
+  it('surfaces a failed penalties, chains, quotas, or Grace Days read instead of rendering as if nothing were owed or held', async () => {
+    for (const table of [
+      'penalty_current',
+      'chain_current',
+      'weekly_quota_progress',
+      'settlement_current:day',
+      'penalty_current:day',
+      'grace_allowance_remaining',
+    ]) {
       rows.commitment = { data: [gym], error: null };
       rows.penalty_current = { data: [], error: null };
       rows.chain_current = { data: [], error: null };
       rows.weekly_quota_progress = { data: [], error: null };
+      rows['settlement_current:day'] = { data: [], error: null };
+      rows['penalty_current:day'] = { data: [], error: null };
+      rows.grace_allowance_remaining = { data: { remaining: 2 }, error: null };
       rows[table] = { data: null, error: { message: `${table} unreadable` } };
 
       const { unmount } = render(
         <Today
+          ownerId="u1"
           onOpenLedger={vi.fn()}
           onOpenChain={vi.fn()}
           onOpenFocus={vi.fn()}
@@ -403,5 +458,183 @@ describe('the today screen', () => {
       expect(await screen.findByText(new RegExp(`${table} unreadable`))).toBeInTheDocument();
       unmount();
     }
+  });
+
+  describe('Grace Day, on the Day summary (Story 5.1)', () => {
+    it('offers the control on a Failed, owed day and always states how many remain', async () => {
+      rows['settlement_current:day'] = {
+        data: [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+        error: null,
+      };
+      rows['penalty_current:day'] = {
+        data: [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+        error: null,
+      };
+      rows.grace_allowance_remaining = { data: { remaining: 2 }, error: null };
+
+      render(
+        <Today
+          ownerId="u1"
+          onOpenLedger={vi.fn()}
+          onOpenChain={vi.fn()}
+          onOpenFocus={vi.fn()}
+          onOpenSettings={vi.fn()}
+        />,
+      );
+
+      expect(await screen.findByRole('button', { name: /Spend a Grace Day/ })).toBeInTheDocument();
+      expect(screen.getByText('2 Grace Days remaining this month.')).toBeInTheDocument();
+    });
+
+    it('filters to verdict = failed server-side, rather than pulling the account’s entire day-kind settlement history', async () => {
+      rows['settlement_current:day'] = {
+        data: [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+        error: null,
+      };
+      rows['penalty_current:day'] = {
+        data: [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+        error: null,
+      };
+
+      render(
+        <Today
+          ownerId="u1"
+          onOpenLedger={vi.fn()}
+          onOpenChain={vi.fn()}
+          onOpenFocus={vi.fn()}
+          onOpenSettings={vi.fn()}
+        />,
+      );
+      await screen.findByRole('button', { name: /Spend a Grace Day/ });
+
+      const settlementCall = fromCalls.find(
+        (c) => c.table === 'settlement_current' && c.columns.includes('verdict'),
+      );
+      expect(settlementCall).toBeDefined();
+      expect(settlementCall?.columns).toEqual(expect.arrayContaining(['kind', 'verdict']));
+    });
+
+    it('says nothing at all when nothing is graceable — the same "say nothing it cannot support" rule as the rest of this screen', async () => {
+      render(
+        <Today
+          ownerId="u1"
+          onOpenLedger={vi.fn()}
+          onOpenChain={vi.fn()}
+          onOpenFocus={vi.fn()}
+          onOpenSettings={vi.fn()}
+        />,
+      );
+
+      await screen.findByRole('button', { name: /Gym/ });
+      expect(screen.queryByRole('button', { name: /Spend a Grace Day/ })).not.toBeInTheDocument();
+    });
+
+    it('sends owner_id and the row’s own for_day, and does not claim Waived before the fold-in runs', async () => {
+      rows['settlement_current:day'] = {
+        data: [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+        error: null,
+      };
+      rows['penalty_current:day'] = {
+        data: [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+        error: null,
+      };
+
+      render(
+        <Today
+          ownerId="owner-42"
+          onOpenLedger={vi.fn()}
+          onOpenChain={vi.fn()}
+          onOpenFocus={vi.fn()}
+          onOpenSettings={vi.fn()}
+        />,
+      );
+
+      await userEvent.click(await screen.findByRole('button', { name: /Spend a Grace Day/ }));
+
+      expect(inserted).toEqual([
+        { table: 'grace_day', payload: { owner_id: 'owner-42', for_day: '2026-08-18' } },
+      ]);
+      expect(
+        await screen.findByText('Grace Day spent. This day clears within the hour.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Spend a Grace Day/ })).not.toBeInTheDocument();
+    });
+
+    it('shows the server’s own refusal verbatim on a failed spend', async () => {
+      rows['settlement_current:day'] = {
+        data: [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+        error: null,
+      };
+      rows['penalty_current:day'] = {
+        data: [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+        error: null,
+      };
+      graceInsertResult = {
+        error: {
+          code: 'P0001',
+          message: 'Both Grace Days for this month have already been spent.',
+        },
+      };
+
+      render(
+        <Today
+          ownerId="u1"
+          onOpenLedger={vi.fn()}
+          onOpenChain={vi.fn()}
+          onOpenFocus={vi.fn()}
+          onOpenSettings={vi.fn()}
+        />,
+      );
+
+      await userEvent.click(await screen.findByRole('button', { name: /Spend a Grace Day/ }));
+
+      expect(
+        await screen.findByText('Both Grace Days for this month have already been spent.'),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Spend a Grace Day/ })).toBeEnabled();
+    });
+
+    it('never double-decrements the shown allowance on an already-spent (23505) outcome', async () => {
+      // A second, still-open row proves it: if the count had wrongly dropped, that row's
+      // own figure would say so even though the spent row's own control disappears either
+      // way. Mirrors `components/ledger.tsx`'s identical test.
+      rows['settlement_current:day'] = {
+        data: [
+          { period: '2026-08-19', verdict: 'failed', missed_count: 1 },
+          { period: '2026-08-18', verdict: 'failed', missed_count: 1 },
+        ],
+        error: null,
+      };
+      rows['penalty_current:day'] = {
+        data: [
+          { amount_dong: 500000, state: 'owed', period: '2026-08-19' },
+          { amount_dong: 500000, state: 'owed', period: '2026-08-18' },
+        ],
+        error: null,
+      };
+      graceInsertResult = { error: { code: '23505', message: 'duplicate key value' } };
+
+      render(
+        <Today
+          ownerId="u1"
+          onOpenLedger={vi.fn()}
+          onOpenChain={vi.fn()}
+          onOpenFocus={vi.fn()}
+          onOpenSettings={vi.fn()}
+        />,
+      );
+      await screen.findAllByText('2 Grace Days remaining this month.');
+
+      await userEvent.click(
+        await screen.findByRole('button', { name: 'Spend a Grace Day for 2026-08-18' }),
+      );
+
+      expect(
+        await screen.findByText('Grace Day spent. This day clears within the hour.'),
+      ).toBeInTheDocument();
+      // The still-open row (2026-08-19) must keep reading 2, not drop to 1.
+      expect(await screen.findByText('2 Grace Days remaining this month.')).toBeInTheDocument();
+      expect(screen.queryByText('1 Grace Day remaining this month.')).not.toBeInTheDocument();
+    });
   });
 });

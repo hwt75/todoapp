@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-25-2026 13:40
+last_updated: 08-25-2026 16:55
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -73,8 +73,8 @@ development_status:
   4-7-the-app-does-the-asking-the-referee-does-the-collecting: review
   epic-4-retrospective: optional
 
-  epic-5: backlog
-  5-1-a-countable-way-to-be-forgiven: backlog
+  epic-5: in-progress
+  5-1-a-countable-way-to-be-forgiven: review
   5-2-the-app-notices-i-have-gone-quiet: backlog
   5-3-the-friend-is-told-i-have-disappeared: backlog
   5-4-the-long-view-including-whether-this-still-works: backlog
