@@ -407,3 +407,37 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
   summary: "`components/referee-appeal-detail.tsx` infers whether an appeal was approved by comparing `settlement_current`'s id against the appeal's own stored `settlement_id`, rather than reading an explicit ruling-status column — correct today only because approval is the sole thing that currently supersedes a day's settlement once a Held Penalty exists."
   evidence: Raised by the 2026-08-25 review (blind-hunter). Deferred — the invariant holds under every mechanism that exists in this codebase today, and adding an explicit status column is a schema decision with its own migration cost, not a one-line fix. Revisit if a future story (e.g. a second correction mechanism) ever supersedes a `failed` day's settlement for a reason unrelated to an appeal ruling — at that point this inference would need to become an explicit column.
+
+## Deferred from: code review of spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting (2026-08-25)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "Neither the owed-penalties list nor the pre-written collection message names which doer account a row belongs to. Since the referee's RLS grants read every doer account's Penalties, not only the live doer's (a trade-off Story 4.5 already accepted and recorded), two different accounts' owed Penalties would render with no way to tell them apart."
+  evidence: Raised by the 2026-08-25 review (blind-hunter). Deferred — this is the same underlying, already-accepted trade-off Story 4.5's own deferred entry above records (the referee's read policies aren't scoped to `is_live_doer`), not a new gap this story introduces; in practice this app has exactly one real doer account, so the ambiguity is theoretical today. Revisit alongside that same entry if this product is ever run somewhere more than one real doer account is realistic.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "If `referee_missed_commitments()` fails, `components/referee-home.tsx` discards the whole screen (including the already-fetched appeals list and owed-penalty summary) for a bare 'Failed.' message, rather than degrading only the affected list the way Story 4.6's own evidence-loading failure does (per-item, not whole-screen)."
+  evidence: Raised by the 2026-08-25 review (blind-hunter). Deferred — real, but the fix is a genuine restructuring of `load()`'s error handling (partial-failure state, not a single `failed` variant), bigger than a one-line patch; the failure is also rare (a working RLS/RPC call failing only on infrastructure trouble) and self-heals on reload. Revisit alongside a broader pass making every referee/doer screen's error handling per-section rather than whole-screen.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "No test exercises `referee_missed_commitments()` returning an error — `components/referee-home.tsx`'s handling for that branch is untested."
+  evidence: Raised by the 2026-08-25 review (blind-hunter). Deferred alongside the whole-screen-failure entry above — testing the current behavior isn't worth much on its own if that behavior is likely to change once per-section error handling is built.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "`mark_penalty_collected()`'s NULL-role refusal (`role_from_table() is distinct from 'referee'`, guarding against a caller with zero `profile` rows) is never actually tested — every SQL test fixture uses a session with a real `role = 'doer'` row, never a session with no profile row at all."
+  evidence: Raised by the 2026-08-25 review (blind-hunter). Deferred — every `auth.users` row gets a `profile` row automatically via the `on_auth_user_created` trigger (`20260819120000_account_and_roles.sql`), so a zero-profile-row session is not reachable through ordinary use; the same untested-but-structurally-rare gap already exists for `rule_appeal()`'s identical guard (Story 4.6), not new to this story. Revisit only if a path is ever found that creates an `auth.users` row without the trigger running.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "The owed-penalties list's 'oldest first' ordering has no deterministic tiebreaker — rows are sorted only by `created_at`, and two Penalties created in the same batch settlement run can share an identical timestamp, leaving their relative order unspecified."
+  evidence: Raised by the 2026-08-25 review (blind-hunter). Deferred — matches the identical, already-recorded tiebreaker gap in Story 4.6's own pending-appeals list ordering; cosmetic (both rows still appear, just possibly reordered between loads). Revisit together with that entry if the author reports either list visibly reordering.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "The Mark Collected and Copy-message buttons' `busy`/`disabled` state while their respective async call is in flight is never exercised by any test — every test resolves the mocked call immediately."
+  evidence: Raised by the 2026-08-25 review (blind-hunter). Deferred — a real test-coverage gap, but low-value on its own; worth adding alongside a broader pass adding pending-state assertions across the referee surface's async controls generally.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "Double-clicking a row's Copy-message button before the first `navigator.clipboard.writeText()` call settles can let the two calls' results resolve out of order, showing 'Copied.'/'Could not copy.' for the wrong click."
+  evidence: Raised by the 2026-08-25 review (edge-case-hunter). Deferred — narrow (needs two rapid clicks within one clipboard round trip) and low-consequence (worst case is a momentarily wrong status message on a control that can simply be clicked again).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "A day-kind owed Penalty whose `referee_missed_commitments()` lookup legitimately returns zero rows (a data gap) would render identically to the intentional week-kind fallback ('A commitment') — nothing distinguishes 'no commitment data exists for this kind' from 'something is wrong for a kind that should always have data'."
+  evidence: Raised by the 2026-08-25 review (edge-case-hunter). Deferred — structurally near-unreachable in normal operation: a day-kind settlement only ever produces an `owed` Penalty when `settle_day()`'s own `admitted + silent > 0`, which requires at least one `settlement_commitment` row with `outcome = 'missed'` to exist for that settlement by construction. Revisit only if this is ever observed happening for a genuine day-kind row.

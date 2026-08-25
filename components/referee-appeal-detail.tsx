@@ -336,6 +336,13 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
             {view.appeal.penaltyState === 'dropped' && (
               <p role="status">{REFEREE_APPEAL_DETAIL_COPY.timedOut}</p>
             )}
+
+            {/* Story 4.7: this appeal's own Penalty was rejected, then later marked
+                Collected from the "Owed penalties" list — reachable by revisiting this
+                screen afterward. Without this branch the outcome area silently went blank. */}
+            {view.appeal.penaltyState === 'collected' && (
+              <p role="status">{REFEREE_APPEAL_DETAIL_COPY.collected}</p>
+            )}
           </>
         )}
       </section>

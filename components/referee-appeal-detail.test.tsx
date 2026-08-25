@@ -341,6 +341,21 @@ describe('an already-resolved appeal', () => {
     expect(await screen.findByText('Converted to owed. He has been notified.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'He did it' })).not.toBeInTheDocument();
   });
+
+  it('shows the collected outcome, with no ruling controls (Story 4.7)', async () => {
+    // Reachable: rule_appeal(false) rejects the appeal (owed), then the referee later marks
+    // that same Penalty Collected from the "Owed penalties" list — a bookmark, browser back,
+    // or simply reopening this screen afterward lands here. Without a branch for this state
+    // the outcome area silently went blank (no case, no fallback).
+    penaltyResult = { data: { state: 'collected' }, error: null };
+    renderDetail();
+
+    expect(
+      await screen.findByText('Collected. The referee marked this debt paid.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'He did it' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "He didn't" })).not.toBeInTheDocument();
+  });
 });
 
 describe('access', () => {

@@ -9,6 +9,8 @@
  */
 
 import type { PenaltyState } from './ledger';
+import { formatDong } from './money';
+import { ZONE } from './declaration';
 
 /** What Settings sends to the `pair-referee` Edge Function. Nothing else — the function
  *  derives everything about eligibility itself, never trusting a client-sent role or flag. */
@@ -170,6 +172,11 @@ export function summarizeReferee(rows: readonly RefereePenaltyRow[]): RefereeSum
       // read as resolved rather than crash the home screen.
       case 'voided':
         break;
+      // Story 4.7: mark_penalty_collected()'s own owed -> collected transition. Excluded
+      // from both counts for the same reason `dropped`/`voided` are — resolved, and the
+      // debt has changed hands, not owed any longer.
+      case 'collected':
+        break;
       default: {
         const exhaustive: never = row.state;
         throw new Error(`summarizeReferee: unhandled penalty state ${String(exhaustive)}`);
@@ -208,6 +215,28 @@ export interface PendingAppealRow {
   id: string;
   forDay: string;
   commitmentName: string | null;
+}
+
+/**
+ * One row of `components/referee-home.tsx`'s own "Owed penalties" list (Story 4.7, FR-21) —
+ * amount, day and every commitment `referee_missed_commitments()` (a `security definer`
+ * function, scoped to `outcome = 'missed'` and `kind = 'day'` — never a new RLS policy on
+ * `settlement_commitment` itself, which is also `chain_current`'s own base table) names for
+ * the Penalty's own settlement, joined rather than picking one — a day's settlement can
+ * cover more than one missed commitment even though `penalty` itself is 1:1 with
+ * `settlement` (Story 4.6's own established fact). Every owed Penalty appears here
+ * regardless of kind — a week-kind one (Week Close, 3.4) has to be just as collectible as a
+ * day-kind one, or it sits owed forever with no control that can ever discharge it — but
+ * `missedCommitments` is empty for one, since Week Close freezes no per-commitment outcome
+ * to name; the component falls back to a generic label rather than fabricating a commitment
+ * list. Oldest first (`created_at` ascending) is the list's own sort, not a field carried
+ * here.
+ */
+export interface OwedPenaltyRow {
+  id: string;
+  forDay: string;
+  amountDong: number;
+  missedCommitments: string[];
 }
 
 /**
@@ -289,4 +318,67 @@ export const REFEREE_APPEAL_DETAIL_COPY = {
    *  it — FR-15's own promise, not a failure of this screen. */
   timedOut:
     'This one is no longer open — it timed out and dropped in his favor before you got to it.',
+
+  /** Story 4.7: this appeal's own Penalty was rejected ("He didn't"), then later marked
+   *  Collected from the "Owed penalties" list — reachable by revisiting this screen
+   *  afterward (a bookmark, browser back, or simply opening it again). Without this branch
+   *  `penaltyState === 'collected'` matched none of the others above and the outcome area
+   *  silently went blank. */
+  collected: 'Collected. The referee marked this debt paid.',
+} as const;
+
+/**
+ * A day an owed Penalty stems from, with its year — unlike `lib/appeal.ts`'s own
+ * `formatDeadline` (`"Aug 18"`), which deliberately omits the year because an Appeal's own
+ * deadline is always a few days out and the year is never in question. An owed Penalty is
+ * the opposite case by design (this story's own Never boundary: "never written off
+ * automatically" — a debt persists indefinitely), so two rows more than a year apart must
+ * not render identically, and the collection message must not name an ambiguous date for a
+ * debt that has sat unpaid a long time. A dedicated formatter rather than adding an option to
+ * `formatDeadline` itself, so its own other callers (the Appeal deadline note, the pending
+ * appeals list) are untouched.
+ */
+export function formatOwedDay(day: Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: ZONE,
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(day);
+}
+
+/**
+ * The collection message (Story 4.7, FR-21) — verbatim from `epic-4-context.md`'s UX &
+ * Interaction Patterns, with `formatDong`/`formatOwedDay` filling in the amount and day
+ * rather than the planning doc's own literal comma-grouped figure (confirmed with the human
+ * before drafting — the story's own Ask First is "None" for exactly this reason). Attributes
+ * the demand to the app, never the referee ("I'm just the one collecting it"), and is placed
+ * on the clipboard unchanged — no compose field, no editable message (Never boundary).
+ */
+export function collectionMessage(amountDong: number, forDay: Date): string {
+  return (
+    `todoapp says you owe ${formatDong(amountDong)} for ${formatOwedDay(forDay)}. ` +
+    `I'm just the one collecting it. When are you free?`
+  );
+}
+
+/**
+ * Every string `components/referee-home.tsx`'s own "Owed penalties" list says (Story 4.7).
+ * Kept here for the reason every other `*_COPY` object in this codebase gives: copy rules,
+ * testable independent of a component.
+ */
+export const OWED_PENALTIES_COPY = {
+  heading: 'Owed penalties',
+
+  copy: 'Copy message',
+  copied: 'Copied.',
+  /** The first clipboard use in this codebase — an unsupported browser, a denied
+   *  permission, or an insecure context all reject the same way. Surfaced as a status
+   *  message, never silently, matching the failure-surfacing bar Story 4.6 set for evidence
+   *  loading (`REFEREE_APPEAL_DETAIL_COPY.evidenceLoadFailed`). */
+  copyFailed: 'Could not copy the message.',
+
+  markCollected: 'Mark Collected',
+  marking: 'Marking…',
+  markFailed: 'Failed.',
 } as const;

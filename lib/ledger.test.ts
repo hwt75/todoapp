@@ -313,6 +313,31 @@ describe('a Penalty a won appeal voided (Story 4.6)', () => {
   });
 });
 
+describe('a Penalty the referee marked Collected (Story 4.7)', () => {
+  const collectedPenalty: PenaltyRecord = {
+    period: '2026-08-18',
+    amount_dong: PENALTY_DONG,
+    state: 'collected',
+  };
+
+  it('says Collected, distinct from Owed', () => {
+    const row = buildLedger([failedDay], [collectedPenalty], misses)[0];
+    expect(ledgerPillLabel(row)).toBe('Collected');
+    expect(ledgerPillLabel(row)).not.toBe('Owed');
+  });
+
+  it('colours the held (good/resolved) family, the same as Dropped and Voided', () => {
+    const row = buildLedger([failedDay], [collectedPenalty], misses)[0];
+    expect(ledgerPillFamily(row)).toBe('held');
+    expect(ledgerPillFamily(row)).not.toBe('failed');
+  });
+
+  it('excludes a collected Penalty from the outstanding total — the debt has been paid', () => {
+    const rows = buildLedger([failedDay], [collectedPenalty], misses);
+    expect(outstandingTotal(rows)).toBe(0);
+  });
+});
+
 describe('which misses can still be contested (Story 4.4)', () => {
   const machineFiled: MissRecord = {
     for_day: '2026-08-18',

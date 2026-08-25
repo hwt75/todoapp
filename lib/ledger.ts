@@ -26,11 +26,14 @@ export type DayVerdict = 'clean' | 'failed' | 'expired';
  *  never reaches `penalty_current`/the Ledger the way `held`/`dropped` do —
  *  `components/referee-appeal-detail.tsx` infers it by comparing settlement ids rather than
  *  reading it off any row (this codebase's one-door-per-table rule, `lib/chain.test.ts`,
- *  forbids reading the base `penalty` table directly). The case exists here only so this
- *  shared union type and every exhaustive switch over it — `summarizeReferee`,
+ *  forbids reading the base `penalty` table directly). `collected` arrives with Story 4.7:
+ *  the referee's own `mark_penalty_collected()` is the only way a debt is ever discharged —
+ *  a pure `owed -> collected` transition, no settlement/chain correction (the day already
+ *  correctly counted the miss; paying it doesn't change what happened). The case exists here
+ *  only so this shared union type and every exhaustive switch over it — `summarizeReferee`,
  *  `ledgerPillLabel`/`ledgerPillFamily` below — compile rather than silently misclassify a
- *  state that now exists. `collected` (4.7) and `waived` (5.1) are still ahead. */
-export type PenaltyState = 'owed' | 'held' | 'dropped' | 'voided';
+ *  state that now exists. `waived` (5.1) is still ahead. */
+export type PenaltyState = 'owed' | 'held' | 'dropped' | 'voided' | 'collected';
 export type LedgerKind = 'day' | 'week';
 
 /** The rows as they come back from the database, before folding. Shared shape for a day's
@@ -188,6 +191,9 @@ export function ledgerPillLabel(row: LedgerRow): string {
   // kept distinct from `Dropped` per Story 4.6's own boundary: a decided reversal is not
   // the same fact as an unresolved timeout, even where neither ever renders today.
   if (row.state === 'voided') return 'Voided';
+  // Story 4.7: the referee's own Mark Collected. Distinct from `Owed` — the debt has since
+  // changed hands, and a record that still said `Owed` would tell him he still owes it.
+  if (row.state === 'collected') return 'Collected';
   return row.state === 'owed' ? 'Owed' : 'Failed';
 }
 
@@ -199,7 +205,10 @@ export function ledgerPillLabel(row: LedgerRow): string {
  * elsewhere in this design system (a chain that held, a grace day that waived a miss), and
  * a Held Penalty is "sort this out", not "you lost this" (epic-4-context.md's own note).
  * `dropped` — the timeout resolved in his favour — takes the `held` colour family instead,
- * alongside `waived`: both are a bad day that ended up costing nothing.
+ * alongside `waived`: both are a bad day that ended up costing nothing. `collected` (4.7)
+ * takes it too — money that stood and has since been paid is resolved/good, same family a
+ * won appeal and a timed-out one already get, never the failed family a row that still owes
+ * gets.
  */
 export function ledgerPillFamily(row: LedgerRow): 'held' | 'urgent' | 'failed' {
   if (row.verdict === 'clean') return 'held';
@@ -208,6 +217,9 @@ export function ledgerPillFamily(row: LedgerRow): 'held' | 'urgent' | 'failed' {
   // A won appeal, same good/resolved family as `dropped` and a clean day — money that in
   // the end cost nothing, never the failed family a row that still owes gets.
   if (row.state === 'voided') return 'held';
+  // Story 4.7: paid. Resolved, same as dropped/voided — never the failed family, which
+  // reads as still owed.
+  if (row.state === 'collected') return 'held';
   return 'failed';
 }
 
