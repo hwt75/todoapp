@@ -832,3 +832,7 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-3-the-friend-is-told-i-have-disappeared.md`
   summary: The Resend call sends `text` only (no `html` alternative), and `RESEND_FROM_EMAIL` is used as a bare address with no display name — plain and unstyled compared to how a transactional email from a named product would typically present.
   evidence: Raised by the 2026-08-26 review (blind-hunter). Functionally correct and deliverable as built; deferred because it's a polish decision (an `html` body, a `"todoapp <...>"` from-header) rather than a defect, and this is the product's first outbound email to a real external person — worth a deliberate pass rather than a default picked mid-story.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-4-the-long-view-including-whether-this-still-works.md`
+  summary: No index exists on `penalty.collected_at` or `appeal.ruled_at`, both of which `components/monthly-report.tsx` now range-filters (`gte`/`lt`) on every report load.
+  evidence: Raised by the 2026-08-26 review (blind-hunter). Negligible at this app's current single-tenant scale (a handful of rows per account per month), and neither column exists on a table large enough yet to make a sequential scan visible. Revisit if either table's row count ever grows enough for this to matter.

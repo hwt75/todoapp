@@ -87,14 +87,28 @@ beforeEach(() => {
 describe('the settings surface', () => {
   it('shows the hour the question actually arrives at', async () => {
     profileResult = { data: { morning_hour: 9 }, error: null };
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
 
     expect(await screen.findByLabelText('Morning hour')).toHaveValue('9');
     expect(screen.getByRole('group', { name: 'Morning hour, 09:00' })).toBeInTheDocument();
   });
 
   it('writes the hour to the account, through the column grant that already exists', async () => {
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     await userEvent.selectOptions(screen.getByLabelText('Morning hour'), '6');
@@ -106,7 +120,14 @@ describe('the settings surface', () => {
 
   it('does not claim a refused write saved, but keeps the hour he typed', async () => {
     updateResult = { error: { message: 'new row violates check constraint' } };
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     await userEvent.selectOptions(screen.getByLabelText('Morning hour'), '6');
@@ -121,14 +142,28 @@ describe('the settings surface', () => {
     // Zero rows, no error — `maybeSingle()`'s honest shape for a missing profile row. The
     // frozen boundary forbids a second `?? 7` here, so this must read as a failure, not a guess.
     profileResult = { data: null, error: null };
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
 
     expect(await screen.findByText(/No profile found/)).toBeInTheDocument();
     expect(screen.queryByLabelText('Morning hour')).not.toBeInTheDocument();
   });
 
   it('offers a control for permission only while one could still change the answer', async () => {
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     expect(screen.getByRole('button', { name: 'Turn on notifications' })).toBeInTheDocument();
@@ -137,7 +172,12 @@ describe('the settings surface', () => {
   it('states a granted or denied permission instead of offering a button that would lie', async () => {
     vi.stubGlobal('Notification', { permission: 'denied', requestPermission: vi.fn() });
     const { unmount } = render(
-      <Settings ownerId="u1" installState="installed" onClose={vi.fn()} />,
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
     );
     await screen.findByLabelText('Morning hour');
 
@@ -148,14 +188,28 @@ describe('the settings surface', () => {
     unmount();
 
     vi.stubGlobal('Notification', { permission: 'granted', requestPermission: vi.fn() });
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     expect(screen.queryByRole('button', { name: 'Turn on notifications' })).not.toBeInTheDocument();
   });
 
   it('never offers to install or uninstall the app', async () => {
-    render(<Settings ownerId="u1" installState="browser" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="browser"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     const home = screen.getByRole('group', { name: /Home screen/ });
@@ -168,7 +222,14 @@ describe('the settings surface', () => {
     // Permission defaults to `'default'` (from `beforeEach`), which is actionable on its own —
     // this is the case the install row must still override, per the frozen I/O matrix row
     // "Launched in a browser tab → permission is not offered at all".
-    render(<Settings ownerId="u1" installState="browser" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="browser"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     expect(screen.queryByRole('button', { name: 'Turn on notifications' })).not.toBeInTheDocument();
@@ -176,7 +237,14 @@ describe('the settings surface', () => {
 
   it('shows the Grace Days remaining count, read-only (Story 5.1)', async () => {
     graceResult = { data: { remaining: 1 }, error: null };
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     const row = await screen.findByRole('group', { name: 'Grace Days' });
@@ -188,7 +256,14 @@ describe('the settings surface', () => {
 
   it('says none remain rather than a bare 0', async () => {
     graceResult = { data: { remaining: 0 }, error: null };
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     expect(await screen.findByText('No Grace Days remaining this month.')).toBeInTheDocument();
@@ -199,7 +274,14 @@ describe('the settings surface', () => {
     // stay distinguishable from the "failed" case below rather than the two sharing one
     // ambiguous null.
     graceResult = new Promise(() => {});
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
 
     // The morning hour still loads and is still usable — a slow Grace Days read is one
     // independent fact among several on this screen, not a precondition for the rest.
@@ -211,7 +293,14 @@ describe('the settings surface', () => {
     // An earlier version destructured only `data` from this read, silently swallowing
     // `error` entirely — a real failure was indistinguishable from "still loading".
     graceResult = { data: null, error: { message: 'permission denied' } };
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     const row = await screen.findByRole('group', { name: 'Grace Days' });
@@ -227,7 +316,14 @@ describe('the settings surface', () => {
     // own `where role = 'doer'`) — no row without an error is itself a failure, not a
     // silent "treat it as 0 remaining".
     graceResult = { data: null, error: null };
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     const row = await screen.findByRole('group', { name: 'Grace Days' });
@@ -237,7 +333,14 @@ describe('the settings surface', () => {
 
   it('surfaces a genuine promise rejection, not only a resolved {error} pair', async () => {
     graceResult = Promise.reject(new Error('network down'));
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     const row = await screen.findByRole('group', { name: 'Grace Days' });
@@ -247,7 +350,14 @@ describe('the settings surface', () => {
 
   it('fills the referee row: pairs from an email, shows the one-time password once', async () => {
     invokeResult = { data: { email: 'ref@example.com', password: 'p4ssw0rd12345' }, error: null };
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     expect(screen.getByRole('button', { name: 'Pair referee' })).toBeDisabled();
@@ -272,7 +382,14 @@ describe('the settings surface', () => {
       data: null,
       error: { message: 'A referee is already paired. There is no re-pairing yet.' },
     };
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     await userEvent.type(screen.getByPlaceholderText('referee@example.com'), 'ref2@example.com');
@@ -286,7 +403,14 @@ describe('the settings surface', () => {
   });
 
   it('subscribes this device when permission is granted from here', async () => {
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     await userEvent.click(screen.getByRole('button', { name: 'Turn on notifications' }));
@@ -306,7 +430,14 @@ describe('the settings surface', () => {
       permission: 'default',
       requestPermission: vi.fn().mockResolvedValue('denied'),
     });
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
     await screen.findByLabelText('Morning hour');
 
     await userEvent.click(screen.getByRole('button', { name: 'Turn on notifications' }));
@@ -316,7 +447,14 @@ describe('the settings surface', () => {
 
   it('says what failed rather than showing a default hour it never read', async () => {
     profileResult = { data: null, error: { message: 'permission denied' } };
-    render(<Settings ownerId="u1" installState="installed" onClose={vi.fn()} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
 
     expect(await screen.findByText(/permission denied/)).toBeInTheDocument();
     expect(screen.queryByLabelText('Morning hour')).not.toBeInTheDocument();
@@ -324,9 +462,32 @@ describe('the settings surface', () => {
 
   it('goes back to today', async () => {
     const onClose = vi.fn();
-    render(<Settings ownerId="u1" installState="installed" onClose={onClose} />);
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={onClose}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
 
     await userEvent.click(screen.getByRole('button', { name: 'Back to today' }));
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('opens the monthly report (Story 5.4)', async () => {
+    const onOpenMonthlyReport = vi.fn();
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={onOpenMonthlyReport}
+      />,
+    );
+
+    expect(await screen.findByText('Monthly report')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(onOpenMonthlyReport).toHaveBeenCalledOnce();
   });
 });

@@ -10,6 +10,7 @@ import { SilenceIntervention } from '@/components/silence-intervention';
 import { Today } from '@/components/today';
 import { Ledger, type AppealTarget } from '@/components/ledger';
 import { Settings } from '@/components/settings';
+import { MonthlyReport } from '@/components/monthly-report';
 import { ChainsDetail } from '@/components/chains-detail';
 import { FocusSession } from '@/components/focus-session';
 import { AppealForm } from '@/components/appeal-form';
@@ -45,6 +46,9 @@ export default function Home() {
   const [silenceEpisodeForOwner, setSilenceEpisodeForOwner] = useState<string | null>(null);
   const [showLedger, setShowLedger] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  // Story 5.4 (FR-24): a new screen in the existing ternary chain below, mirroring
+  // `showLedger`/`showSettings` exactly — not a new route.
+  const [showMonthlyReport, setShowMonthlyReport] = useState(false);
   const [chainOf, setChainOf] = useState<{ id: string; name: string } | null>(null);
   const [focusOf, setFocusOf] = useState<{ id: string; name: string } | null>(null);
   const [appealOf, setAppealOf] = useState<AppealTarget | null>(null);
@@ -229,11 +233,14 @@ export default function Home() {
             onClose={() => setShowLedger(false)}
             onOpenAppeal={setAppealOf}
           />
+        ) : showMonthlyReport ? (
+          <MonthlyReport onClose={() => setShowMonthlyReport(false)} />
         ) : showSettings ? (
           <Settings
             ownerId={ownerId}
             installState={installState}
             onClose={() => setShowSettings(false)}
+            onOpenMonthlyReport={() => setShowMonthlyReport(true)}
           />
         ) : (
           <Today

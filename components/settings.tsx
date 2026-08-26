@@ -65,10 +65,14 @@ export function Settings({
   ownerId,
   installState,
   onClose,
+  onOpenMonthlyReport,
 }: {
   ownerId: string;
   installState: InstallState;
   onClose: () => void;
+  /** Story 5.4 (FR-24). Reachable the same way Chains detail and Focus Session are: a
+   *  callback this component invokes itself, never a route the caller renders beside it. */
+  onOpenMonthlyReport: () => void;
 }) {
   const [view, setView] = useState<View>({ kind: 'loading' });
   const [saving, setSaving] = useState<Saving>({ kind: 'idle' });
@@ -332,6 +336,22 @@ export function Settings({
             {grace.kind === 'loading' ? 'Working…' : formatGraceAllowance(grace.remaining)}
           </span>
         )}
+      </div>
+
+      {/* Story 5.4 (FR-24): the monthly report's only entry point, mirroring
+          `onOpenLedger`/`onOpenSettings`'s own callback shape — a new screen `app/page.tsx`
+          renders in its existing ternary chain, never a route. */}
+      <div className="row" role="group" aria-label="Monthly report">
+        <div className="row-main">
+          <div className="row-name">Monthly report</div>
+          <div className="row-muted">
+            Every measure, for the most recently completed month — whether the whole arrangement is
+            still working.
+          </div>
+        </div>
+        <button type="button" onClick={onOpenMonthlyReport}>
+          Open
+        </button>
       </div>
 
       {/* Install state leads the two read-only rows. Without home-screen installation there is no

@@ -141,9 +141,30 @@ vi.mock('@/components/today', () => ({
 }));
 
 vi.mock('@/components/settings', () => ({
-  Settings: ({ onClose }: { onClose: () => void }) => (
+  Settings: ({
+    onClose,
+    onOpenMonthlyReport,
+  }: {
+    onClose: () => void;
+    onOpenMonthlyReport: () => void;
+  }) => (
     <div>
       <p>Settings screen</p>
+      <button type="button" onClick={onClose}>
+        Back to today
+      </button>
+      <button type="button" onClick={onOpenMonthlyReport}>
+        Open monthly report
+      </button>
+    </div>
+  ),
+}));
+
+// Story 5.4: a third screen in the same ternary chain, reached only from Settings.
+vi.mock('@/components/monthly-report', () => ({
+  MonthlyReport: ({ onClose }: { onClose: () => void }) => (
+    <div>
+      <p>Monthly report screen</p>
       <button type="button" onClick={onClose}>
         Back to today
       </button>
@@ -220,6 +241,26 @@ describe('the app shell', () => {
     // Today again, Settings gone.
     expect(await screen.findByRole('button', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.queryByText('Settings screen')).not.toBeInTheDocument();
+  });
+
+  it('opens the Monthly report from Settings and returns to Settings, not Today (Story 5.4)', async () => {
+    render(<Home />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Settings' }));
+    expect(await screen.findByText('Settings screen')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open monthly report' }));
+
+    // The Monthly report is on screen, Settings' own content gone with it.
+    expect(await screen.findByText('Monthly report screen')).toBeInTheDocument();
+    expect(screen.queryByText('Settings screen')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Back to today' }));
+
+    // Closing it falls back to the prior screen (Settings, still open underneath), never
+    // straight to Today — showSettings was never cleared by opening the report.
+    expect(await screen.findByText('Settings screen')).toBeInTheDocument();
+    expect(screen.queryByText('Monthly report screen')).not.toBeInTheDocument();
   });
 
   it('swaps Today for the Focus Session and back, with the tapped commitment carried through', async () => {
