@@ -6,6 +6,7 @@ import { CommitmentList } from '@/components/commitment-list';
 import { MorningGate } from '@/components/morning-gate';
 import { PushProbe } from '@/components/push-probe';
 import { SignIn } from '@/components/sign-in';
+import { SilenceIntervention } from '@/components/silence-intervention';
 import { Today } from '@/components/today';
 import { Ledger, type AppealTarget } from '@/components/ledger';
 import { Settings } from '@/components/settings';
@@ -31,6 +32,17 @@ export default function Home() {
   // owns the new `ownerId` land in the same commit (see the comment on that guard).
   const [roleForOwner, setRoleForOwner] = useState<string | null>(null);
   const gate = useGate(ownerId);
+  // Story 5.2 (FR-16): whether this account has an active (unsatisfied) Silence episode.
+  // Fetched inline, mirroring `role`'s own pattern just above rather than a dedicated hook —
+  // the read is a single row check, not a piece of state anything else on this screen needs.
+  const [silenceEpisode, setSilenceEpisode] = useState<{ startedDay: string } | null>(null);
+  // Which `ownerId` `silenceEpisode` was last reset for — same render-time-reset shape as
+  // `roleForOwner` just above, and for the identical reason: switching straight from one
+  // signed-in account to another with no sign-out between must not render one more frame
+  // under the *previous* account's Silence episode (2026-08-26 review finding — the original
+  // cut left this state keyed only to sign-out, the exact cross-account flash `roleForOwner`
+  // was written to close for `role`).
+  const [silenceEpisodeForOwner, setSilenceEpisodeForOwner] = useState<string | null>(null);
   const [showLedger, setShowLedger] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [chainOf, setChainOf] = useState<{ id: string; name: string } | null>(null);
@@ -70,6 +82,20 @@ export default function Home() {
     setRole('unknown');
   }
 
+  // Same reset, same reason, for the Silence episode (2026-08-26 review finding): landed in
+  // the same render as the `ownerId` change itself, not inside the Effect below, so a second
+  // account signing in with no sign-out between never renders one more frame under the
+  // previous account's episode while the new read is still in flight. No dedicated regression
+  // test for this one, unlike `role`'s own: `onAccountChange` only ever fires from `SignIn`,
+  // which this file never renders while either this branch or the MorningGate branch below is
+  // active (both are early returns) -- so in practice `silenceEpisode` is already `null` for
+  // the current account at the one moment a real switch can happen. Kept anyway, matching
+  // `role`'s own defensive shape, in case a future refactor changes that mounting guarantee.
+  if (ownerId !== silenceEpisodeForOwner) {
+    setSilenceEpisodeForOwner(ownerId);
+    setSilenceEpisode(null);
+  }
+
   useEffect(() => {
     if (!ownerId) return;
 
@@ -94,6 +120,34 @@ export default function Home() {
     if (effectiveRole === 'referee') router.replace('/referee');
   }, [effectiveRole, router]);
 
+  // Story 5.2: the one row RLS ever lets this account see is its own active episode, if any
+  // (silence_episode_one_active's own partial unique index guarantees at most one). No
+  // `.eq('owner_id', ...)` needed — RLS ("silence_episode: read own") already scopes this,
+  // the same convention every other read on this screen already follows.
+  useEffect(() => {
+    // No setState for the signed-out case — mirrors `useGate`'s own identical comment: the
+    // React Compiler rejects it, rightly, and the empty case is derived below instead of
+    // stored.
+    if (!ownerId) return;
+
+    let cancelled = false;
+
+    createClient()
+      .from('silence_episode')
+      .select('started_day')
+      .is('satisfied_at', null)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) {
+          setSilenceEpisode(data ? { startedDay: data.started_day as string } : null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ownerId]);
+
   // Nothing rendered here while the role read is in flight or the redirect above is about to
   // run — the doer's own screen must never flash in front of a referee session, even for one
   // frame. A read that errors resolves `role` to `null` the same as "no row", same as the
@@ -103,6 +157,26 @@ export default function Home() {
   // the rare one.
   if (ownerId && (role === 'unknown' || effectiveRole === 'referee')) {
     return <main />;
+  }
+
+  // Story 5.2 (FR-16): a third top-level branch, ahead of the ordinary Declaration gate below
+  // — an active Silence episode replaces routine notifications (including the outstanding
+  // Declaration prompt) rather than adding to them, so it must win this fork even when
+  // `gate.owing.length > 0` would otherwise render MorningGate directly. The intervention's
+  // own one concrete action renders that same MorningGate, unchanged, beneath its copy when
+  // there is something to answer.
+  if (ownerId && silenceEpisode) {
+    return (
+      <main>
+        <SilenceIntervention
+          ownerId={ownerId}
+          startedDay={silenceEpisode.startedDay}
+          owing={gate.owing}
+          now={gate.now}
+          onAnswered={gate.markAnswered}
+        />
+      </main>
+    );
   }
 
   // The gate is the entire screen, and that is how it blocks. Not a focus trap, not an

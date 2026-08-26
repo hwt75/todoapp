@@ -34,21 +34,37 @@ let profileRole: string | null = 'doer';
 let nextReadIsDeferred = false;
 let pendingRoleRead:
   ((value: { data: { role: string | null } | null; error: null }) => void) | null = null;
+// Story 5.2: `app/page.tsx` now also reads `silence_episode` directly (not through a mocked
+// hook, the same way `role` is read inline). `null` here is every existing test's own case —
+// no active episode, so this screen's original routing is exercised exactly as before.
+let activeSilenceEpisode: { started_day: string } | null = null;
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
-    from: () => ({
-      select: () => ({
-        maybeSingle: () => {
-          if (nextReadIsDeferred) {
-            nextReadIsDeferred = false;
-            return new Promise((resolve) => {
-              pendingRoleRead = resolve;
-            });
-          }
-          return Promise.resolve({ data: { role: profileRole }, error: null });
-        },
-      }),
-    }),
+    from: (table: string) => {
+      if (table === 'silence_episode') {
+        return {
+          select: () => ({
+            is: () => ({
+              maybeSingle: () => Promise.resolve({ data: activeSilenceEpisode, error: null }),
+            }),
+          }),
+        };
+      }
+
+      return {
+        select: () => ({
+          maybeSingle: () => {
+            if (nextReadIsDeferred) {
+              nextReadIsDeferred = false;
+              return new Promise((resolve) => {
+                pendingRoleRead = resolve;
+              });
+            }
+            return Promise.resolve({ data: { role: profileRole }, error: null });
+          },
+        }),
+      };
+    },
   }),
 }));
 
@@ -78,6 +94,11 @@ vi.mock('@/components/sign-in', () => ({
 vi.mock('@/components/commitment-list', () => ({ CommitmentList: () => null }));
 vi.mock('@/components/push-probe', () => ({ PushProbe: () => null }));
 vi.mock('@/components/morning-gate', () => ({ MorningGate: () => null }));
+vi.mock('@/components/silence-intervention', () => ({
+  SilenceIntervention: ({ startedDay }: { startedDay: string }) => (
+    <p>{`Silence intervention screen: started ${startedDay}`}</p>
+  ),
+}));
 vi.mock('@/components/ledger', () => ({ Ledger: () => null }));
 vi.mock('@/components/chains-detail', () => ({ ChainsDetail: () => null }));
 
@@ -134,6 +155,7 @@ beforeEach(() => {
   profileRole = 'doer';
   nextReadIsDeferred = false;
   pendingRoleRead = null;
+  activeSilenceEpisode = null;
   replace.mockClear();
 });
 
@@ -168,6 +190,16 @@ describe('the app shell', () => {
     // story exists to build completes.
     pendingRoleRead?.({ data: { role: 'referee' }, error: null });
     await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/referee'));
+  });
+
+  it('renders the Silence intervention ahead of Today when an active episode exists', async () => {
+    activeSilenceEpisode = { started_day: '2026-08-19' };
+    render(<Home />);
+
+    expect(
+      await screen.findByText('Silence intervention screen: started 2026-08-19'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
   });
 
   it('swaps Today for Settings and back, through the callbacks it owns', async () => {
