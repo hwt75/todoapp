@@ -448,7 +448,7 @@ begin
     'public.declaration_deadline(date, integer)',
     'public.penalty_amount_dong()',
     'public.handle_new_user()',
-    'public.outbox_enqueue(uuid, text, jsonb)',
+    'public.outbox_enqueue(uuid, text, jsonb, public.outbox_channel)',
     'public.enqueue_gate_reminders()',
     'public.resolve_account_elsewhere(uuid)',
     'public.file_auto_check_result(uuid, uuid, public.auto_check_result)',

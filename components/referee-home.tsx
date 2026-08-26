@@ -10,6 +10,7 @@ import {
   OWED_PENALTIES_COPY,
   REFEREE_HOME_COPY,
   collectionMessage,
+  daysSinceQuiet,
   formatOwedDay,
   summarizeReferee,
   type OwedPenaltyRow,
@@ -22,6 +23,11 @@ type View =
   | ({ kind: 'ready' } & RefereeSummary & {
         appeals: PendingAppealRow[];
         owedPenalties: OwedPenaltyRow[];
+        // Story 5.3, FR-18 — the episode's own started_day when an escalated, still-open
+        // Silence episode exists; null otherwise. RLS ("silence_episode: referee reads
+        // escalated", 20260826100000) already scopes the read below to exactly this state —
+        // an unescalated or already-satisfied episode simply does not come back.
+        goneQuietSince: string | null;
       })
   | { kind: 'failed'; reason: string };
 
@@ -147,6 +153,29 @@ export function RefereeHome() {
         return;
       }
 
+      // The escalated "gone quiet" state (Story 5.3, FR-18) — at most one row matches in
+      // practice (`silence_episode_one_active` is a per-owner partial unique index, and this
+      // codebase pairs at most one referee with, in practice, one doer), but the read makes
+      // no such assumption itself: oldest first and take the first, the same defensive shape
+      // the appeals/owed-penalties lists above already use rather than assuming
+      // single-account scoping.
+      const { data: quietRows, error: quietError } = await supabase
+        .from('silence_episode')
+        .select('started_day')
+        .is('satisfied_at', null)
+        .not('escalated_at', 'is', null)
+        .order('started_day', { ascending: true })
+        .limit(1);
+      if (cancelled) return;
+
+      if (quietError) {
+        setView({ kind: 'failed', reason: quietError.message });
+        return;
+      }
+
+      const goneQuietSince =
+        (quietRows?.[0] as { started_day?: string } | undefined)?.started_day ?? null;
+
       // Owed penalties (Story 4.7), oldest first — "uncollected debts age visibly" is
       // satisfied by surfacing the oldest debt first (Always boundary), not a counter.
       // Every kind, day or week: a week-kind Penalty (Week Close, 3.4 — a Weekly Quota
@@ -228,6 +257,7 @@ export function RefereeHome() {
           commitmentName: (row.commitment as unknown as { name: string } | null)?.name ?? null,
         })),
         owedPenalties,
+        goneQuietSince,
       });
     }
 
@@ -326,6 +356,17 @@ export function RefereeHome() {
               </p>
             )}
           </>
+        )}
+
+        {/* Story 5.3, FR-18 — alongside the appeals/penalties content above, never replacing
+            it, and never a new queue item: no action control, no amount, no commitment name.
+            Renders whenever an escalated episode is still open, independent of whether
+            anything above is also pending or owed (an author who has gone quiet may owe
+            nothing and have nothing under appeal). */}
+        {view.kind === 'ready' && view.goneQuietSince && (
+          <p role="status">
+            {REFEREE_HOME_COPY.goneQuiet(daysSinceQuiet(view.goneQuietSince, new Date()))}
+          </p>
         )}
 
         {/* The real list (Story 4.6): day and commitment name, each opening its own ruling

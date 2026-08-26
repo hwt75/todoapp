@@ -168,7 +168,7 @@ begin
   -- is a text read and is worth exactly what a text read is worth. It is here so that
   -- deleting the clause is noticed, not so that anyone believes it was exercised.
   -- -------------------------------------------------------------------------------
-  if pg_get_functiondef('public.outbox_claim(integer)'::regprocedure)
+  if pg_get_functiondef('public.outbox_claim(integer, public.outbox_channel)'::regprocedure)
        not like '%for update skip locked%' then
     raise exception using message =
       'outbox_claim no longer takes `for update skip locked`. Two overlapping ticks will '

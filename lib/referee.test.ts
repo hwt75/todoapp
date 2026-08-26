@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  REFEREE_HOME_COPY,
   collectionMessage,
+  daysSinceQuiet,
   formatOwedDay,
   isPairableEmail,
   isPairedReferee,
@@ -162,5 +164,50 @@ describe('collectionMessage', () => {
     const a = collectionMessage(500_000, new Date('2026-08-18T00:00:00Z'));
     const b = collectionMessage(1_000_000, new Date('2026-08-18T00:00:00Z'));
     expect(a).not.toBe(b);
+  });
+});
+
+describe('daysSinceQuiet (Story 5.3)', () => {
+  it('counts inclusively from asked_day (yesterday), matching the migration’s own arithmetic exactly', () => {
+    // 20260826100000_the_friend_is_told_i_have_disappeared.sql escalates at exactly
+    // asked_day - started_day >= 3, where asked_day is *yesterday* in the fixed zone
+    // (enqueue_gate_reminders()'s own local_now::date - 1) — never today. "now" here is
+    // 10:00 on the 23rd, so asked_day is the 22nd; started_day the 19th is 3 days before
+    // that, i.e. day 4 inclusive — the exact figure the SQL formula would also produce for
+    // the same instant.
+    expect(daysSinceQuiet('2026-08-19', new Date('2026-08-23T10:00:00+07:00'))).toBe(4);
+  });
+
+  it('reads 1 when started_day is asked_day itself — never 0', () => {
+    expect(daysSinceQuiet('2026-08-22', new Date('2026-08-23T10:00:00+07:00'))).toBe(1);
+  });
+
+  it('is computed in Asia/Ho_Chi_Minh, not a naive UTC day', () => {
+    // 20:00 UTC on the 22nd is already 03:00 on the 23rd in Ho Chi Minh City (UTC+7), so
+    // asked_day (yesterday, zone-correct) is the 22nd — the same asked_day the first test
+    // above reaches from a different instant, and the same answer (4) it must produce here
+    // too. A naive UTC-based "yesterday" would instead read the 22nd's own UTC calendar day
+    // minus one (the 21st), undercounting by one.
+    expect(daysSinceQuiet('2026-08-19', new Date('2026-08-22T20:00:00Z'))).toBe(4);
+  });
+});
+
+describe('REFEREE_HOME_COPY.goneQuiet (Story 5.3, FR-18)', () => {
+  it('states the real day count, no amount, no missed commitment', () => {
+    expect(REFEREE_HOME_COPY.goneQuiet(4)).toBe(
+      "He hasn't opened this in 4 days. Nothing needs deciding — but he'd probably rather " +
+        'hear from you than from the app.',
+    );
+  });
+
+  it('names a different count distinctly — never a hardcoded "four"', () => {
+    expect(REFEREE_HOME_COPY.goneQuiet(4)).not.toBe(REFEREE_HOME_COPY.goneQuiet(9));
+    expect(REFEREE_HOME_COPY.goneQuiet(9)).toContain('9 days');
+  });
+
+  it('asks him for no action — no verb of its own beyond hearing from him', () => {
+    const message = REFEREE_HOME_COPY.goneQuiet(4);
+    expect(message).not.toMatch(/₫/);
+    expect(message).not.toMatch(/mark|collect|rule|approve|reject/i);
   });
 });

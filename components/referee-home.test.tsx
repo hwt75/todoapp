@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RefereeHome } from './referee-home';
 
 /**
@@ -26,6 +26,9 @@ let penaltyResult: unknown = { data: [], error: null };
 let appealResult: unknown = { data: [], error: null };
 let missedCommitmentsResult: unknown = { data: [], error: null };
 let markCollectedResult: unknown = { data: null, error: null };
+// Story 5.3 — the escalated "gone quiet" episode, if any. Empty by default: most tests never
+// see this row, the same way most never see an owed penalty.
+let silenceResult: unknown = { data: [], error: null };
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
@@ -38,6 +41,19 @@ vi.mock('@/lib/supabase/client', () => ({
         // `.select().eq().order()` — the last call in the chain resolves, matching the
         // shape `components/referee-home.tsx` actually builds.
         return { select: () => ({ eq: () => ({ order: () => Promise.resolve(appealResult) }) }) };
+      }
+      if (table === 'silence_episode') {
+        // `.select().is().not().order().limit()` — the last call in the chain resolves,
+        // matching the shape `components/referee-home.tsx` actually builds.
+        return {
+          select: () => ({
+            is: () => ({
+              not: () => ({
+                order: () => ({ limit: () => Promise.resolve(silenceResult) }),
+              }),
+            }),
+          }),
+        };
       }
       // penalty_current — no `.maybeSingle()`, a bare `.select()` resolves directly,
       // matching how `ledger.tsx`'s own `from(...).select(...)` reads behave.
@@ -78,6 +94,7 @@ beforeEach(() => {
   appealResult = { data: [], error: null };
   missedCommitmentsResult = { data: [], error: null };
   markCollectedResult = { data: null, error: null };
+  silenceResult = { data: [], error: null };
   rpc.mockClear();
   replace.mockClear();
   push.mockClear();
@@ -567,5 +584,77 @@ describe('the owed penalties list (Story 4.7)', () => {
         p_settlement_ids: ['settlement-1'],
       }),
     );
+  });
+});
+
+describe('the gone-quiet state (Story 5.3, FR-18)', () => {
+  // A frozen clock, the same shape `morning-gate.test.tsx` uses — `daysSinceQuiet` reads
+  // `new Date()` inside the component, and a real clock would make the day count this test
+  // asserts drift with whatever day it happens to run on. 10:00 on the 23rd makes asked_day
+  // (yesterday, in the fixed zone — `daysSinceQuiet`'s own reference point, matching
+  // `enqueue_gate_reminders()`'s `local_now::date - 1`) the 22nd, so a `started_day` of the
+  // 19th below reads 4 — the same figure the SQL formula would produce for the same instant.
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-08-23T10:00:00+07:00'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('names the day count, alongside existing content rather than instead of it', async () => {
+    penaltyResult = { data: [{ state: 'held', amount_dong: 500_000 }], error: null };
+    silenceResult = { data: [{ started_day: '2026-08-19' }], error: null };
+    render(<RefereeHome />);
+
+    expect(await screen.findByText('1 appeal pending.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "He hasn't opened this in 4 days. Nothing needs deciding — but he'd probably " +
+          'rather hear from you than from the app.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('renders nothing when no episode has been escalated', async () => {
+    render(<RefereeHome />);
+    await screen.findByText(/Nothing for you right now/);
+
+    expect(screen.queryByText(/hasn't opened this/)).not.toBeInTheDocument();
+  });
+
+  it('renders even when nothing else is pending or owed — it is not a new queue item', async () => {
+    silenceResult = { data: [{ started_day: '2026-08-19' }], error: null };
+    render(<RefereeHome />);
+
+    expect(await screen.findByText(/hasn't opened this in 4 days/)).toBeInTheDocument();
+    // The empty-state copy still renders too — the gone-quiet state coexists with it rather
+    // than replacing it (Boundaries: "adds nothing to his queues" is not the same claim as
+    // "the screen has nothing else to say").
+    expect(screen.getByText(/Nothing for you right now/)).toBeInTheDocument();
+  });
+
+  it('names no amount and no commitment, and offers no action control', async () => {
+    silenceResult = { data: [{ started_day: '2026-08-19' }], error: null };
+    render(<RefereeHome />);
+
+    const message = await screen.findByText(/hasn't opened this/);
+    expect(message).toHaveTextContent('4 days');
+    expect(message.textContent).not.toMatch(/₫/);
+    // Only the pre-existing "Sign out" control exists on this screen when nothing else is
+    // pending or owed — the gone-quiet state itself renders no button of its own.
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Sign out']);
+  });
+
+  it('clears once the episode is satisfied — the RLS read simply returns nothing', async () => {
+    // No fixture stamps escalated_at is not null and satisfied_at is null once a Declaration
+    // lands (5.2's own trigger) — the policy itself stops matching the row, so the query
+    // this component runs comes back empty exactly as it does by default here.
+    silenceResult = { data: [], error: null };
+    render(<RefereeHome />);
+    await screen.findByText(/Nothing for you right now/);
+
+    expect(screen.queryByText(/hasn't opened this/)).not.toBeInTheDocument();
   });
 });

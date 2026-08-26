@@ -10,7 +10,7 @@
 
 import type { PenaltyState } from './ledger';
 import { formatDong } from './money';
-import { ZONE } from './declaration';
+import { ZONE, dayInQuestion } from './declaration';
 
 /** What Settings sends to the `pair-referee` Edge Function. Nothing else — the function
  *  derives everything about eligibility itself, never trusting a client-sent role or flag. */
@@ -210,7 +210,43 @@ export const REFEREE_HOME_COPY = {
     `${count} penalt${count === 1 ? 'y' : 'ies'} owed, ${totalLabel} total.`,
   appealsHeading: 'Pending appeals',
   openAppeal: 'Open',
+  /**
+   * Story 5.3, FR-18 — verbatim from `epic-5-context.md`'s UX & Interaction Patterns and
+   * `EXPERIENCE.md:128` (Referee escalation), with `${days}` filling the day count where
+   * that copy's own worked example names a fixed "four", and `He` standing in for the
+   * `[Author]` placeholder those planning docs use — the same pronoun
+   * `REFEREE_APPEAL_DETAIL_COPY` already uses for the doer throughout ("He did it", "He has
+   * been notified") rather than a name this schema never stores. States only the day count
+   * (Always boundary): no amount, no missed commitment, no action asked of him — the only
+   * message that asks the referee to act as a person rather than process a queue.
+   */
+  goneQuiet: (days: number): string =>
+    `He hasn't opened this in ${days} days. Nothing needs deciding — but he'd probably ` +
+    `rather hear from you than from the app.`,
 } as const;
+
+/**
+ * How many days a Silence episode has run, from its own `started_day` up to the migration's
+ * own `asked_day` — inclusive of both ends, matching `asked_day - started_day + 1`
+ * (`20260826100000_the_friend_is_told_i_have_disappeared.sql`). `asked_day` is *yesterday*
+ * in the product's fixed zone, not today: `dayInQuestion()` (`lib/declaration.ts`) is the
+ * same "agrees with the database trigger" derivation `enqueue_gate_reminders()` uses for its
+ * own `local_now::date - 1`. Using today's own calendar day here instead would read one day
+ * higher than the number the email actually named, for every hour of the day the escalation
+ * fires. `now` is a parameter, never read from the system clock directly, so this is
+ * exercised the same deterministic way every other date rule in this file is
+ * (`formatOwedDay`, `collectionMessage`).
+ */
+export function daysSinceQuiet(startedDay: string, now: Date): number {
+  const [sy, sm, sd] = startedDay.split('-').map(Number);
+  const askedDay = dayInQuestion(now);
+  const [ay, am, ad] = askedDay.split('-').map(Number);
+
+  const startedUtc = Date.UTC(sy, sm - 1, sd);
+  const askedUtc = Date.UTC(ay, am - 1, ad);
+
+  return Math.round((askedUtc - startedUtc) / 86_400_000) + 1;
+}
 
 /**
  * One row of `components/referee-home.tsx`'s own pending-appeals list (Story 4.6) — day and

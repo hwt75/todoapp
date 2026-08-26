@@ -165,8 +165,11 @@ Both are one-time, and both are in the Supabase dashboard.
    unnoticed and a forgotten password is reset from the dashboard. Both are survivable here
    and neither would be in a product with strangers signing up.
 
-   **Custom SMTP is still coming.** The referee's channel is email, so Epic 4 and Epic 5 need
-   it regardless. It was not made a prerequisite for signing in.
+   **Custom SMTP turned out not to be needed for this.** The referee's channel is email
+   (NFR3), but Story 5.3's escalation sends through Resend's HTTP API directly — see "The
+   outbox, and the secrets it needs" below for `RESEND_API_KEY`/`RESEND_FROM_EMAIL`. Nothing
+   here routes through Supabase Auth's own outbound mail, so this sign-in flow's own
+   SMTP-free choice above was never actually blocked on it.
 
 ### Applying migrations
 
@@ -193,17 +196,18 @@ There is deliberately no delete policy on `commitment` — removal is an update.
 The cost is honest: a commitment created by mistake and deleted a minute later leaves a row behind
 forever. That is the cheaper of the two mistakes.
 
-### The outbox, and the two secrets it needs
+### The outbox, and the secrets it needs
 
 Settlement never sends anything. It writes the verdict and the work-to-send in one
 transaction, so a pass that rolls back takes the notification with it. A worker drains the
 queue on **its own** `pg_cron` schedule — not settlement's, because a queue whose only
 consumer is triggered by its producer looks exactly like a working system right up until
-the producer stops.
+the producer stops. Story 5.3 adds a second worker (`email-worker`) draining a second
+channel on the same outbox, on its own separate schedule, for the same reason.
 
-Until both secrets below exist, the cron job **fails every minute on purpose** and says why
-in `cron.job_run_details`. That is the intended state: a silent no-op here would be the
-exact failure the design warns about.
+Until the secrets below exist, each cron job **fails every run on purpose** and says why in
+`cron.job_run_details`. That is the intended state: a silent no-op here would be the exact
+failure the design warns about.
 
 **1. The worker's VAPID keys.** These live in the Edge Function's own environment and
 nowhere else — not this repo, not a migration, not a Vercel variable.
@@ -225,6 +229,29 @@ select vault.create_secret('https://hxzalpnlrunctbajgtkv.supabase.co', 'project_
 The service-role key is read at call time and never written into a migration. It is still
 the key that bypasses every policy — it belongs in Vault and in the function's environment,
 and nowhere a person can read it by opening a file.
+
+**3. The email worker's Resend key.** Story 5.3 (FR-18) adds a second worker,
+`email-worker`, that drains the outbox's own `email` channel — the Referee's escalation,
+never the author's push. Same rule as the VAPID keys above: these live in the Edge
+Function's own environment and nowhere else — not this repo, not a migration, not a Vercel
+variable.
+
+```bash
+npx supabase secrets set --project-ref hxzalpnlrunctbajgtkv RESEND_API_KEY=... RESEND_FROM_EMAIL=you@example.com
+```
+
+Until both are set, `email-worker` fails loudly (500) on every invocation rather than
+draining the `email` channel into nothing — the same discipline `outbox-worker`'s own VAPID
+check follows. `email-worker` runs on its own hourly schedule (`wake_email_worker()`, cron
+`email-worker`, `:55`), reusing the same two Vault secrets above — no separate Vault entry.
+
+`RESEND_FROM_EMAIL` has to be an address at a domain verified in the Resend dashboard, or
+Resend's own `onboarding@resend.dev` sandbox address while testing (which only delivers to
+the Resend account's own verified address) — a first-time setup trap the VAPID keys above
+have no equivalent of. An unverified domain is a Resend API error, not a stuck cron job:
+`email-worker` retries it like any other send failure and eventually marks the row `failed`
+with Resend's own reason in `outbox.last_error`, so that column is where to look first if the
+Referee says an email never arrived.
 
 ### Watching the queue
 
