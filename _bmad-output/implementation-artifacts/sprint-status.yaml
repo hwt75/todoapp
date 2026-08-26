@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-26-2026 16:35
+last_updated: 08-26-2026 17:15
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -78,7 +78,7 @@ development_status:
   5-2-the-app-notices-i-have-gone-quiet: done
   5-3-the-friend-is-told-i-have-disappeared: done
   5-4-the-long-view-including-whether-this-still-works: done
-  epic-5-retrospective: optional
+  epic-5-retrospective: done
 action_items:
   - id: "epic-1-retro-item-1-record-whether-a-research-spike-may-skip"
     epic: 1
@@ -213,3 +213,57 @@ action_items:
     owner: "hwt75"
     status: done
     ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-08-21.md"
+  - id: "epic-5-retro-item-20-add-the-missing-pg_advisory_xact_lock-ha"
+    epic: 5
+    action: "Add the missing pg_advisory_xact_lock(hashtext(owner_id::text)) to mark_penalty_collected(),
+      first statement, mirroring appeal_hold_penalty() -- closes the still-open Grace-Day/Collection
+      race live in production since 2026-08-25"
+    owner: "hwt75"
+    status: open
+    ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"
+  - id: "epic-5-retro-item-21-restore-the-day-n-is-waiting-chain-stake"
+    epic: 5
+    action: "Restore the Day N is waiting chain-stake naming in enqueue_gate_reminders()
+      -- Story 2.9s lone_commitment/lone_chain/stake logic was silently dropped when
+      Story 5.2 rewrote the function"
+    owner: "hwt75"
+    status: open
+    ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"
+  - id: "epic-5-retro-item-22-decide-and-implement-a-fix-for-monthly-r"
+    epic: 5
+    action: "Decide and implement a fix for Monthly report SM-C1/SM-2 month-misattribution
+      on late Grace Day or Appeal fold-in -- needs a human decision on direction before
+      implementing"
+    owner: "hwt75"
+    status: open
+    ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"
+  - id: "epic-5-retro-item-23-give-the-silence-intervention-a-way-out"
+    epic: 5
+    action: "Give the Silence intervention a way out when nothing is pending -- at
+      minimum a Settings/sign-out link, ideally the Grace Day spend control too"
+    owner: "hwt75"
+    status: open
+    ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"
+  - id: "epic-5-retro-item-24-convert-settlement_current-to-explicit-s"
+    epic: 5
+    action: "Convert settlement_current to explicit spelled-out columns proactively,
+      before the next story that adds a settlement column rediscovers the 42P16 view-column-freeze
+      error penalty_current just hit"
+    owner: "hwt75"
+    status: open
+    ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"
+  - id: "epic-5-retro-item-25-run-epic-4-own-retrospective-or-explicit"
+    epic: 5
+    action: "Run Epic 4 own retrospective, or explicitly decide it is being skipped
+      permanently -- currently neither done nor decided against"
+    owner: "hwt75"
+    status: open
+    ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"
+  - id: "epic-5-retro-item-26-manually-exercise-at-least-one-story-per"
+    epic: 5
+    action: "Manually exercise at least one story per epic in a real browser before
+      promoting it to done -- every Epic 5 story shipped on automated verification
+      only"
+    owner: "hwt75"
+    status: open
+    ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"

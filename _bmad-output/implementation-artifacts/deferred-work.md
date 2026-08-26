@@ -836,3 +836,23 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-4-the-long-view-including-whether-this-still-works.md`
   summary: No index exists on `penalty.collected_at` or `appeal.ruled_at`, both of which `components/monthly-report.tsx` now range-filters (`gte`/`lt`) on every report load.
   evidence: Raised by the 2026-08-26 review (blind-hunter). Negligible at this app's current single-tenant scale (a handful of rows per account per month), and neither column exists on a table large enough yet to make a sequential scan visible. Revisit if either table's row count ever grows enough for this to matter.
+
+- source_spec: `_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md`
+  summary: "Grace Day spend logic (the `GraceRowState` type, the `mounted`-ref pattern, `spendGraceDay`, and the row JSX) is duplicated wholesale between `components/today.tsx` and `components/ledger.tsx`, acknowledged in each file's own comments rather than shared via a hook."
+  evidence: Raised by the Epic 5 retrospective's diff-scope review (2026-08-26, code-review skill, reuse angle). A behavior fix to grace-day spending has to be applied twice by hand today. Revisit by extracting a `useGraceDaySpend(ownerId)` hook plus a shared `<GraceDayRow>` presentational component the next time either file needs a grace-day-spend change.
+
+- source_spec: `_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md`
+  summary: "The `grace_allowance_remaining` fetch/error/no-row-handling pattern, including an identical literal error string, is copy-pasted independently across `components/today.tsx`, `components/ledger.tsx`, `components/settings.tsx`, and `components/silence-intervention.tsx`."
+  evidence: Raised by the Epic 5 retrospective's diff-scope review (2026-08-26, reuse angle). If the "no row" message or the doer-only-view invariant it encodes ever changes, some call sites can silently drift out of sync. Revisit by extracting a `useGraceRemaining()` hook the four surfaces share.
+
+- source_spec: `_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md`
+  summary: "`lib/monthly-report.ts`'s `foldPenaltyFigure` sums `amount_dong` with a bare `reduce` instead of calling the existing `lib/money.ts` `totalOwed()` helper (already a sibling import in the same file), losing that helper's `isStorableAmount` validation."
+  evidence: Raised by the Epic 5 retrospective's diff-scope review (2026-08-26, reuse angle). If a corrupted or negative `amount_dong` ever reached this fold, `totalOwed` would throw and surface it loudly; `foldPenaltyFigure` would instead silently produce a wrong SM-C1 total on the Referee-facing monthly report. Revisit by switching the call.
+
+- source_spec: `_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md`
+  summary: "`app/page.tsx` manages 6 independent overlay-navigation `useState`s (`showLedger`, `showSettings`, `showMonthlyReport`, `chainOf`, `focusOf`, `appealOf`) with no type-level mutual exclusion — correctness depends entirely on the order of a 7-branch ternary, and this file has gained one new overlay per recent story."
+  evidence: Raised by the Epic 5 retrospective's diff-scope review (2026-08-26, altitude angle). A future overlay inserted at the wrong ternary position would never render because a stale boolean from an earlier navigation is still `true`. Revisit by replacing the booleans with a single discriminated-union `Screen` state (optionally a small stack, for the existing "return to caller" behavior) the next time a new overlay is added.
+
+- source_spec: `_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md`
+  summary: "`supabase/functions/email-worker/index.ts`'s `mark()`/`json()` and the migration's `wake_email_worker()` are byte-for-byte copies of `outbox-worker`'s equivalents and `wake_outbox_worker()` — no shared `_shared` module or `wake_worker(target_path)` helper was extracted despite the code's own comments saying it 'mirrors... exactly.'"
+  evidence: Raised by the Epic 5 retrospective's diff-scope review (2026-08-26, reuse angle). A future change to the retry/timeout/error-reporting shape has to be made in both workers by hand; miss one and the two workers' behavior silently diverges. Revisit if a third outbox-channel worker is ever added, at which point the duplication triples.
