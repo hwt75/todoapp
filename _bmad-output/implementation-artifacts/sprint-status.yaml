@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-26-2026 17:15
+last_updated: 08-26-2026 17:50
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -219,7 +219,7 @@ action_items:
       first statement, mirroring appeal_hold_penalty() -- closes the still-open Grace-Day/Collection
       race live in production since 2026-08-25"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"
   - id: "epic-5-retro-item-21-restore-the-day-n-is-waiting-chain-stake"
     epic: 5
@@ -227,7 +227,7 @@ action_items:
       -- Story 2.9s lone_commitment/lone_chain/stake logic was silently dropped when
       Story 5.2 rewrote the function"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"
   - id: "epic-5-retro-item-22-decide-and-implement-a-fix-for-monthly-r"
     epic: 5
