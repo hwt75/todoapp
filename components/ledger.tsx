@@ -248,7 +248,9 @@ export function Ledger({
                           ? `${row.day}, ${formatDong(row.amountDong ?? 0)} on hold pending appeal, for ${row.missed.join(' and ')}`
                           : row.state === 'dropped'
                             ? `${row.day}, dropped, for ${row.missed.join(' and ')}`
-                            : `${row.day}, owed ${formatDong(row.amountDong ?? 0)}, for ${row.missed.join(' and ')}`
+                            : row.state === 'collected'
+                              ? `${row.day}, collected, for ${row.missed.join(' and ')}`
+                              : `${row.day}, owed ${formatDong(row.amountDong ?? 0)}, for ${row.missed.join(' and ')}`
               }
             >
               <div className="row-main">

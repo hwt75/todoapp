@@ -157,6 +157,13 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-4-the-week-closes-and-settles.md`
   summary: The Ledger's "Everything held" text (both the day-row and, now, the week-row copy) is shown whenever `verdict = 'clean'`, including a day/week where a penalty-free commitment actually slipped or fell short — "clean" means "nothing charged," not "nothing happened," and the Ledger says the second when it means the first.
   evidence: Raised by review on 2026-08-20 while auditing the week row's copy. Confirmed pre-existing for days, not introduced by this story: `components/ledger.tsx`'s `misses` query is filtered to `carries_penalty: true` before `buildLedger` ever sees it, so a penalty-free `slipped` declaration never reaches `row.missed`, and a day where only that commitment slipped already showed "Everything held" before 3.4 touched anything. `components/ledger.tsx`'s new week-row branch inherits the identical shape (`row.verdict === 'clean' ? 'Everything held' : ...`, with no per-commitment data available to say otherwise — 3.4's own "Never" boundary rules out per-commitment week freezing). `week_summary_body` itself is *not* affected the same way — it names the shortfall commitment whenever `shortfall_count >= 1` regardless of `carries_penalty`, so the push notification for this case reads correctly (e.g. "Reading, 1 of 3 held, week of..." with no amount); only the Ledger's own secondary-line text is wrong. Deferred rather than patched because the honest fix (a third state, distinct from both "held" and "failed", for "something slipped but nothing is owed") touches vocabulary both day and week rows share and is a real product-language decision, not a one-line patch.
+  update_2026_08_25: The independent review of Story 5.1 found the identical symptom on a third
+  cause — a `waived` day (Grace Day spent, `apply_grace_days()`'s corrective settlement also
+  reads `verdict = 'clean'`) shows "Everything held" too, distinguishable from a genuinely clean
+  day only by its pill and its screen-reader-only `aria-label`. Same root cause, same deferred
+  reasoning: the honest fix is the same missing third state this entry already names, now with
+  three causes (penalty-free slip, week shortfall, Grace Day) collapsing into one string instead
+  of two.
 
 ## Deferred from: code review of spec-3-0-change-the-hour-i-am-asked (2026-08-21)
 
@@ -370,6 +377,73 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
   summary: "`pair-referee`'s cleanup path (`index.ts`, after a `profile_single_referee` race loses) calls `admin.auth.admin.deleteUser(created.user.id)` with no check of whether that call itself fails — if the cleanup delete also fails, the newly created `auth.users` row is left orphaned as an unpromoted, unreachable `role = 'doer'` account with no log of the failure."
   evidence: Raised by the 2026-08-25 review (edge-case-hunter). Deferred — narrow (requires the promote update to lose the `profile_single_referee` race *and* the subsequent delete to independently fail) and low-consequence (an orphaned ordinary `doer` row is clutter, not a security or correctness issue — `profile_single_referee` still guarantees only one real referee). Revisit alongside adding structured logging to Edge Functions generally, which this repo has none of today (`outbox-worker` doesn't either).
 
+## Deferred from: independent code review of spec-4-5-the-referee-has-his-own-way-in (2026-08-25)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5-the-referee-has-his-own-way-in.md`
+  summary: "`pair-referee/index.ts` sets `Access-Control-Allow-Origin: '*'` unconditionally, on an
+  Edge Function that creates a privileged account. The function is only ever meant to be invoked
+  from this app's own origin via `supabase.functions.invoke()`."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — no standalone
+  vulnerability today, since every request still needs the caller's own valid, live-doer JWT
+  (checked server-side); a wildcard origin only widens which page's JavaScript *could* relay an
+  already-authenticated request, which is not this app's threat model absent an XSS elsewhere.
+  Cheap hardening, worth doing alongside a pass scoping CORS on `outbox-worker` too if that
+  function is ever given a browser-reachable trigger.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5-the-referee-has-his-own-way-in.md`
+  summary: "Pairing leaves no audit trail — `profile` gains no `paired_at`/`paired_by` column in
+  the new migration, and the Edge Function logs nothing beyond the row update itself. There is no
+  way to later answer 'when was the referee paired,' for a one-shot, unrecoverable operation."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — a real gap but
+  a schema decision, not an unambiguous patch; `auth.users.created_at` on the referee's own row is
+  a rough proxy already available without a migration. Revisit if the author ever needs to
+  reconstruct pairing history.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5-the-referee-has-his-own-way-in.md`
+  summary: "The orphaned-account risk this story's own review already recorded (the cleanup
+  `deleteUser` call itself failing after `promoteError`) is narrower than the real risk: the same
+  orphaned, unpromoted `role = 'doer'` row also results — with zero cleanup attempt and zero
+  record — if the process crashes or the connection drops between `createUser` succeeding and the
+  promote `update` even starting."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred for the same
+  reason as the existing entry — narrow, low-consequence (clutter, not a security or correctness
+  issue; `profile_single_referee` still guarantees only one real referee), and belongs with
+  structured logging for Edge Functions generally, which this repo has none of yet.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5-the-referee-has-his-own-way-in.md`
+  summary: "`referee-home.tsx`'s `penalty_current` read (`select('state,amount_dong')`) has no
+  `.limit()`/pagination — it fetches every historical penalty row just to compute two aggregate
+  numbers, growing without bound over the product's lifetime."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — unbounded
+  growth is a years-out concern for a single-doer, daily/weekly-cadence product; revisit if the
+  referee home screen is ever observed loading slowly.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5-the-referee-has-his-own-way-in.md`
+  summary: "Neither `pair-referee` (callable repeatedly by a live doer session) nor
+  `/referee/login`'s password sign-in has any rate limiting or backoff beyond Supabase Auth's own
+  defaults, which this code doesn't configure or verify."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — matches
+  `sign-in.tsx`'s own pre-existing pattern exactly (no rate limiting there either), a systemic gap
+  this story reproduced rather than introduced. Revisit as one pass across every auth entry point.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5-the-referee-has-his-own-way-in.md`
+  summary: "`RefereeLogin` never checks for an existing session on mount — a referee who is
+  already signed in and navigates to `/referee/login` sees the sign-in form again instead of being
+  redirected to `/referee`, unlike `referee-home.tsx`'s own careful redirect handling for the
+  reverse cases."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — cosmetic; the
+  referee reaches `/referee` fine on submit regardless, this only affects an already-signed-in
+  session revisiting the login URL directly.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5-the-referee-has-his-own-way-in.md`
+  summary: "`generatePassword()`'s 24-character/144-bit output isn't verified against
+  `auth.admin.createUser()`'s own password-policy constraints (minimum length/complexity some
+  Supabase Auth configurations enforce) — a future tightening of that policy elsewhere in the
+  project could silently break pairing with nothing to catch it."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — no live failure
+  observed; 144 bits comfortably clears any realistic policy today. Revisit if pairing ever starts
+  failing after an Auth configuration change.
+
 ## Deferred from: code review of spec-4-6-the-referee-rules (2026-08-25)
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
@@ -408,6 +482,164 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
   summary: "`components/referee-appeal-detail.tsx` infers whether an appeal was approved by comparing `settlement_current`'s id against the appeal's own stored `settlement_id`, rather than reading an explicit ruling-status column — correct today only because approval is the sole thing that currently supersedes a day's settlement once a Held Penalty exists."
   evidence: Raised by the 2026-08-25 review (blind-hunter). Deferred — the invariant holds under every mechanism that exists in this codebase today, and adding an explicit status column is a schema decision with its own migration cost, not a one-line fix. Revisit if a future story (e.g. a second correction mechanism) ever supersedes a `failed` day's settlement for a reason unrelated to an appeal ruling — at that point this inference would need to become an explicit column.
 
+## Deferred from: independent code review of spec-4-6-the-referee-rules (2026-08-25)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "`components/referee-appeal-detail.tsx`'s `rule()` calls `setRuling(...)` /
+  `setReloadToken(...)` after its `await supabase.rpc(...)` resolves with no `cancelled` check,
+  unlike the same file's own `load()` effect, which tracks `cancelled` carefully for exactly this
+  reason."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — matches the
+  same codebase-wide, pre-existing pattern already recorded for Story 4.5's own async handlers
+  (no top-level catch/unmount-guard on Supabase calls); narrow (requires navigating away in the
+  brief window between click and RPC resolution) and self-healing on the next screen visit.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "No confirmation step before 'He did it'/'He didn't' — the referee's first-ever write,
+  moving real money with no correction path once ruled (the guarded transition means a wrong
+  ruling cannot be re-ruled)."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — matches this
+  app's established pattern of no confirm dialogs anywhere (including Story 4.5's own accepted
+  no-recovery pairing flow and Story 4.7's un-confirmed Mark Collected), not a gap specific to
+  this story. Revisit only as a deliberate, app-wide confirmation-UX decision, not a one-off patch
+  to this screen.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "The pending-appeals list (`components/referee-home.tsx`) has no `.limit()`/pagination
+  — grows unbounded as appeals accumulate."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — same class of
+  gap already recorded for Story 4.5's own unbounded penalty read; years-out concern at this
+  product's scale.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "No index supports the new `penalty:penalty_id!inner(state)` embedded-filter query
+  pattern the pending-appeals list introduces — the first use of `!inner` in this codebase."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — premature at
+  this product's single-referee, small-appeal-count scale; revisit if the pending-appeals list is
+  ever observed loading slowly.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "The referee's new `storage.objects` read policy on `appeal-evidence` is tested only
+  for the positive case (referee reads) and the pre-existing negative case (a doer cannot read) —
+  no test proves the referee still cannot insert/update/delete evidence objects."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — the policy
+  itself is declared `for select` only, so there is no corresponding write policy to test against;
+  real gap in explicit negative-case coverage, cheap to add alongside a broader storage-policy
+  test pass.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "The new `!inner`-filtered appeal query (`referee-home.tsx`, `.eq('penalty.state',
+  'held')` on a `penalty:penalty_id!inner(state)` embed) is unverified against real PostgREST
+  semantics — `referee-home.test.tsx`'s mock `.eq()` ignores its own arguments entirely, so a
+  dropped or misapplied `!inner` qualifier would show stale or resolved appeals with every
+  existing test still passing."
+  evidence: Raised by the independent 2026-08-25 review (verification-gap). Deferred — closing it
+  properly needs a real-PostgREST test (this repo's CI `db-tests` job explicitly excludes
+  PostgREST — `.github/workflows/ci.yml`), the same kind of gap already accepted for `pair-referee`'s
+  own untested authorization gate. Revisit alongside a pass adding PostgREST-backed integration
+  tests generally.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "`rule_appeal()`'s approval path isn't discussed for what happens if the final
+  `outbox_enqueue` call itself fails after the `settlement`/`penalty`/`settlement_commitment`
+  inserts succeed — unlike similar partial-failure paths called out elsewhere in this file."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — almost
+  certainly safe (the whole function runs in one transaction, so an `outbox_enqueue` failure would
+  roll back the corrective settlement too, not leave it half-applied), but not stated explicitly
+  anywhere. Revisit only if this function's transactional boundary is ever changed.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-6-the-referee-rules.md`
+  summary: "`referee-home.tsx` and `referee-appeal-detail.tsx` both reuse `formatDeadline` (named
+  and documented around deadlines) to render `for_day`, a calendar date with different semantics
+  from a deadline."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — works correctly
+  today (both are plain dates formatted the same way); a naming-only mismatch, not a functional
+  defect. Revisit if `formatDeadline`'s own formatting ever needs to diverge from a plain calendar
+  date's.
+
+## Deferred from: independent code review of spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting (2026-08-25)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "No test in `supabase/tests/4-7-...sql` queries `public.outbox` — the spec's own
+  'Never' boundary ('No outbox notification to the author on collection') is documented in prose
+  but never proven, unlike Story 4.6's own test file, which explicitly asserts outbox row counts
+  for both a ruling outcome and a refused one."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — the behavior is
+  correct by inspection (`mark_penalty_collected()`'s own SQL performs no `outbox_enqueue` call at
+  all), and cheap to add alongside a broader pass strengthening this test file's own assertions.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "`referee_missed_commitments()`'s own migration comment claims it correctly excludes a
+  `held`, `dropped`, `voided`, or already-`collected` Penalty's settlement, but the test file only
+  exercises the `held` case — the other three named states are untested."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter), and subsumes a related
+  finding (no test drives a single Penalty through the held -> owed -> collected lifecycle
+  checking this function's output at each stage). Deferred — the `state = 'owed'` scoping this
+  function's own `exists` clause enforces is exercised for `held`; the remaining three follow the
+  identical single-column check and share the same low marginal risk. Revisit alongside a general
+  pass widening this test file's own state coverage.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "Two different doer accounts, each with an identically-named commitment missed on the
+  same day, would produce two owed-penalty rows with an identical accessible name on both the Copy
+  and Mark Collected buttons."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — the same
+  underlying, already-accepted trade-off Story 4.5's own deferred entry records (the referee's
+  read policies aren't scoped to `is_live_doer`), not a new gap this story introduces; this
+  product has exactly one real doer account today.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "No component-level test proves a `collected`-state Penalty is excluded from the 'Owed
+  penalties' list, unlike the equivalent Held-Penalty exclusion, which is component-tested."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — the underlying
+  filter (`state === 'owed'`) is the same one already proven to exclude `held`; cheap to add
+  alongside the SQL-level state-coverage gap recorded above.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "`collectionMessage()` (`lib/referee.ts`) hardcodes an English sentence with a
+  `vi-VN`-formatted amount (`formatDong`) inside it — a localized money format inside an
+  English-only sentence, with no note on whether the mix is intentional."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — matches every
+  other user-facing string in this codebase, all of which are English-only today; a real
+  localization decision, not a one-off patch to this message.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "No confirmation step before Mark Collected — a single click discharges a debt with no
+  undo."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — matches the
+  identical, already-recorded no-confirm-dialog pattern for Story 4.6's own ruling controls; a
+  deliberate, app-wide design choice, not a gap specific to this story.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "`markStatus`/`markErrors`/`copyStatus` in `components/referee-home.tsx`, all keyed by
+  `penalty.id`, are never pruned — entries for rows no longer rendered accumulate over a
+  long-lived session with many collections."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — minor; a
+  referee's session is not long-lived enough in practice for this to matter today.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "`referee_missed_commitments(p_settlement_ids uuid[])` has no server-side bound on the
+  size of the incoming array — accepted and processed with no defensive cap."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — `security
+  definer` but still gated to `authenticated`, and the row filter (`role_from_table() =
+  'referee'`) limits what any call can ever read regardless of array size; a single-referee
+  product has no realistic path to an oversized array today.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "The 'Owed penalties' section has no empty-state affordance — it simply doesn't render
+  when the list is empty, giving the referee no confirmation the list was checked versus broken or
+  still loading."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — matches the
+  pending-appeals list's own identical pattern (Story 4.6), not unique to this diff; a real UX gap
+  worth a shared fix across both lists.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
+  summary: "`markCollected`/`copyMessage` in `components/referee-home.tsx` set state after their
+  own `await` with no `cancelled` guard, the same class of gap already recorded for Story 4.6's
+  `rule()`."
+  evidence: Raised by the independent 2026-08-25 review (edge-case-hunter). Deferred — narrow and
+  self-healing, same reasoning as the Story 4.6 entry it matches.
+
 ## Deferred from: code review of spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting (2026-08-25)
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
@@ -441,6 +673,119 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-7-the-app-does-the-asking-the-referee-does-the-collecting.md`
   summary: "A day-kind owed Penalty whose `referee_missed_commitments()` lookup legitimately returns zero rows (a data gap) would render identically to the intentional week-kind fallback ('A commitment') — nothing distinguishes 'no commitment data exists for this kind' from 'something is wrong for a kind that should always have data'."
   evidence: Raised by the 2026-08-25 review (edge-case-hunter). Deferred — structurally near-unreachable in normal operation: a day-kind settlement only ever produces an `owed` Penalty when `settle_day()`'s own `admitted + silent > 0`, which requires at least one `settlement_commitment` row with `outcome = 'missed'` to exist for that settlement by construction. Revisit only if this is ever observed happening for a genuine day-kind row.
+
+## Deferred from: independent code review of spec-5-1-a-countable-way-to-be-forgiven (2026-08-25)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-a-countable-way-to-be-forgiven.md`
+  summary: "`apply_grace_days()` is never tested through its real production entry point,
+  `settle_due_days()` — `supabase/tests/5-1-...sql` calls `apply_grace_days()` directly. A
+  regression dropping the one line wiring them together (`settled := settled +
+  public.apply_grace_days();`) would ship undetected — the fold-in would silently stop happening
+  in production while every existing test kept passing."
+  evidence: Raised by the independent 2026-08-25 review (verification-gap). Deferred — closing it
+  needs a test step calling `settle_due_days()` itself rather than the inner function, matching
+  this same gap's already-accepted shape for `2-7-supersession.sql`. Revisit alongside a pass
+  strengthening this test file's own entry-point coverage.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-a-countable-way-to-be-forgiven.md`
+  summary: "Neither per-account advisory lock — `grace_day_validate()`'s original one, nor the
+  one this same review's own patch added to `appeal_hold_penalty()` and `mark_penalty_collected()`
+  (`20260825120000_the_same_lock_the_same_day.sql`) — has an automated concurrent-session test.
+  This test suite's format (a single transaction, sequential `do $$ ... $$` block) cannot express
+  two genuinely overlapping transactions."
+  evidence: Raised by the independent 2026-08-25 review (verification-gap), and applies equally
+  to the same review's own fix. Deferred — the same kind of gap already accepted for `pair-referee`'s
+  own untested authorization gate (Story 4.5) and the `!inner`-filtered query (Story 4.6): closing
+  it needs test infrastructure (two real concurrent connections, or a PostgREST-backed harness)
+  this repo does not have yet. The fix itself was verified by careful reading (the lock key and
+  timing exactly mirror the already-reasoned-through original), not by a passing concurrent test.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-a-countable-way-to-be-forgiven.md`
+  summary: "`GRACE_DAY_COPY.alreadySpent` (`lib/grace.ts`) is defined but never referenced — both
+  `components/ledger.tsx` and `components/today.tsx` deliberately collapse the `'spent'` and
+  `'already-spent'` outcomes into the same UI state (a reasoned, commented choice: a `grace_day`
+  row exists for this day either way), leaving this string genuinely dead."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — not a defect,
+  the collapse is deliberate and correct; either remove the unused constant or use it to
+  distinguish the messaging, a real but low-value choice either way.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-a-countable-way-to-be-forgiven.md`
+  summary: "The Day summary's Grace Day control (`components/today.tsx`) shows only the date and
+  the remaining-allowance sentence — never the amount that spending it would forgive, nor which
+  commitment(s) were missed, unlike the equivalent control on a Ledger row."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — a user deciding
+  whether to spend one of only two non-carrying monthly allowances has less context from Today
+  than from the Ledger; real, but a UI enhancement rather than a defect, and the Ledger already
+  offers the fuller view for the same decision.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-a-countable-way-to-be-forgiven.md`
+  summary: "This story introduces several new user-facing strings (`GRACE_DAY_COPY`'s spend/
+  spending/spent/failed/unreachable/alreadySpent text, the Settings 'Grace Days' row, `referee-
+  appeal-detail.tsx`'s `gracedAfterRejection`) with no corresponding update to `EXPERIENCE.md`,
+  despite `epic-5-context.md`'s own Naming Conventions bullet requiring copy to originate there
+  first."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — a documentation
+  gap, not a functional defect; the shipped copy itself was independently verified against the
+  frozen spec's own verbatim requirements. Revisit as a documentation pass reconciling
+  `EXPERIENCE.md` with every story that has shipped copy since it was last touched (Story 3.5).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-a-countable-way-to-be-forgiven.md`
+  summary: "The frozen I/O Matrix's 'Appeal then Grace Day' row (`supabase/tests/5-1-...sql`,
+  step 7) is proven by directly `UPDATE`-ing the penalty to `held`, not by inserting a real
+  `appeal` row and letting `appeal_hold_penalty()` derive that state itself — weaker proof than
+  its sibling row ('Grace Day then Appeal', step 14), which exercises the real insert path."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — the guard under
+  test (`grace_day_validate()`'s own `state <> 'owed'` check) is simple and shared with every
+  other eligibility check this same function already proves via direct state manipulation
+  elsewhere in the file; cheap to strengthen alongside a general pass tightening this test file's
+  own fixture realism.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-a-countable-way-to-be-forgiven.md`
+  summary: "`apply_grace_days()`'s corrective `settlement_commitment` freeze depends on
+  `commitments_owing()` returning every commitment for that day at fold-in time; a commitment
+  archived between the original Failed Day and the fold-in would silently narrow the freeze,
+  covering fewer rows than the original miss did."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — narrow (needs a
+  commitment archived in the up-to-an-hour window between spend and fold-in) and matches the
+  identical, already-accepted risk shape `commitments_owing()`'s own `archived_at` filter carries
+  everywhere else it's used. Revisit alongside a general audit of `commitments_owing()`'s
+  archival-window behavior if one is ever done.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-a-countable-way-to-be-forgiven.md`
+  summary: "No test exercises a graced day's interaction with `weekly_quota_progress` for a
+  commitment that also has weekly-cadence tracking — the 'day-scoped only' boundary is asserted
+  structurally (`graceable` is hardcoded `false` on a week row) but not proven against a live
+  weekly-quota commitment's own progress count."
+  evidence: Raised by the independent 2026-08-25 review (blind-hunter). Deferred — `apply_grace_days()`
+  never touches `settlement_commitment` for any cadence other than what `commitments_owing()`
+  already returns for a `kind = 'day'` settlement, the same scoping every other day-level
+  correction in this codebase already relies on untested for this specific cross-cadence case.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-a-countable-way-to-be-forgiven.md`
+  summary: "The Ledger's Contest button isn't hidden once a Grace Day is spent on that row —
+  cosmetic; the server already refuses the resulting appeal attempt (`appeal_hold_penalty()`'s own
+  grace_day guard)."
+  evidence: Raised by the independent 2026-08-25 review (edge-case-hunter). Deferred — no
+  incorrect state results, only a confusing click followed by a clear server refusal.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-a-countable-way-to-be-forgiven.md`
+  summary: "The `grace_day` insert's promise rejection (as opposed to a `{data, error}` result) is
+  uncaught in both `components/ledger.tsx` and `components/today.tsx`."
+  evidence: Raised by the independent 2026-08-25 review (edge-case-hunter). Deferred — matches the
+  same codebase-wide, pre-existing pattern already recorded for Story 4.6's own async handlers.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-a-countable-way-to-be-forgiven.md`
+  summary: "`apply_grace_days()`'s own fold-in loop has no per-row exception isolation — one bad
+  `grace_day` row raising inside the loop would abort the whole hourly `settle_due_days()` pass,
+  including the `settle_day()`/`supersede_expiries()` work already done in the same call."
+  evidence: Raised by the independent 2026-08-25 review (edge-case-hunter). Deferred — verified by
+  reading `supersede_expiries()`'s own identical loop shape (`20260819241000_expiry_and_
+  supersession.sql:189-231`): no per-row exception isolation there either. A systemic,
+  pre-existing pattern this story reproduces, not a regression it introduces; matches the
+  product's own stated observability model (`epic-5-context.md`: "if settlement stops running for
+  any reason, the visible symptom is that the daily summary stops arriving... nothing in this
+  epic assumes a separate monitoring layer exists"). Revisit alongside a general pass adding
+  per-row exception isolation to every scheduled batch function at once.
 
 ## Deferred from: code review of spec-5-1-a-countable-way-to-be-forgiven (2026-08-25)
 

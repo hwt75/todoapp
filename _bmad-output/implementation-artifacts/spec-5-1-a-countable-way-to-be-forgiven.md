@@ -194,6 +194,81 @@ ruling's outcome by comparing settlement ids, which a second review pass found c
 residual was itself Grace Day'd. Replaced with a direct read of the appeal's own original penalty
 row's `state` — see the Tasks list and Design Notes above.
 
+### Review Findings
+
+**Independent code review, 2026-08-25 — commit `4642217`, 4-layer (blind-hunter, edge-case-hunter,
+verification-gap, acceptance-auditor).**
+
+- [x] [Review][Patch] The iteration-1 mutual-exclusion fix (Grace Day vs. Appeal) only
+  serializes under sequential commits, not true concurrency: `appeal_hold_penalty()` never took
+  `grace_day_validate()`'s own per-account advisory lock, so two genuinely concurrent
+  transactions (two devices/tabs) could each read the other's uncommitted state as absent and
+  both commit — a `grace_day` row *and* a `held` Penalty for the same day at once, exactly the
+  "Grace Day spent for nothing" failure the iteration-1 fix exists to close. Fixed in a new
+  migration, `20260825120000_the_same_lock_the_same_day.sql` (this codebase's own "migrations are
+  additive" discipline — never editing a past one): `appeal_hold_penalty()` now takes the
+  identical lock, first statement, before any of its own reads.
+- [x] [Review][Patch] The same gap existed, undefended, for collection: `mark_penalty_collected()`
+  (Story 4.7) had no `grace_day` awareness at all. Unlike the Appeal race, this direction needs no
+  concurrency — the fold-in delay is up to an hour wide, and a referee collecting an owed Penalty
+  is ordinary behavior. A Grace Day spent, then that same Penalty marked Collected before the next
+  `:15` pass, would consume the Grace Day for nothing. Fixed in the same migration: a symmetric
+  "a grace_day row for this day means it's already spoken for" guard, mirroring
+  `appeal_hold_penalty()`'s own. Applied against the local stack (`create or replace function`,
+  non-destructive); compiles clean. **Not run end-to-end**: the shared local stack already has a
+  live referee from other concurrent work, so no SQL test file in this repo (4-6, 4-7, or 5-1, all
+  of which build their own referee fixture) can run against it without a `supabase db reset`,
+  which was avoided to not disrupt that session. `npm test` (892/892), `npx tsc --noEmit`,
+  `npm run lint` all clean — this fix is SQL-only, no TypeScript touched.
+- [x] [Review][Patch] `components/ledger.test.tsx` and `components/today.test.tsx` both start
+  with a stray UTF-8 BOM (an editor artifact, not intentional). Removed from both files.
+- [x] [Review][Patch] `sprint-status.yaml` and this spec's own frontmatter disagreed on status —
+  synced in this review's own step 6.
+- [x] [Review][Defer] `apply_grace_days()` is never tested through its real production entry
+  point, `settle_due_days()` — the SQL test calls `apply_grace_days()` directly. A regression in
+  the one added line wiring them together would ship undetected.
+- [x] [Review][Defer] Neither advisory lock (the pre-existing one in `grace_day_validate()`, nor
+  the one this review's own patch added to `appeal_hold_penalty()`) has an automated
+  concurrent-session test — this test suite's format (one transaction, sequential) cannot express
+  true concurrency.
+- [x] [Review][Defer] A waived day's Ledger row-muted caption still reads "Everything held" (the
+  same `verdict === 'clean'` branch a plain clean day uses) — only the pill and screen-reader-only
+  `aria-label` actually distinguish it. Extends the identical, already-recorded gap for
+  penalty-free slipped commitments (Story 3.4's own deferred entry): a real product-language
+  decision (a third state distinct from both `Held` and `Failed`), not a one-line patch.
+- [x] [Review][Defer] `GRACE_DAY_COPY.alreadySpent` is defined but never referenced — both
+  `ledger.tsx` and `today.tsx` deliberately collapse `'spent'`/`'already-spent'` into the same UI
+  state (a reasoned, commented choice, not an oversight), leaving this string genuinely unused.
+- [x] [Review][Defer] The Day summary's Grace Day control shows only the date and the
+  remaining-allowance sentence — never the amount or which commitment(s) were missed, unlike the
+  equivalent Ledger-row control.
+- [x] [Review][Defer] `EXPERIENCE.md` was not updated with this story's new user-facing copy
+  (`GRACE_DAY_COPY`, the Settings row, `gracedAfterRejection`), despite the epic's own Naming
+  Conventions bullet requiring copy to originate there first.
+- [x] [Review][Defer] The frozen I/O Matrix's "Appeal then Grace Day" row is tested by directly
+  `UPDATE`-ing the penalty to `held`, not by inserting a real `appeal` row and letting
+  `appeal_hold_penalty()` derive that state — weaker proof than its sibling row, which does.
+- [x] [Review][Defer] `apply_grace_days()`'s corrective `settlement_commitment` freeze depends on
+  `commitments_owing()` returning every commitment for that day; a commitment archived between the
+  original Failed Day and the fold-in would silently narrow the freeze.
+- [x] [Review][Defer] No test exercises a graced day's interaction with `weekly_quota_progress`
+  for a commitment that also has weekly-cadence tracking.
+- [x] [Review][Defer] The Ledger's Contest button isn't hidden once a Grace Day is spent on that
+  row — cosmetic; the server already refuses the resulting appeal attempt.
+- [x] [Review][Defer] The `grace_day` insert's promise rejection (as opposed to a `{data, error}`
+  result) is uncaught in both `ledger.tsx` and `today.tsx` — the same class of gap already
+  recorded for Story 4.6's `rule()`.
+- [x] [Review][Defer] `apply_grace_days()`'s own fold-in loop (and `settle_due_days()`'s call to
+  it) has no per-row exception isolation — one bad `grace_day` row could abort the whole hourly
+  pass. Matches `supersede_expiries()`'s own identical, pre-existing loop shape (verified by
+  reading it) — a systemic pattern this story reproduces, not a regression it introduces.
+
+Four further findings were dismissed as already recorded with reasoning in `deferred-work.md` by
+this same commit's own internal review (`grace_allowance_remaining`'s referee misread,
+`grace_day_owner_idx`'s possible redundancy, the client's blindness to an unprocessed spend within
+the fold-in window) or as low-value/theoretical (`classifyGraceDaySpend`'s empty-string message
+fallback, never observed to occur given the server always sends a non-empty message).
+
 ## Design Notes
 
 **Why the fold-in is delayed up to an hour, and why that's acceptable.** The doer's insert is

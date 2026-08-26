@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-25-2026 16:55
+last_updated: 08-25-2026 21:15
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -68,13 +68,13 @@ development_status:
   4-2-a-check-that-cannot-run-never-says-i-missed: done
   4-3-when-money-rides-on-it-the-machine-s-word-stands: done
   4-4-contest-a-miss-the-machine-got-wrong: done
-  4-5-the-referee-has-his-own-way-in: review
-  4-6-the-referee-rules: review
-  4-7-the-app-does-the-asking-the-referee-does-the-collecting: review
+  4-5-the-referee-has-his-own-way-in: done
+  4-6-the-referee-rules: done
+  4-7-the-app-does-the-asking-the-referee-does-the-collecting: done
   epic-4-retrospective: optional
 
   epic-5: in-progress
-  5-1-a-countable-way-to-be-forgiven: review
+  5-1-a-countable-way-to-be-forgiven: done
   5-2-the-app-notices-i-have-gone-quiet: backlog
   5-3-the-friend-is-told-i-have-disappeared: backlog
   5-4-the-long-view-including-whether-this-still-works: backlog

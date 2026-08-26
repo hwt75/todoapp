@@ -152,6 +152,43 @@ and the route split (`/referee/login`, `/referee`) both follow directly from exi
 - Given the referee's surface, then it requires no notification permission (NFR3) and is fully
   keyboard-navigable with no focus traps (NFR15)
 
+### Review Findings
+
+**Independent code review, 2026-08-25 — commit `47d42b6`, 4-layer (blind-hunter, edge-case-hunter,
+verification-gap, acceptance-auditor).**
+
+- [x] [Review][Decision→Patch] A doer could pair an email he himself controls as "the referee,"
+  defeating the independent-referee premise. **Resolved 2026-08-25:** author chose to patch —
+  `pair-referee/index.ts` now reads the caller's own email via `caller.auth.getUser()` and refuses
+  (400) if it matches the submitted referee email. Does not stop a doer using a *different*
+  address he also controls — that remains a trust boundary, not a code one.
+- [x] [Review][Patch] `sprint-status.yaml` and this spec's own frontmatter disagree on status —
+  the spec says `done`, sprint-status says `review`. Synced in this review's own step 6.
+- [x] [Review][Patch] Broken citation in "Suggested Review Order" — `referee-login.tsx:1016`
+  pointed past the end of an 88-line file. Corrected to `referee-login.tsx:16`.
+- [x] [Review][Defer] `pair-referee` sets `Access-Control-Allow-Origin: '*'` unconditionally on a
+  function that creates privileged accounts [`pair-referee/index.ts:30`](../../supabase/functions/pair-referee/index.ts#L30) — deferred, no functional risk today (JWT-authorized regardless of origin)
+- [x] [Review][Defer] No audit trail for pairing — `profile` gains no `paired_at`/`paired_by` —
+  deferred, low priority for a single-referee product
+- [x] [Review][Defer] The orphaned-account risk already recorded in `deferred-work.md` is
+  narrower than the real risk — the same orphaned row also results from a crash/disconnect between
+  `createUser` succeeding and the promote update even starting, not only from a failed cleanup
+  delete — deferred, same reasoning as the existing entry
+- [x] [Review][Defer] `referee-home.tsx`'s `penalty_current` read has no `.limit()` — fetches
+  every historical penalty row for two aggregate counts [`referee-home.tsx`](../../components/referee-home.tsx) — deferred, unbounded growth is years out for this product
+- [x] [Review][Defer] No rate limiting on `pair-referee` or `/referee/login` — deferred, matches
+  `sign-in.tsx`'s own pre-existing pattern, systemic not introduced here
+- [x] [Review][Defer] `RefereeLogin` doesn't check for an existing session on mount, unlike
+  `referee-home.tsx`'s own redirect handling [`referee-login.tsx`](../../components/referee-login.tsx) — deferred, minor UX
+- [x] [Review][Defer] `generatePassword()`'s output isn't verified against Supabase Auth's own
+  password-policy constraints — deferred, no live failure observed
+
+Nine further findings (409/500 inconsistency, `is_live_doer` gate untested, Settings not
+detecting existing pairing, one-time-password confirm/copy, placeholder-only labels, uncaught
+async rejections, cleanup-delete error unchecked, referee read policies not `is_live_doer`-scoped,
+missing mounted-guards) were dismissed as already recorded with reasoning in `deferred-work.md`
+by this same commit's own internal review.
+
 ## Spec Change Log
 
 ## Design Notes
@@ -296,7 +333,7 @@ environment -- see below):**
 **Referee's own surfaces (sign-in and home)**
 
 - Sign-in only, deliberately not reusing `sign-in.tsx`'s "Create account" path.
-  [`referee-login.tsx:1016`](../../components/referee-login.tsx#L1016)
+  [`referee-login.tsx:16`](../../components/referee-login.tsx#L16)
 
 - The home surface's own guard: a count and a total, and the two redirects (signed-out, non-referee) that keep the wrong session off it.
   [`referee-home.tsx:30`](../../components/referee-home.tsx#L30)

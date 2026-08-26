@@ -100,6 +100,23 @@ Deno.serve(async (req) => {
     return json({ error: 'Only the live doer account may pair a referee.' }, 403);
   }
 
+  // The referee exists to rule on the doer's own appeals (Story 4.6) and collect his own
+  // penalties (Story 4.7) — an independent party by the whole mechanism's own premise. This
+  // cannot verify the referee is truly a different person, only block the one case code can
+  // actually see: the doer pairing an address that is his own signed-in account.
+  const { data: callerUser, error: callerUserError } = await caller.auth.getUser();
+
+  if (callerUserError) {
+    return json({ error: callerUserError.message }, 500);
+  }
+
+  if (callerUser.user?.email?.toLowerCase() === email.toLowerCase()) {
+    return json(
+      { error: 'The referee must be a different account than your own.' },
+      400,
+    );
+  }
+
   const { data: existingReferee, error: existingError } = await admin
     .from('profile')
     .select('id')

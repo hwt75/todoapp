@@ -1,4 +1,4 @@
-﻿import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Ledger } from './ledger';
@@ -310,6 +310,35 @@ describe('Contest, on an eligible owed failed-day row (Story 4.4)', () => {
     expect(await screen.findByText('Held')).toBeInTheDocument();
     expect(screen.getByText('Dropped')).toBeInTheDocument();
     expect(screen.queryByText('Owed')).not.toBeInTheDocument();
+  });
+
+  it("names Collected, distinct from Owed, once the referee has marked a Penalty paid", async () => {
+    // A `collected` Penalty is the same settlement's own row transitioned in place (Story
+    // 4.7's `mark_penalty_collected()` writes no new settlement) — unlike `voided`, which
+    // only ever lands on a superseded settlement `penalty_current` never surfaces, this state
+    // is genuinely reachable through the doer's own Ledger read. The pill already read
+    // "Collected" correctly; this proves the row's accessible name does too, rather than
+    // falling through to the "owed" default and telling a screen-reader user he still owes it.
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'collected', period: '2026-08-18' }],
+      [
+        {
+          for_day: '2026-08-18',
+          commitment_id: 'commitment-1',
+          filed_by: 'doer',
+          commitment: { name: 'No fap', carries_penalty: true },
+        },
+      ],
+    );
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Collected')).toBeInTheDocument();
+    expect(screen.queryByText('Owed')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('group', { name: '2026-08-18, collected, for No fap' }),
+    ).toBeInTheDocument();
   });
 
   it('colours Held urgent rather than failed, and Dropped held rather than failed', async () => {

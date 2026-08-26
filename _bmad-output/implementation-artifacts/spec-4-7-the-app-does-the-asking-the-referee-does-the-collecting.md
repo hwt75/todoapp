@@ -156,6 +156,15 @@ comma string) was confirmed with the human before drafting.
 
 ## Spec Change Log
 
+**2026-08-25, iteration 2 (independent review).** The frozen "Always" bullet states the
+collection message "reuses `formatDong`/`formatDeadline`," but the shipped code (`lib/referee.ts`)
+introduces a new `formatOwedDay` instead — deliberately: `formatDeadline` omits the year
+(`lib/appeal.ts:93-99`), and this story's own review found that wrong for a Penalty designed to
+persist indefinitely (see Design Notes/Suggested Review Order). The behavior is correct and was
+independently verified; this entry only records the substitution against the frozen text, which
+had gone stale without a logged amendment. KEEP: `formatOwedDay`, adding the year `formatDeadline`
+omits, is the correct function for this message; no code change needed.
+
 **2026-08-25, iteration 1.** The original "Always" bullet specified a new RLS `select` policy
 directly on `settlement_commitment` for the referee, scoped to `kind = 'day'`. Building against it
 and re-running Story 4.5's own regression test (`supabase/tests/4-5-the-referee-has-his-own-way-in.sql`)
@@ -171,6 +180,62 @@ same scope (`kind = 'day'`, `outcome = 'missed'`), but `settlement_commitment` i
 policy, so `chain_current` is untouched. KEEP: everything else in this spec — the
 `mark_penalty_collected()` design, the list UI, the copy/clipboard handling — was unaffected and
 should carry forward unchanged.
+
+### Review Findings
+
+**Independent code review, 2026-08-25 — commit `f8c36af`, 4-layer (blind-hunter, edge-case-hunter,
+verification-gap, acceptance-auditor).**
+
+- [x] [Review][Patch] The doer's own Ledger (`components/ledger.tsx`) had no `row.state ===
+  'collected'` branch in its `aria-label` chain — a Collected Penalty (this story's own new,
+  reachable state) fell through to the final default and announced itself as still "owed" to a
+  screen-reader user, contradicting the sighted pill (correctly labelled "Collected"). Unlike
+  `voided` (Story 4.6), which only ever lands on a superseded settlement `penalty_current` never
+  surfaces, `collected` transitions the same row in place and is genuinely reachable. Fixed: a
+  `collected` branch added, matching `dropped`'s own shape. New test in `ledger.test.tsx` asserts
+  the accessible name directly. `npm test` (889/889), `npx tsc --noEmit`, `npm run lint` all clean.
+- [x] [Review][Patch] The frozen "Always" boundary said the message reuses `formatDeadline`; the
+  shipped code deliberately uses a new `formatOwedDay` instead (to add the year `formatDeadline`
+  omits), with no Spec Change Log entry recording the amendment. Logged as iteration 2 above — no
+  code change needed, the substitution was already correct.
+- [x] [Review][Patch] `sprint-status.yaml` and this spec's own frontmatter disagreed on status —
+  synced in this review's own step 6.
+- [x] [Review][Defer] No test proves `mark_penalty_collected()` leaves `outbox` untouched — the
+  spec's own "Never" boundary ("No outbox notification... on collection") is documented in prose
+  but never asserted, unlike Story 4.6's own test file, which does assert outbox counts.
+- [x] [Review][Defer] `referee_missed_commitments()`'s migration comment claims it correctly
+  excludes a `held`, `dropped`, `voided`, or already-`collected` Penalty's settlement, but only the
+  `held` case is exercised by the test file.
+- [x] [Review][Defer] Two different doer accounts with an identically-named commitment missed on
+  the same day would produce two owed-penalty rows with an identical accessible name — the same
+  underlying, already-accepted trade-off as Story 4.5's referee reads not being `is_live_doer`-
+  scoped, not a new gap.
+- [x] [Review][Defer] No component-level test proves a `collected`-state Penalty is excluded from
+  the "Owed penalties" list, unlike the equivalent Held-Penalty exclusion, which is tested.
+- [x] [Review][Defer] `collectionMessage()` hardcodes an English sentence with a `vi-VN`-formatted
+  amount inside it — no localization hook, no note on whether the mix is intentional.
+- [x] [Review][Defer] No confirmation step before Mark Collected — matches the same established
+  no-confirm-dialog pattern already recorded for Story 4.6's ruling controls, not a gap specific
+  to this story.
+- [x] [Review][Defer] `markStatus`/`markErrors`/`copyStatus` in `referee-home.tsx`, all keyed by
+  `penalty.id`, are never pruned — a minor memory leak over a long-lived session with many
+  collections.
+- [x] [Review][Defer] `referee_missed_commitments(p_settlement_ids uuid[])` has no server-side
+  bound on the incoming array's size.
+- [x] [Review][Defer] The "Owed penalties" section has no empty-state affordance — it simply
+  doesn't render when the list is empty, giving the referee no confirmation the list was checked.
+- [x] [Review][Defer] `markCollected`/`copyMessage` in `referee-home.tsx` set state after their
+  own `await` with no `cancelled` guard, the same class of gap already recorded for Story 4.6's
+  `rule()`.
+
+Six further findings were dismissed: three duplicate this same commit's own internal review,
+already recorded in `deferred-work.md` with reasoning (Copy-message double-click race, owed-list
+ordering tiebreaker, a day-kind zero-missed-commitments row rendering identically to the
+intentional week-kind fallback); one (near-verbatim rationale duplicated between the migration's
+header comment and its per-function `comment on function`) is a stylistic choice matching this
+codebase's own established documentation convention, not a defect; and one (a full held-through-
+collected lifecycle test) is subsumed by the `referee_missed_commitments()` test-coverage gap
+already deferred above.
 
 ## Design Notes
 

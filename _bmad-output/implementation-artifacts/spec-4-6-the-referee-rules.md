@@ -124,6 +124,61 @@ the chain rather than forgive only the money) was confirmed with the human befor
 - Given a non-referee session, when it calls `rule_appeal()`, then it is refused before any row is
   read or written
 
+### Review Findings
+
+**Independent code review, 2026-08-25 — commit `7f91ad9`, 4-layer (blind-hunter, edge-case-hunter,
+verification-gap, acceptance-auditor).**
+
+- [x] [Review][Patch] `rule_appeal()`'s NULL-`p_approved` guard (the exact hazard the migration's
+  own comment names as already fixed) had no regression test — every existing step passes a
+  literal boolean. Added Step 2b to `supabase/tests/4-6-the-referee-rules.sql`, mirroring Steps
+  1/2's pattern, against account 1's own appeal before Step 3 rules on it normally. **Not run
+  end-to-end**: the shared local Supabase stack already has a live referee paired from other
+  concurrent work, so `docker exec ... psql` against the fixture's own referee-creation step hits
+  `profile_single_referee`'s unique constraint before reaching Step 2b; a full `supabase db reset`
+  was avoided to not disrupt that other session. Modeled precisely on Steps 1/2's already-passing
+  shape (same variables, same `begin...exception` idiom).
+- [x] [Review][Patch] `supabase/tests/4-6-the-referee-rules.sql` cited a `settlement_once_correction`
+  constraint that doesn't exist anywhere in the codebase — the real guarantee is the guarded
+  update's first-writer-wins semantics. Comment corrected.
+- [x] [Review][Patch] `sprint-status.yaml` and this spec's own frontmatter disagreed on status —
+  synced in this review's own step 6.
+- [x] [Review][Defer] `referee-appeal-detail.tsx`'s `rule()` sets state after its `await
+  supabase.rpc(...)` with no `cancelled` guard, unlike the same file's own `load()` effect —
+  navigating away mid-ruling sets state on an unmounted component.
+- [x] [Review][Defer] No confirmation step before "He did it"/"He didn't" — the referee's
+  first-ever write, moving real money with no correction path once ruled. Matches this app's
+  established no-confirm-dialog pattern everywhere else (including 4.5's own accepted
+  no-recovery pairing flow), not a regression specific to this story.
+- [x] [Review][Defer] The pending-appeals list (`referee-home.tsx`) has no `.limit()`/pagination —
+  same class of gap already recorded for Story 4.5's penalty read.
+- [x] [Review][Defer] No index added for the new `penalty:penalty_id!inner(state)` embedded-filter
+  query pattern — first use of `!inner` in this codebase.
+- [x] [Review][Defer] No negative test proves the referee's new `storage.objects` read policy on
+  `appeal-evidence` doesn't also grant insert/update/delete — only the positive read case and the
+  pre-existing doer-refusal case are tested.
+- [x] [Review][Defer] The new `!inner`-filtered appeal query's real PostgREST semantics are
+  unverified — `referee-home.test.tsx`'s mock doesn't inspect `.eq()`'s arguments, so a dropped or
+  broken `!inner` filter would show stale/resolved appeals with no test catching it.
+- [x] [Review][Defer] The corrective settlement's own transaction failing at the final
+  `outbox_enqueue` call isn't discussed anywhere, unlike similar partial-failure paths recorded
+  elsewhere in `deferred-work.md` — likely safe (single transaction) but not called out.
+- [x] [Review][Defer] `referee-home.tsx`/`referee-appeal-detail.tsx` both reuse `formatDeadline`
+  (named and documented around deadlines) to render `for_day`, a calendar date with different
+  semantics — works today, no comment on the naming mismatch.
+
+Eight further findings were dismissed: two SQL edge cases proved unreachable on inspection (a
+NULL `appeal.commitment_id` is impossible — the column is `not null`; an archived appealed
+commitment disappearing from `commitments_owing()` at ruling time is impossible — its
+`archived_at` filter is anchored to the appealed `for_day`, not to "now"); one finding
+(`penaltyState` defaulting to `'owed'` on a missing Penalty row) was real at this commit but is
+already superseded by Story 4.7's own rewrite of this exact read (confirmed clean in the current
+tree); one (unstyled new CSS classes) was a false positive — `.row`/`.row-main`/`.row-muted` are
+pre-existing shared classes in `app/globals.css`; and three (unexpected penalty state renders
+blank, a demoted referee keeps evidence-storage access until token refresh, no ordering
+tiebreaker for same-day appeals) duplicate findings this same commit's own internal review already
+recorded in `deferred-work.md` with reasoning.
+
 ## Design Notes
 
 **Corrective recompute.** See `rule_appeal()`'s own recompute

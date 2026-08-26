@@ -376,6 +376,45 @@ begin
     'with "No such appeal.", not the role-refusal message.';
 
   -- -------------------------------------------------------------------------------
+  -- 2b. A NULL p_approved is refused before the appeal is touched -- the exact hazard the
+  --     migration's own comment names: `if not p_approved` treats a NULL argument as false
+  --     and falls through into the approval branch, voiding a Held Penalty for a call that
+  --     named no ruling at all. Run against account 1's own appeal, which Step 3 below then
+  --     rules on normally -- proving the guard changed nothing about the real ruling that
+  --     follows it.
+  -- -------------------------------------------------------------------------------
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
+    true);
+
+  v_refused := false;
+  begin
+    perform public.rule_appeal(v_appeal1, null);
+  exception when others then
+    v_refused := true;
+    v_message := sqlerrm;
+  end;
+
+  perform set_config('role', 'postgres', true);
+
+  if not v_refused or v_message not ilike '%p_approved%' then
+    raise exception using message = format(
+      'A NULL p_approved read "%s", expected the "p_approved must not be null." refusal.',
+      coalesce(v_message, '<null>'));
+  end if;
+
+  select state into v_state from public.penalty where id = v_penalty1;
+  if v_state <> 'held' then
+    raise exception using message = format(
+      'Account 1''s penalty reads `%s` after a refused NULL-approved ruling, expected `held` '
+      '-- untouched.', v_state);
+  end if;
+
+  raise notice using message = 'Step 2b ok: rule_appeal() with a NULL p_approved is refused '
+    'before anything is written, leaving the Penalty exactly where Step 3 expects to find it.';
+
+  -- -------------------------------------------------------------------------------
   -- 3. Approve, sole cause (account 1). Penalty voids; the corrective settlement reads
   --    clean and carries no penalty; the chain reads the appealed commitment as held, not
   --    missed, on the day it was corrected; one outbox notification, self-dated, naming the
@@ -648,7 +687,9 @@ begin
   if v_count <> 1 then
     raise exception using message = format(
       'Account 5''s settlement gained %s correction row(s) across two ruling calls on the '
-      'same appeal, expected exactly 1 -- settlement_once_correction''s own guarantee.',
+      'same appeal, expected exactly 1 -- the guarded update''s own first-writer-wins '
+      'guarantee (rule_appeal() has no separate settlement_once_correction constraint; the '
+      'second call''s `where state = ''held''` finds zero rows and never reaches the insert).',
       v_count);
   end if;
 
