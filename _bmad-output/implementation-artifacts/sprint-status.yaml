@@ -77,7 +77,7 @@ development_status:
   5-1-a-countable-way-to-be-forgiven: done
   5-2-the-app-notices-i-have-gone-quiet: done
   5-3-the-friend-is-told-i-have-disappeared: done
-  5-4-the-long-view-including-whether-this-still-works: review
+  5-4-the-long-view-including-whether-this-still-works: done
   epic-5-retrospective: optional
 action_items:
   - id: "epic-1-retro-item-1-record-whether-a-research-spike-may-skip"
