@@ -145,9 +145,14 @@ untriggered-in-practice path rather than dead code.
   possible.
 - Story 4.6 (ruling) and Story 4.7 (collection) both depend on 4.5 (Referee account/auth existing
   first).
-- The AD-15 guarded transition is shared machinery between this epic's Appeal-timeout path and Epic
-  3's Week Close settlement (Story 3.4) — both can resolve the same Held Penalty, and only one may
-  win.
+- **Corrected 2026-08-27 (Epic 4 retrospective):** the AD-15 guarded transition is intra-epic
+  machinery shared among this epic's own Appeal-timeout path (`void_expired_appeals()`), ruling
+  (`rule_appeal()`), and the toggle-off-ends-appeal fix (`commitment_carries_penalty_off_ends_appeal()`)
+  — all can resolve the same Held Penalty, and only one may win. It is **not** shared with Epic 3's
+  Week Close (Story 3.4): `settle_week()`/`settle_due_weeks()` never write `penalty.state`, and
+  `appeal_hold_penalty()` restricts eligibility to `s.kind = 'day'`, so a Weekly-Quota Held Penalty
+  cannot exist. The retrospective's own diff-scope review confirmed this by direct code
+  inspection after a lens flagged the original claim above as unverified.
 - Ledger outcomes `Owed` and `Expired` were introduced in Epic 2 (Stories 2.6, 2.7); this epic adds
   `Dropped` and `Collected` to the same enum/surface.
 - Epic 5's Grace Day (FR-17) and silence intervention (FR-16) reuse the Ledger and notification

@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-26-2026 17:50
+last_updated: 08-27-2026 14:26
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -71,7 +71,7 @@ development_status:
   4-5-the-referee-has-his-own-way-in: done
   4-6-the-referee-rules: done
   4-7-the-app-does-the-asking-the-referee-does-the-collecting: done
-  epic-4-retrospective: optional
+  epic-4-retrospective: done
 
   epic-5: in-progress
   5-1-a-countable-way-to-be-forgiven: done
@@ -235,14 +235,14 @@ action_items:
       on late Grace Day or Appeal fold-in -- needs a human decision on direction before
       implementing"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"
   - id: "epic-5-retro-item-23-give-the-silence-intervention-a-way-out"
     epic: 5
     action: "Give the Silence intervention a way out when nothing is pending -- at
       minimum a Settings/sign-out link, ideally the Grace Day spend control too"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"
   - id: "epic-5-retro-item-24-convert-settlement_current-to-explicit-s"
     epic: 5
@@ -250,7 +250,7 @@ action_items:
       before the next story that adds a settlement column rediscovers the 42P16 view-column-freeze
       error penalty_current just hit"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"
   - id: "epic-5-retro-item-25-run-epic-4-own-retrospective-or-explicit"
     epic: 5
@@ -267,3 +267,80 @@ action_items:
     owner: "hwt75"
     status: open
     ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"
+  - id: "epic-4-retro-item-27-stop-file_auto_check_result-from-re-read"
+    epic: 4
+    action: "Stop file_auto_check_result() from re-reading the live, mutable commitment.carries_penalty
+      at hourly-resolution time -- freeze the money-relevant flag as of the claimed
+      day so toggling it cannot make a genuine machine-filed miss evade FR-2a precedence"
+    owner: ""
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-08-27.md"
+  - id: "epic-4-retro-item-28-implement-fr-2a-s-documented-invariant-t"
+    epic: 4
+    action: "Implement FR-2a's documented invariant: turning carries_penalty off on
+      a commitment with a held Penalty must resolve that Appeal in the author's favor
+      immediately (AD-15 guarded transition) -- and correct deferred-work.md's Story-4.4
+      entry, whose premise that no UI path edits carries_penalty post-creation is
+      factually false"
+    owner: ""
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-08-27.md"
+  - id: "epic-4-retro-item-29-implement-fr-14-s-same-day-evidence-requ"
+    epic: 4
+    action: "Implement FR-14's same-day-evidence requirement -- a captured-at date
+      on appeal_evidence (or equivalent), checked client-side and server-side; currently
+      entirely unenforced and not recorded anywhere as deferred"
+    owner: ""
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-08-27.md"
+  - id: "epic-4-retro-item-30-add-sql-test-coverage-for-appeal_hold_pe"
+    epic: 4
+    action: "Add SQL-test coverage for appeal_hold_penalty()'s verdict='failed' and
+      carries_penalty-required eligibility guards -- both are real, present code with
+      zero test coverage of their refusal path"
+    owner: ""
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-08-27.md"
+  - id: "epic-4-retro-item-31-add-a-test-fixture-where-a-referee-s-jwt"
+    epic: 4
+    action: "Add a test fixture where a referee's JWT and profile.role disagree (a
+      demoted referee with a stale token), asserting rule_appeal()/mark_penalty_collected()
+      still refuse -- proves role_from_table() is load-bearing, not incidentally equivalent
+      to role_from_token() in every current fixture"
+    owner: ""
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-08-27.md"
+  - id: "epic-4-retro-item-32-fix-lib-ledger-ts-components-ledger-tsx"
+    epic: 4
+    action: "Fix lib/ledger.ts / components/ledger.tsx's pill and aria-label precedence
+      so a collected or voided Penalty is never shown or announced as Expired"
+    owner: ""
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-08-27.md"
+  - id: "epic-4-retro-item-33-decide-whether-to-add-a-defensive-db-con"
+    epic: 4
+    action: "Decide whether to add a defensive DB constraint blocking an Auto-check
+      on a daily_hours_quota commitment (mirrors the existing abstain exclusion) --
+      cheap, removes an ambiguity even though current settlement paths appear not
+      to reach it"
+    owner: ""
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-08-27.md"
+  - id: "epic-4-retro-item-34-correct-epic-4-context-md-s-claim-that-a"
+    epic: 4
+    action: "Correct epic-4-context.md's claim that AD-15 is shared machinery with
+      Epic 3's Week Close -- Week Close never writes penalty.state and Weekly-Quota
+      Held Penalties cannot exist yet, so the described race is not actually wired
+      up as documented"
+    owner: ""
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-08-27.md"
+  - id: "epic-4-retro-item-35-flip-epic-4-s-top-level-status-to-done-i"
+    epic: 4
+    action: "Flip epic-4's top-level status to done in sprint-status.yaml -- all 7
+      stories have been done for the full duration of Epic 5's build, and this retrospective
+      closes the last gate; note epic-5 has the identical unflipped-top-level-status
+      gap right now"
+    owner: ""
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-08-27.md"
