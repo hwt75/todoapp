@@ -59,6 +59,13 @@ export const SILENCE_COPY = {
   pendingSuffix: 'close tonight — answer them, and do one thing today.',
   failed: 'Failed.',
   unreachable: 'The server could not be reached.',
+
+  /** Epic 5 retrospective (2026-08-27), finding A4: shown only once nothing is owing, so
+   *  the one concrete action above stays the only thing above the fold while anything is
+   *  still outstanding (UX-DR6). Plain navigation, not content — neither name violates the
+   *  no-debt-figure/no-red boundary above. */
+  openSettings: 'Settings',
+  openLedger: 'Open the Ledger',
 } as const;
 
 /** The full sentence for whichever variant applies, `pending` deciding between them exactly

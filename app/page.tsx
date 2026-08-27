@@ -169,7 +169,14 @@ export default function Home() {
   // `gate.owing.length > 0` would otherwise render MorningGate directly. The intervention's
   // own one concrete action renders that same MorningGate, unchanged, beneath its copy when
   // there is something to answer.
-  if (ownerId && silenceEpisode) {
+  // Epic 5 retrospective (2026-08-27), finding A4: when nothing is owing, the intervention
+  // used to have no way out at all — no Settings/sign-out, no Ledger, nothing but the copy
+  // and the Grace Days sentence, until some later day's commitment happened to become owing
+  // again. `!showSettings && !showLedger` lets either escape hatch fall through to the
+  // ternary chain below, exactly the way `gate.owing.length > 0` already falls through when
+  // neither is requested; closing either returns here, since only answering a Declaration
+  // ends the episode (`declaration_satisfies_silence()`), not merely leaving the screen.
+  if (ownerId && silenceEpisode && !showSettings && !showLedger) {
     return (
       <main>
         <SilenceIntervention
@@ -178,6 +185,8 @@ export default function Home() {
           owing={gate.owing}
           now={gate.now}
           onAnswered={gate.markAnswered}
+          onOpenSettings={() => setShowSettings(true)}
+          onOpenLedger={() => setShowLedger(true)}
         />
       </main>
     );

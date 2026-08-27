@@ -37,7 +37,7 @@ beforeEach(() => {
 });
 
 describe('the Silence intervention', () => {
-  it('names one concrete thing to do and opens nothing when nothing is outstanding', async () => {
+  it('names one concrete thing to do and opens no Declaration UI when nothing is outstanding', async () => {
     render(
       <SilenceIntervention
         ownerId="u1"
@@ -45,6 +45,8 @@ describe('the Silence intervention', () => {
         owing={[]}
         now={now}
         onAnswered={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onOpenLedger={vi.fn()}
       />,
     );
 
@@ -63,6 +65,48 @@ describe('the Silence intervention', () => {
     expect(document.body.textContent).not.toContain('₫');
   });
 
+  it('offers a way out once nothing is outstanding — Epic 5 retro, 2026-08-27, finding A4', async () => {
+    const onOpenSettings = vi.fn();
+    const onOpenLedger = vi.fn();
+    render(
+      <SilenceIntervention
+        ownerId="u1"
+        startedDay="2026-08-19"
+        owing={[]}
+        now={now}
+        onAnswered={vi.fn()}
+        onOpenSettings={onOpenSettings}
+        onOpenLedger={onOpenLedger}
+      />,
+    );
+
+    await screen.findByRole('heading');
+
+    screen.getByRole('button', { name: 'Settings' }).click();
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+
+    screen.getByRole('button', { name: 'Open the Ledger' }).click();
+    expect(onOpenLedger).toHaveBeenCalledTimes(1);
+  });
+
+  it('never offers the escape hatch while MorningGate is the one concrete action (UX-DR6)', async () => {
+    render(
+      <SilenceIntervention
+        ownerId="u1"
+        startedDay="2026-08-19"
+        owing={[gym]}
+        now={now}
+        onAnswered={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onOpenLedger={vi.fn()}
+      />,
+    );
+
+    await screen.findByText(/MorningGate/);
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open the Ledger' })).not.toBeInTheDocument();
+  });
+
   it('names the specific outstanding days and opens MorningGate, unchanged, when 1+ are pending', async () => {
     const onAnswered = vi.fn();
     render(
@@ -72,6 +116,8 @@ describe('the Silence intervention', () => {
         owing={[gym]}
         now={now}
         onAnswered={onAnswered}
+        onOpenSettings={vi.fn()}
+        onOpenLedger={vi.fn()}
       />,
     );
 
@@ -97,6 +143,8 @@ describe('the Silence intervention', () => {
         owing={[]}
         now={now}
         onAnswered={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onOpenLedger={vi.fn()}
       />,
     );
 
@@ -112,6 +160,8 @@ describe('the Silence intervention', () => {
         owing={[]}
         now={now}
         onAnswered={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onOpenLedger={vi.fn()}
       />,
     );
 

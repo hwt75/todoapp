@@ -32,6 +32,14 @@ type View =
  * screen returns on the next load (I/O Matrix: "Declaration answered mid-episode" — this
  * component does not attempt to react live within the same session, matching the spec's own
  * stated boundary).
+ *
+ * When nothing is owing, MorningGate has nothing to render and there is no Declaration to
+ * answer — until some later day's commitment happens to become owing again, this screen used
+ * to be a dead end (Epic 5 retrospective, 2026-08-27, finding A4). `onOpenSettings`/
+ * `onOpenLedger` give that state a way out: Settings (sign-out lives there) and the Ledger,
+ * which already carries the Grace Day spend control this component deliberately does not
+ * re-implement — one working control, not two copies of it. Neither ends the episode; leaving
+ * either returns here exactly as before, since only a Declaration does that.
  */
 export function SilenceIntervention({
   ownerId,
@@ -39,6 +47,8 @@ export function SilenceIntervention({
   owing,
   now,
   onAnswered,
+  onOpenSettings,
+  onOpenLedger,
 }: {
   ownerId: string;
   /** `silence_episode.started_day` — the earlier of the two quiet asked-days that opened it. */
@@ -46,6 +56,8 @@ export function SilenceIntervention({
   owing: OwedCommitment[];
   now: Date;
   onAnswered: (commitmentId: string) => void;
+  onOpenSettings: () => void;
+  onOpenLedger: () => void;
 }) {
   const [view, setView] = useState<View>({ kind: 'loading' });
 
@@ -99,6 +111,17 @@ export function SilenceIntervention({
       )}
 
       {pending && <MorningGate ownerId={ownerId} owing={owing} now={now} onAnswered={onAnswered} />}
+
+      {!pending && (
+        <p>
+          <button type="button" onClick={onOpenLedger}>
+            {SILENCE_COPY.openLedger}
+          </button>{' '}
+          <button type="button" onClick={onOpenSettings}>
+            {SILENCE_COPY.openSettings}
+          </button>
+        </p>
+      )}
     </section>
   );
 }
