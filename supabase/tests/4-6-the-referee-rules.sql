@@ -256,8 +256,8 @@ begin
   insert into public.appeal (owner_id, commitment_id, idempotency_key, for_day)
   values (v_user1, v_c1, gen_random_uuid(), v_day) returning id into v_appeal1;
 
-  insert into public.appeal_evidence (appeal_id, storage_path)
-  values (v_appeal1, v_appeal1::text || '/proof.jpg') returning id into v_evidence1;
+  insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+  values (v_appeal1, v_appeal1::text || '/proof.jpg', v_day) returning id into v_evidence1;
 
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_user2, 'role', 'authenticated', 'app_role', 'doer')::text, true);

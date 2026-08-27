@@ -67,6 +67,13 @@ export const APPEAL_COPY = {
   evidenceSaved: 'Evidence attached.',
   evidenceFailed:
     'The evidence could not be saved. The appeal itself still stands — you can try again.',
+
+  /** FR-14: "restricted to items dated the claimed day" — an old or unrelated photo proves
+   *  nothing (EXPERIENCE.md). Refused client-side before any upload starts; the same rule is
+   *  enforced again server-side by `appeal_evidence_derive_owner()`, since a client check
+   *  alone is never authoritative (AD-1). */
+  evidenceWrongDay:
+    'That photo isn’t dated the day being appealed. Attach one from that day instead.',
 } as const;
 
 /**
@@ -106,6 +113,27 @@ export function formatDeadline(deadline: Date): string {
  * `appeal.owner_id` (NFR4) — a path that did not lead with it would be unreadable by that
  * policy regardless of who owns the appeal.
  */
+/**
+ * The calendar date (Asia/Ho_Chi_Minh) a file's own `lastModified` timestamp falls on.
+ *
+ * Not EXIF `DateTimeOriginal` — parsing binary EXIF client-side has no existing dependency in
+ * this codebase, and `lastModified` is the only capture-adjacent signal a plain `<input
+ * type="file">` exposes without one. This is a real limitation: a library-picked file's
+ * `lastModified` reflects the OS's own file metadata, which a sync or export step can touch
+ * independently of when the photo was actually taken. Good enough to refuse an evidently old
+ * or unrelated file, not a cryptographic proof of capture time.
+ */
+export function fileCapturedOn(file: File): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: ZONE }).format(new Date(file.lastModified));
+}
+
+/** FR-14: evidence must be dated the day being appealed. `forDay` is already `YYYY-MM-DD`
+ *  (the same shape `fileCapturedOn` produces via the `en-CA` locale), so a plain string
+ *  comparison is exact — no date parsing on either side to disagree about. */
+export function isEvidenceDated(file: File, forDay: string): boolean {
+  return fileCapturedOn(file) === forDay;
+}
+
 export function evidenceObjectPath(appealId: string, evidenceId: string, filename: string): string {
   // No dot survives, on purpose: allowing `.` and rejecting only `/` would still let
   // `../../etc/passwd` through as `.._.._etc_passwd`, which still reads as a traversal

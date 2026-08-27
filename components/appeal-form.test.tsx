@@ -12,6 +12,7 @@ let insertResponse: { data: unknown; error: unknown } = { data: null, error: nul
 let rereadResponse: { data: unknown; error: unknown } = { data: null, error: null };
 let evidenceInsertResponse: { data: unknown; error: unknown } = { data: null, error: null };
 let uploadResponse: { data: unknown; error: unknown } = { data: null, error: null };
+let lastEvidenceInsert: Record<string, unknown> | null = null;
 let uuidCounter = 0;
 
 vi.mock('@/lib/supabase/client', () => ({
@@ -34,7 +35,12 @@ vi.mock('@/lib/supabase/client', () => ({
         };
       }
       if (table === 'appeal_evidence') {
-        return { insert: () => Promise.resolve(evidenceInsertResponse) };
+        return {
+          insert: (row: Record<string, unknown>) => {
+            lastEvidenceInsert = row;
+            return Promise.resolve(evidenceInsertResponse);
+          },
+        };
       }
       throw new Error(`appeal-form.test.tsx: unexpected table ${table}`);
     },
@@ -51,6 +57,7 @@ beforeEach(() => {
   rereadResponse = { data: null, error: null };
   evidenceInsertResponse = { data: null, error: null };
   uploadResponse = { data: null, error: null };
+  lastEvidenceInsert = null;
   uuidCounter = 0;
   vi.stubGlobal('crypto', { randomUUID: () => `uuid-${++uuidCounter}` });
 });
@@ -210,26 +217,38 @@ describe('evidence, optional and never blocking', () => {
     await screen.findByLabelText('Evidence');
   }
 
+  // `forDay` is always `2026-08-18` (see `renderForm`). Noon Asia/Ho_Chi_Minh keeps this
+  // comfortably inside that calendar date regardless of the machine running the test.
+  function fileDatedOn(isoDate: string) {
+    return new File(['data'], 'photo.jpg', {
+      type: 'image/jpeg',
+      lastModified: new Date(`${isoDate}T12:00:00+07:00`).getTime(),
+    });
+  }
+
   it('says it is optional and never required to submit', async () => {
     await heldForm();
     expect(screen.getByText(/Optional, and never required to submit/)).toBeInTheDocument();
   });
 
-  it('confirms once uploaded and inserted', async () => {
+  it('confirms once uploaded and inserted, with the day it read off the file', async () => {
     await heldForm();
 
-    const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' });
-    fireEvent.change(screen.getByLabelText('Evidence'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('Evidence'), {
+      target: { files: [fileDatedOn('2026-08-18')] },
+    });
 
     expect(await screen.findByText('Evidence attached.')).toBeInTheDocument();
+    expect(lastEvidenceInsert).toMatchObject({ captured_on: '2026-08-18' });
   });
 
   it('says the appeal still stands when the upload itself fails', async () => {
     await heldForm();
     uploadResponse = { data: null, error: { message: 'storage refused' } };
 
-    const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' });
-    fireEvent.change(screen.getByLabelText('Evidence'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('Evidence'), {
+      target: { files: [fileDatedOn('2026-08-18')] },
+    });
 
     expect(await screen.findByText(/The appeal itself still stands/)).toBeInTheDocument();
   });
@@ -238,10 +257,22 @@ describe('evidence, optional and never blocking', () => {
     await heldForm();
     evidenceInsertResponse = { data: null, error: { message: 'insert refused' } };
 
-    const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' });
-    fireEvent.change(screen.getByLabelText('Evidence'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('Evidence'), {
+      target: { files: [fileDatedOn('2026-08-18')] },
+    });
 
     expect(await screen.findByText(/The appeal itself still stands/)).toBeInTheDocument();
+  });
+
+  it('refuses a file dated a different day, before any upload starts (FR-14)', async () => {
+    await heldForm();
+
+    fireEvent.change(screen.getByLabelText('Evidence'), {
+      target: { files: [fileDatedOn('2026-08-17')] },
+    });
+
+    expect(await screen.findByText(/isn’t dated the day being appealed/)).toBeInTheDocument();
+    expect(lastEvidenceInsert).toBeNull();
   });
 });
 

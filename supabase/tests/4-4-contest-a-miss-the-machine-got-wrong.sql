@@ -479,10 +479,13 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_user1, 'role', 'authenticated', 'app_role', 'doer')::text, true);
 
+  -- captured_on is set to v_day (the appeal's own for_day) on both inserts below so the
+  -- Epic 4 retrospective's captured_on guard (2026-08-27, finding A3) never fires here —
+  -- this step is about storage_path's own check constraint, not that one.
   v_refused := false;
   begin
-    insert into public.appeal_evidence (appeal_id, storage_path)
-    values (v_appeal1, gen_random_uuid()::text || '/not-this-appeals-folder.jpg');
+    insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+    values (v_appeal1, gen_random_uuid()::text || '/not-this-appeals-folder.jpg', v_day);
   exception when others then
     v_refused := true;
   end;
@@ -493,8 +496,8 @@ begin
       'check constraint on storage_path did not fire.';
   end if;
 
-  insert into public.appeal_evidence (appeal_id, storage_path)
-  values (v_appeal1, v_appeal1::text || '/proof.jpg');
+  insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+  values (v_appeal1, v_appeal1::text || '/proof.jpg', v_day);
 
   perform set_config('role', 'postgres', true);
 

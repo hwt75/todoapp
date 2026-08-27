@@ -299,8 +299,8 @@ begin
         '`appeal: read own` did not let the owning account read back its own appeal.';
     end if;
 
-    insert into public.appeal_evidence (appeal_id, storage_path)
-    values (v_appeal, v_appeal::text || '/one.jpg')
+    insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+    values (v_appeal, v_appeal::text || '/one.jpg', v_day)
     returning id into v_evidence;
 
     select count(*) into v_count from public.appeal_evidence where id = v_evidence;
@@ -335,8 +335,11 @@ begin
     -- (auth.uid() = owner_id)` fails even though v_b never claimed to be anyone else.
     v_refused := false;
     begin
-      insert into public.appeal_evidence (appeal_id, storage_path)
-      values (v_appeal, v_appeal::text || '/planted.jpg');
+      -- captured_on = v_day (the appeal's own for_day) so the Epic 4 retrospective's
+      -- captured_on guard (2026-08-27, finding A3) never fires here — this step is about
+      -- ownership (v_b cannot claim v_a's appeal), not evidence dating.
+      insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+      values (v_appeal, v_appeal::text || '/planted.jpg', v_day);
     exception when others then
       v_refused := true;
     end;

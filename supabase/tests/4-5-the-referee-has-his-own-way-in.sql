@@ -162,8 +162,8 @@ begin
       'for a client one; triggers do not consult the caller''s own role.', v_state);
   end if;
 
-  insert into public.appeal_evidence (appeal_id, storage_path)
-  values (v_appeal_a, v_appeal_a::text || '/proof.jpg')
+  insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+  values (v_appeal_a, v_appeal_a::text || '/proof.jpg', v_day_a)
   returning id into v_evidence_a;
 
   -- Account B. A plain, self-declared miss with no appeal at all -- its Penalty stays owed,
@@ -485,8 +485,11 @@ begin
   --     policy's own `role_from_table() = 'doer'` check refuse it.
   v_refused := false;
   begin
-    insert into public.appeal_evidence (appeal_id, storage_path)
-    values (v_appeal_a, v_appeal_a::text || '/second.jpg');
+    -- captured_on = v_day_a (the appeal's own for_day) so the Epic 4 retrospective's
+    -- captured_on guard (2026-08-27, finding A3) never fires here — this step is about
+    -- the RLS "file own" policy refusing a referee session, not that one.
+    insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+    values (v_appeal_a, v_appeal_a::text || '/second.jpg', v_day_a);
   exception when insufficient_privilege then
     v_refused := true;
   end;
