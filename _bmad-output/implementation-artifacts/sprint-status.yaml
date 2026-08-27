@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-27-2026 16:10
+last_updated: 08-27-2026 16:32
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -273,7 +273,7 @@ action_items:
       at hourly-resolution time -- freeze the money-relevant flag as of the claimed
       day so toggling it cannot make a genuine machine-filed miss evade FR-2a precedence"
     owner: ""
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-08-27.md"
   - id: "epic-4-retro-item-28-implement-fr-2a-s-documented-invariant-t"
     epic: 4
