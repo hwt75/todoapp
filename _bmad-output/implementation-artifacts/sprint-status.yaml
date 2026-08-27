@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-27-2026 14:26
+last_updated: 08-27-2026 15:14
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -265,7 +265,7 @@ action_items:
       promoting it to done -- every Epic 5 story shipped on automated verification
       only"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"
   - id: "epic-4-retro-item-27-stop-file_auto_check_result-from-re-read"
     epic: 4
