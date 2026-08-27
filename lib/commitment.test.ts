@@ -66,6 +66,17 @@ describe('auto-checks', () => {
       expect(typeof autoChecksPossible(kind)).toBe('boolean');
     }
   });
+
+  it('are impossible for an Hours-per-day commitment (Epic 4 retro, finding A7)', () => {
+    // commitments_owing() excludes daily_hours_quota entirely, so no settlement path ever
+    // consults an Auto-check attached to one — mirrors the abstain exclusion above.
+    expect(autoChecksPossible('do', 'daily_hours_quota')).toBe(false);
+  });
+
+  it('defaults the cadence argument to one that always allows a check', () => {
+    // Every pre-existing single-argument call site keeps its prior meaning.
+    expect(autoChecksPossible('do')).toBe(true);
+  });
 });
 
 describe('an Account-elsewhere Auto-check draft', () => {
@@ -90,6 +101,19 @@ describe('an Account-elsewhere Auto-check draft', () => {
     expect(
       draftProblems(
         draft({ kind: 'abstain', autoCheckEnabled: true, autoCheckAccountRef: 'my-handle' }),
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('is refused on an Hours-per-day commitment, even with a ref typed (Epic 4 retro, A7)', () => {
+    expect(
+      draftProblems(
+        draft({
+          cadence: 'daily_hours_quota',
+          dailyMinutesTarget: 180,
+          autoCheckEnabled: true,
+          autoCheckAccountRef: 'my-handle',
+        }),
       ).length,
     ).toBeGreaterThan(0);
   });
@@ -190,6 +214,20 @@ describe('switching cadence', () => {
     const switched = withCadence(original, 'daily_hours_quota');
     expect(switched.name).toBe('Company work');
     expect(switched.carriesPenalty).toBe(true);
+  });
+
+  it('clears a linked Auto-check when switching to Hours-per-day (Epic 4 retro, A7)', () => {
+    const linked = draft({ cadence: 'daily', autoCheckEnabled: true, autoCheckAccountRef: 'handle' });
+    const switched = withCadence(linked, 'daily_hours_quota');
+    expect(switched.autoCheckEnabled).toBe(false);
+    expect(switched.autoCheckAccountRef).toBe('');
+  });
+
+  it('leaves a linked Auto-check alone when switching between cadences that both allow one', () => {
+    const linked = draft({ cadence: 'daily', autoCheckEnabled: true, autoCheckAccountRef: 'handle' });
+    const switched = withCadence(linked, 'weekly_quota');
+    expect(switched.autoCheckEnabled).toBe(true);
+    expect(switched.autoCheckAccountRef).toBe('handle');
   });
 });
 

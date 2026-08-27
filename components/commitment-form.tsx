@@ -59,7 +59,7 @@ export function CommitmentForm({
 
   const problems = draftProblems(draft);
   const targets = requiredTargets(draft.cadence);
-  const checksPossible = autoChecksPossible(draft.kind);
+  const checksPossible = autoChecksPossible(draft.kind, draft.cadence);
   const autoCheckActive = checksPossible && draft.autoCheckEnabled;
 
   function set<K extends keyof CommitmentDraft>(key: K, value: CommitmentDraft[K]) {
@@ -189,10 +189,15 @@ export function CommitmentForm({
           Until then, and unless Account elsewhere is linked below, every commitment is settled by
           your morning answer.
         </p>
-      ) : (
+      ) : draft.kind === 'abstain' ? (
         <p className="row-muted">
           Nothing can check this one. There is no sensor for a thing not done, so your morning
           answer is the record — and the only record.
+        </p>
+      ) : (
+        <p className="row-muted">
+          Nothing can check this one. An Hours-per-day commitment is judged by the time you
+          bank, never by a morning answer, so there is nothing an Auto-check could report.
         </p>
       )}
       <p>

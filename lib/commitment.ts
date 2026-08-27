@@ -87,9 +87,20 @@ export function requiredTargets(cadence: CommitmentCadence): TargetField[] {
  * account elsewhere that records it. Those commitments are settled by the author's
  * morning answer and nothing else, which the setup screen has to say out loud rather
  * than leaving the controls merely greyed.
+ *
+ * An Hours-per-day commitment is excluded the same way, for a different reason (Epic 4
+ * retrospective, finding A7): it is judged by banked Focus-Session minutes, never by a
+ * Declaration (`commitments_owing()` excludes `daily_hours_quota` entirely,
+ * `20260820140000_weekly_quota_is_not_judged_daily.sql`), so `resolve_auto_checks()`'s
+ * settlement-gating guard (`auto_check_pending()`, AD-13) never runs for one — an attached
+ * check would have no path that could ever enforce it. `cadence` defaults to `'daily'` so
+ * every existing single-argument call site (kind-only checks) keeps its prior meaning.
  */
-export function autoChecksPossible(kind: CommitmentKind): boolean {
-  return kind !== 'abstain';
+export function autoChecksPossible(
+  kind: CommitmentKind,
+  cadence: CommitmentCadence = 'daily',
+): boolean {
+  return kind !== 'abstain' && cadence !== 'daily_hours_quota';
 }
 
 /**
@@ -152,9 +163,12 @@ export function draftProblems(draft: CommitmentDraft): string[] {
   if (draft.autoCheckEnabled) {
     // Mirrors `autoChecksPossible()`: there is no sensor for a thing not done, so an
     // Auto-check can never attach to an abstention — refused here and by the database's
-    // own `commitment_auto_check_not_on_abstain` check.
-    if (!autoChecksPossible(draft.kind)) {
+    // own `commitment_auto_check_not_on_abstain` check. An Hours-per-day cadence is refused
+    // the same way, by `commitment_auto_check_not_on_hours_quota`.
+    if (draft.kind === 'abstain') {
       problems.push('Nothing can check an Avoid-it commitment automatically.');
+    } else if (draft.cadence === 'daily_hours_quota') {
+      problems.push('Nothing can check an Hours-per-day commitment automatically.');
     }
     if (draft.autoCheckAccountRef.trim() === '') {
       problems.push('Account elsewhere needs an account identifier to check.');
@@ -170,7 +184,7 @@ export function draftProblems(draft: CommitmentDraft): string[] {
  * refuse the save anyway — this is what keeps the control itself from becoming a dead end).
  */
 export function withKind(draft: CommitmentDraft, kind: CommitmentKind): CommitmentDraft {
-  const checksPossible = autoChecksPossible(kind);
+  const checksPossible = autoChecksPossible(kind, draft.cadence);
   return {
     ...draft,
     kind,
@@ -182,12 +196,15 @@ export function withKind(draft: CommitmentDraft, kind: CommitmentKind): Commitme
 /** Clears whatever the previous cadence needed, so switching cadence cannot leave a stale target. */
 export function withCadence(draft: CommitmentDraft, cadence: CommitmentCadence): CommitmentDraft {
   const required = requiredTargets(cadence);
+  const checksPossible = autoChecksPossible(draft.kind, cadence);
   return {
     ...draft,
     cadence,
     weeklyTarget: required.includes('weeklyTarget') ? draft.weeklyTarget : null,
     weekStartDay: required.includes('weekStartDay') ? draft.weekStartDay : null,
     dailyMinutesTarget: required.includes('dailyMinutesTarget') ? draft.dailyMinutesTarget : null,
+    autoCheckEnabled: checksPossible ? draft.autoCheckEnabled : false,
+    autoCheckAccountRef: checksPossible ? draft.autoCheckAccountRef : '',
   };
 }
 
