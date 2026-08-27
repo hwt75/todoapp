@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-27-2026 15:14
+last_updated: 08-27-2026 16:10
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -257,7 +257,7 @@ action_items:
     action: "Run Epic 4 own retrospective, or explicitly decide it is being skipped
       permanently -- currently neither done nor decided against"
     owner: "hwt75"
-    status: open
+    status: done
     ref: "D:/code-space/todoapp/_bmad-output/implementation-artifacts/epic-5-retro-2026-08-26.md"
   - id: "epic-5-retro-item-26-manually-exercise-at-least-one-story-per"
     epic: 5
@@ -342,5 +342,5 @@ action_items:
       closes the last gate; note epic-5 has the identical unflipped-top-level-status
       gap right now"
     owner: ""
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-08-27.md"
