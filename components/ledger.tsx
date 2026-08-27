@@ -240,17 +240,25 @@ export function Ledger({
                     : `Week of ${row.day}, owed ${formatDong(row.amountDong ?? 0)}`
                   : row.state === 'waived'
                     ? `${row.day}, waived`
-                    : row.verdict === 'clean'
-                      ? `${row.day}, clean`
-                      : row.verdict === 'expired'
-                        ? `${row.day}, expired unanswered, owed ${formatDong(row.amountDong ?? 0)}`
-                        : row.state === 'held'
-                          ? `${row.day}, ${formatDong(row.amountDong ?? 0)} on hold pending appeal, for ${row.missed.join(' and ')}`
-                          : row.state === 'dropped'
-                            ? `${row.day}, dropped, for ${row.missed.join(' and ')}`
-                            : row.state === 'collected'
-                              ? `${row.day}, collected, for ${row.missed.join(' and ')}`
-                              : `${row.day}, owed ${formatDong(row.amountDong ?? 0)}, for ${row.missed.join(' and ')}`
+                    : // Held/Dropped/Voided/Collected all checked before `verdict === 'expired'`
+                      // (Epic 4 retrospective, 2026-08-27, finding A6): a day can close `expired`
+                      // (silence from some *other* commitment) while still freezing one
+                      // commitment's own machine-filed `missed` and its Penalty, which can still
+                      // resolve to any of these four states — the reader must hear what actually
+                      // happened to the money, not the day's own unrelated silence.
+                      row.state === 'held'
+                      ? `${row.day}, ${formatDong(row.amountDong ?? 0)} on hold pending appeal, for ${row.missed.join(' and ')}`
+                      : row.state === 'dropped'
+                        ? `${row.day}, dropped, for ${row.missed.join(' and ')}`
+                        : row.state === 'voided'
+                          ? `${row.day}, voided, for ${row.missed.join(' and ')}`
+                          : row.state === 'collected'
+                            ? `${row.day}, collected, for ${row.missed.join(' and ')}`
+                            : row.verdict === 'clean'
+                              ? `${row.day}, clean`
+                              : row.verdict === 'expired'
+                                ? `${row.day}, expired unanswered, owed ${formatDong(row.amountDong ?? 0)}`
+                                : `${row.day}, owed ${formatDong(row.amountDong ?? 0)}, for ${row.missed.join(' and ')}`
               }
             >
               <div className="row-main">

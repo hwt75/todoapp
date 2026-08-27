@@ -341,6 +341,33 @@ describe('Contest, on an eligible owed failed-day row (Story 4.4)', () => {
     ).toBeInTheDocument();
   });
 
+  it('names Collected, never Expired, on a day that otherwise closed expired (Epic 4 retro, finding A6)', async () => {
+    // A day can close `expired` (silence from some *other* commitment) while still freezing
+    // one commitment's own machine-filed `missed` and its Penalty, which can still resolve
+    // to `collected`. Before this fix, the aria-label ternary checked `verdict === 'expired'`
+    // before `state === 'collected'`, so a paid debt kept announcing "expired unanswered,
+    // owed ..." forever.
+    withDays(
+      [{ period: '2026-08-18', verdict: 'expired', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'collected', period: '2026-08-18' }],
+      [
+        {
+          for_day: '2026-08-18',
+          commitment_id: 'commitment-1',
+          filed_by: 'auto_check',
+          commitment: { name: 'No fap', carries_penalty: true },
+        },
+      ],
+    );
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Collected')).toBeInTheDocument();
+    expect(
+      screen.getByRole('group', { name: '2026-08-18, collected, for No fap' }),
+    ).toBeInTheDocument();
+  });
+
   it('colours Held urgent rather than failed, and Dropped held rather than failed', async () => {
     // `held`'s own colour family is deliberately `pill-urgent`, not `pill-held` — a Held
     // Penalty still needs attention (epic-4-context.md's own naming-collision warning), so

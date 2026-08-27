@@ -338,6 +338,32 @@ describe('a Penalty the referee marked Collected (Story 4.7)', () => {
   });
 });
 
+describe('a resolved Penalty on a day that closed expired (Epic 4 retro, 2026-08-27, finding A6)', () => {
+  // A day can close `expired` (silence from some *other* commitment) while still freezing
+  // one commitment's own machine-filed `missed` and its Penalty — that Penalty can still
+  // resolve to held/dropped/voided/collected. Before this fix, `ledgerPillLabel` checked
+  // `verdict === 'expired'` before any of these states, so a paid or resolved debt kept
+  // reading "Expired" forever, hiding what actually happened to the money.
+  const expiredDay: SettlementRecord = { period: '2026-08-18', verdict: 'expired', missed_count: 1 };
+
+  it.each([
+    ['held', 'Held'],
+    ['dropped', 'Dropped'],
+    ['voided', 'Voided'],
+    ['collected', 'Collected'],
+  ] as const)('says %s, never Expired, on a day that otherwise closed expired', (state, label) => {
+    const penaltyRecord: PenaltyRecord = { period: '2026-08-18', amount_dong: PENALTY_DONG, state };
+    const row = buildLedger([expiredDay], [penaltyRecord], misses)[0];
+    expect(ledgerPillLabel(row)).toBe(label);
+    expect(ledgerPillLabel(row)).not.toBe('Expired');
+  });
+
+  it('still says Expired when nothing else resolved the Penalty (owed, unaffected by this fix)', () => {
+    const row = buildLedger([expiredDay], [penalty], misses)[0];
+    expect(ledgerPillLabel(row)).toBe('Expired');
+  });
+});
+
 describe('a Penalty a Grace Day waived (Story 5.1)', () => {
   // apply_grace_days() gives the corrective settlement its own fresh penalty row, already
   // waived (20260825110000) — so unlike `voided`, this state genuinely reaches

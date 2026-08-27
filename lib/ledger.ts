@@ -192,21 +192,18 @@ export function outstandingTotal(rows: readonly LedgerRow[]): number {
  * reads as missing data.
  */
 export function ledgerPillLabel(row: LedgerRow): string {
-  // `Expired` is distinguishable from `Owed` on purpose. What he did and what he failed to
-  // say are different facts about him, and a record that merges them tells him he admitted
-  // something he never said.
-  if (row.verdict === 'expired') return 'Expired';
-  // Story 5.1: checked before the plain `clean` case below, because a waived day's own
-  // corrective settlement genuinely reads `verdict = 'clean'` (apply_grace_days() forgives
-  // the day whole) — without this branch first, a Grace Day he spent would render
-  // indistinguishable from a day that simply held, which is exactly the fact UX-DR13 needs
-  // this row to keep.
+  // Story 5.1: checked first of all, because a waived day's own corrective settlement
+  // genuinely reads `verdict = 'clean'` (apply_grace_days() forgives the day whole) —
+  // without this branch first, a Grace Day he spent would render indistinguishable from a
+  // day that simply held, which is exactly the fact UX-DR13 needs this row to keep.
   if (row.state === 'waived') return 'Waived';
-  if (row.verdict === 'clean') return 'Clean';
-  // Held and Dropped both name a real, distinct fact — a Held Penalty is not yet decided
-  // (still Owed in every sense that matters until it is), and Dropped is not the same fact
-  // as Owed either: money that was never actually collected must never read the same as
-  // money that stands.
+  // Held, Dropped, Voided and Collected all name a real, distinct Penalty-level fact, and
+  // every one of them must be checked before `verdict === 'expired'` below (Epic 4
+  // retrospective, 2026-08-27, finding A6): a day can close `expired` (silence from some
+  // *other* commitment) while still freezing one commitment's own machine-filed `missed`
+  // and its Penalty — that Penalty can still resolve to any of these four states, and a
+  // reader must see what actually happened to the money, not the day's own unrelated
+  // silence, once it has.
   if (row.state === 'held') return 'Held';
   if (row.state === 'dropped') return 'Dropped';
   // Unreachable through penalty_current in practice (see the PenaltyState comment above) —
@@ -214,8 +211,14 @@ export function ledgerPillLabel(row: LedgerRow): string {
   // the same fact as an unresolved timeout, even where neither ever renders today.
   if (row.state === 'voided') return 'Voided';
   // Story 4.7: the referee's own Mark Collected. Distinct from `Owed` — the debt has since
-  // changed hands, and a record that still said `Owed` would tell him he still owes it.
+  // changed hands, and a record that still said `Owed` (or `Expired`) would tell him he
+  // still owes it.
   if (row.state === 'collected') return 'Collected';
+  // `Expired` is distinguishable from `Owed` on purpose. What he did and what he failed to
+  // say are different facts about him, and a record that merges them tells him he admitted
+  // something he never said.
+  if (row.verdict === 'expired') return 'Expired';
+  if (row.verdict === 'clean') return 'Clean';
   return row.state === 'owed' ? 'Owed' : 'Failed';
 }
 
