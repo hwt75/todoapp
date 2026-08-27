@@ -22,6 +22,8 @@ import {
   monthDayBounds,
   monthInstantBounds,
   mostRecentCompletedMonth,
+  originalPenaltyRows,
+  type OriginalPenaltyRow,
 } from './monthly-report';
 
 describe('the report always names the most recently completed month (no picker)', () => {
@@ -233,6 +235,39 @@ describe('SM-C1: Penalties incurred / collected — two figures, never merged', 
 
   it('reads zero for an empty set, never a crash', () => {
     expect(foldPenaltyFigure([])).toEqual({ count: 0, totalDong: 0 });
+  });
+});
+
+describe('originalPenaltyRows (Epic 5 retro, 2026-08-27, finding A3)', () => {
+  const original: OriginalPenaltyRow = {
+    amount_dong: 500_000,
+    settlement: { supersedes: null },
+  };
+  const corrective: OriginalPenaltyRow = {
+    amount_dong: 500_000,
+    settlement: { supersedes: 'settlement-original-id' },
+  };
+
+  it('keeps a penalty whose own settlement was never superseded', () => {
+    expect(originalPenaltyRows([original])).toEqual([{ amount_dong: 500_000 }]);
+  });
+
+  it('excludes a corrective penalty — its settlement carries a non-null supersedes', () => {
+    expect(originalPenaltyRows([corrective])).toEqual([]);
+  });
+
+  it('excludes the corrective row and keeps the original when both are present', () => {
+    // Never double-counted alongside the original it corrects, and the original's own
+    // figure is never lost just because a later correction also exists.
+    expect(originalPenaltyRows([original, corrective])).toEqual([{ amount_dong: 500_000 }]);
+  });
+
+  it('excludes a row whose settlement could not be read at all', () => {
+    expect(originalPenaltyRows([{ amount_dong: 500_000, settlement: null }])).toEqual([]);
+  });
+
+  it('reads empty for an empty set, never a crash', () => {
+    expect(originalPenaltyRows([])).toEqual([]);
   });
 });
 

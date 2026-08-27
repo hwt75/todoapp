@@ -22,12 +22,14 @@ import {
   monthDayBounds,
   monthInstantBounds,
   mostRecentCompletedMonth,
+  originalPenaltyRows,
   type AppealOutcomeRow,
   type AppealOutcomeTotals,
   type ChainRow,
   type ChainSummary,
   type CommitmentAnswerRateRow,
   type CommitmentCompletion,
+  type OriginalPenaltyRow,
 } from '@/lib/monthly-report';
 
 interface ReportData {
@@ -110,21 +112,33 @@ export function MonthlyReport({ onClose }: { onClose: () => void }) {
       ] = await Promise.all([
         supabase.from('chain_current').select('commitment_id,current_days,longest_days'),
         supabase.from('commitment').select('id,name'),
+        // SM-2, corrected (Epic 5 retrospective, 2026-08-27, finding A3): the base
+        // `settlement` table with `supersedes` is null, not `settlement_current` — a Grace
+        // Day or an approved Appeal can recompute a Failed Day's own corrective settlement to
+        // `clean`, which would otherwise vanish the day from its own month's Failed-day set
+        // (and this report's own median) the moment it was later forgiven or overturned.
+        // "Was this day originally Failed" ignores supersession on purpose (direction agreed
+        // 2026-08-27): the median describes what happened operationally, not what a later
+        // correction reclassified it as.
         supabase
-          .from('settlement_current')
+          .from('settlement')
           .select('period')
           .eq('kind', 'day')
           .eq('verdict', 'failed')
+          .is('supersedes', null)
           .gte('period', dayBounds.gte)
           .lt('period', dayBounds.lt),
         // SM-2's own lookahead: a Failed day near month end may return past the month
         // boundary, so clean-day candidates are fetched through the lookahead window, not
-        // only the report month itself.
+        // only the report month itself. Same `supersedes is null` fix, for the identical
+        // reason: an original clean day must not be double-counted or displaced by whatever
+        // a later correction of some *other* day happens to also read `clean`.
         supabase
-          .from('settlement_current')
+          .from('settlement')
           .select('period')
           .eq('kind', 'day')
           .eq('verdict', 'clean')
+          .is('supersedes', null)
           .gte('period', dayBounds.gte)
           .lt('period', lookaheadEndDate),
         // SM-C2: any Declaration, any commitment (declaration_satisfies_silence()'s own
@@ -134,10 +148,15 @@ export function MonthlyReport({ onClose }: { onClose: () => void }) {
           .select('answered_at')
           .gte('answered_at', instantBounds.gte)
           .lt('answered_at', lookaheadEndInstant),
-        // SM-C1, incurred: penalty_current rows created in-month, any kind.
+        // SM-C1, incurred, corrected (Epic 5 retrospective, 2026-08-27, finding A3): the base
+        // `penalty` table, any kind, with each row's own settlement embedded so
+        // `originalPenaltyRows` can keep only the ones never superseded — `penalty_current`
+        // would otherwise lose the original month's own figure once a Grace Day or an
+        // approved Appeal folds it into a corrective row stamped with fold-in time, and gain
+        // a spurious one in whatever month that fold-in happened to land in instead.
         supabase
-          .from('penalty_current')
-          .select('amount_dong')
+          .from('penalty')
+          .select('amount_dong,settlement:settlement_id(supersedes)')
           .gte('created_at', instantBounds.gte)
           .lt('created_at', instantBounds.lt),
         // SM-C1, collected: penalty_current rows collected in-month, any kind. Doubles as
@@ -222,7 +241,9 @@ export function MonthlyReport({ onClose }: { onClose: () => void }) {
           askedTotal: answerRateTotal.asked,
           answeredTotal: answerRateTotal.answered,
           answerRate: answerRateTotal.rate,
-          penaltiesIncurred: foldPenaltyFigure((incurredRows ?? []) as { amount_dong: number }[]),
+          penaltiesIncurred: foldPenaltyFigure(
+            originalPenaltyRows((incurredRows ?? []) as unknown as OriginalPenaltyRow[]),
+          ),
           penaltiesCollected: foldPenaltyFigure((collectedRows ?? []) as { amount_dong: number }[]),
           medianDaysToAcknowledge: medianDaysToAcknowledge(failedPeriods, answeredAtInstants),
           appealOutcomes,

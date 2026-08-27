@@ -142,8 +142,21 @@ describe('the chain rule itself', () => {
     // Story 4.5's own "penalty: referee reads day and week" RLS policy
     // (`20260824160000_the_referee_has_his_own_way_in.sql`) grants the referee exactly this
     // read on the base table; it is not a door this rule exists to close.
+    // The second legal exception (Epic 5 retrospective, 2026-08-27, finding A3):
+    // `monthly-report.tsx` reads both base tables for SM-C1 Incurred and SM-2's own
+    // Failed-day set, on purpose — the opposite reasoning from `chain_current`'s own need
+    // above, and equally legitimate. A Grace Day or an approved Appeal folds a Failed Day's
+    // original penalty into a *corrective* settlement/penalty stamped with a fresh
+    // timestamp at fold-in time; reading only the "current" views would silently erase that
+    // day's own figure from its rightful month the instant it was later forgiven or
+    // overturned, and could attribute a spurious one to whatever month the correction itself
+    // landed in. The report reads every row (via `lib/monthly-report.ts`'s own
+    // `originalPenaltyRows`, and a direct `supersedes is null` filter for settlements) and
+    // keeps only the ones that were never superseded — the original event, on its own
+    // original timestamp, deliberately ignoring what happened to it afterward.
     const exempt: Record<string, string[]> = {
-      penalty: ['components/referee-appeal-detail.tsx'],
+      penalty: ['components/referee-appeal-detail.tsx', 'components/monthly-report.tsx'],
+      settlement: ['components/monthly-report.tsx'],
     };
 
     for (const file of sourceFiles(['app', 'components', 'lib'])) {

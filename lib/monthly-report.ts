@@ -308,6 +308,34 @@ export function foldPenaltyFigure(rows: readonly { amount_dong: number }[]): Pen
   };
 }
 
+/**
+ * SM-C1 Incurred, corrected (Epic 5 retrospective, 2026-08-27, finding A3): `apply_grace_days()`
+ * and `rule_appeal()`'s own approval path both fold a Failed Day's original penalty into a
+ * *corrective* settlement, stamped with a fresh `created_at` at fold-in time — not the
+ * original Failed Day's own timestamp — and the original penalty drops out of `penalty_current`
+ * entirely once its own settlement is superseded. Read against `penalty_current`, "Incurred"
+ * would silently lose the original month's own figure the moment either lands, however late,
+ * and could gain a spurious one in whatever month the fold-in itself happened in.
+ *
+ * The fix: read the base `penalty` table (every row, corrective or not) with each row's own
+ * settlement embedded, and keep only the ones whose settlement was never superseded — the
+ * original incurring event, on its own original timestamp, regardless of what happened to it
+ * later. A corrective row's own settlement always carries a non-null `supersedes`, so it is
+ * excluded here rather than double-counted alongside the original it corrects.
+ */
+export interface OriginalPenaltyRow {
+  amount_dong: number;
+  settlement: { supersedes: string | null } | null;
+}
+
+export function originalPenaltyRows(
+  rows: readonly OriginalPenaltyRow[],
+): { amount_dong: number }[] {
+  return rows
+    .filter((r) => r.settlement !== null && r.settlement.supersedes === null)
+    .map((r) => ({ amount_dong: r.amount_dong }));
+}
+
 // ---------------------------------------------------------------------------------
 // SM-C3: Appeals rejected as a share of appeals filed. `appeal` rows this report month,
 // joined to `penalty.state` the same way `referee-appeal-detail.tsx` already infers an

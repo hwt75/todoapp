@@ -6,9 +6,12 @@ import { MonthlyReport } from './monthly-report';
  * The Monthly report (Story 5.4, FR-24): a frozen clock so "the most recently completed
  * month" is deterministic (2026-08-26 -> July 2026), and a thenable chain mock for
  * `@/lib/supabase/client` — every query this screen fires resolves through the same handful
- * of chained calls (`select`/`eq`/`gte`/`lt`), and a table queried more than once
- * (`settlement_current`, `penalty_current`, `appeal`) is served its results in the exact
- * order the component's own `Promise.all` array issues them.
+ * of chained calls (`select`/`eq`/`gte`/`lt`/`is`), and a table queried more than once
+ * (`settlement`, `appeal`) is served its results in the exact order the component's own
+ * `Promise.all` array issues them. `penalty` (incurred, Epic 5 retrospective 2026-08-27
+ * finding A3) and `penalty_current` (collected) are two different table names now, queried
+ * once each, since the fix reads incurred figures off the base table with its own settlement
+ * embedded rather than the "current" view.
  *
  * What is asserted here is `lib/monthly-report.ts`'s own folding, exercised through the real
  * component rather than called directly — at least one measure from each PRD §8 category:
@@ -35,10 +38,11 @@ const okEmpty = { data: [], error: null };
 let chainResult: unknown = okEmpty;
 let commitmentResult: unknown = okEmpty;
 // Queried twice (failed, then clean) — one queue, shifted per call.
-let settlementCurrentResults: unknown[] = [okEmpty, okEmpty];
+let settlementResults: unknown[] = [okEmpty, okEmpty];
 let declarationResult: unknown = okEmpty;
-// Queried twice (incurred, then collected).
-let penaltyCurrentResults: unknown[] = [okEmpty, okEmpty];
+// `penalty` (incurred) and `penalty_current` (collected) are two different tables now.
+let penaltyResult: unknown = okEmpty;
+let penaltyCurrentResult: unknown = okEmpty;
 // Queried twice (outcomes, then ruled).
 let appealResults: unknown[] = [okEmpty, okEmpty];
 let silenceResult: unknown = okEmpty;
@@ -57,13 +61,12 @@ vi.mock('@/lib/supabase/client', () => ({
     from: (table: string) => {
       if (table === 'chain_current') return chain(chainResult);
       if (table === 'commitment') return chain(commitmentResult);
-      if (table === 'settlement_current') {
-        return chain(nextFrom('settlement_current', settlementCurrentResults));
+      if (table === 'settlement') {
+        return chain(nextFrom('settlement', settlementResults));
       }
       if (table === 'declaration') return chain(declarationResult);
-      if (table === 'penalty_current') {
-        return chain(nextFrom('penalty_current', penaltyCurrentResults));
-      }
+      if (table === 'penalty') return chain(penaltyResult);
+      if (table === 'penalty_current') return chain(penaltyCurrentResult);
       if (table === 'appeal') return chain(nextFrom('appeal', appealResults));
       if (table === 'silence_episode') return chain(silenceResult);
       throw new Error(`Unexpected table in monthly-report test mock: ${table}`);
@@ -78,9 +81,10 @@ beforeEach(() => {
 
   chainResult = okEmpty;
   commitmentResult = okEmpty;
-  settlementCurrentResults = [okEmpty, okEmpty];
+  settlementResults = [okEmpty, okEmpty];
   declarationResult = okEmpty;
-  penaltyCurrentResults = [okEmpty, okEmpty];
+  penaltyResult = okEmpty;
+  penaltyCurrentResult = okEmpty;
   appealResults = [okEmpty, okEmpty];
   silenceResult = okEmpty;
   rateResult = okEmpty;
@@ -112,7 +116,7 @@ describe('the monthly report', () => {
   });
 
   it('SM-2 (primary): median days to return after a Failed Day', async () => {
-    settlementCurrentResults = [
+    settlementResults = [
       { data: [{ period: '2026-07-05' }], error: null }, // failed
       { data: [{ period: '2026-07-06' }], error: null }, // clean
     ];
@@ -175,15 +179,33 @@ describe('the monthly report', () => {
   });
 
   it('SM-C1 (counter-metric): Penalties Incurred and Penalties Collected, two figures, never merged', async () => {
-    penaltyCurrentResults = [
-      { data: [{ amount_dong: 500_000 }], error: null }, // incurred
-      { data: [{ amount_dong: 500_000 }, { amount_dong: 500_000 }], error: null }, // collected
-    ];
+    penaltyResult = {
+      data: [{ amount_dong: 500_000, settlement: { supersedes: null } }],
+      error: null,
+    };
+    penaltyCurrentResult = {
+      data: [{ amount_dong: 500_000 }, { amount_dong: 500_000 }],
+      error: null,
+    };
 
     render(<MonthlyReport onClose={() => {}} />);
 
     expect(await screen.findByText('Incurred: 1 · 500.000₫')).toBeInTheDocument();
     expect(screen.getByText('Collected: 2 · 1.000.000₫')).toBeInTheDocument();
+  });
+
+  it('SM-C1: excludes a corrective penalty from Incurred — its own settlement supersedes the original (Epic 5 retro, finding A3)', async () => {
+    penaltyResult = {
+      data: [
+        { amount_dong: 500_000, settlement: { supersedes: null } },
+        { amount_dong: 500_000, settlement: { supersedes: 'settlement-original' } },
+      ],
+      error: null,
+    };
+
+    render(<MonthlyReport onClose={() => {}} />);
+
+    expect(await screen.findByText('Incurred: 1 · 500.000₫')).toBeInTheDocument();
   });
 
   it('SM-C1: reads "None." rather than "0 · 0₫" when a figure is zero — no penalties at all', async () => {
@@ -195,7 +217,7 @@ describe('the monthly report', () => {
   });
 
   it('SM-C2 (counter-metric): median days to acknowledge, via any Declaration answered', async () => {
-    settlementCurrentResults = [
+    settlementResults = [
       { data: [{ period: '2026-07-05' }], error: null }, // failed
       okEmpty, // clean
     ];
