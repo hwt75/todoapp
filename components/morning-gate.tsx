@@ -177,30 +177,42 @@ export function MorningGate({
   }
 
   return (
-    <section>
-      <h1>Yesterday</h1>
+    <section className="screen">
+      {/* No control beside the title. The gate is the whole screen, and the whole screen is
+          the question — there is nowhere else to go from here by design. */}
+      <header className="screen-head">
+        <h1>Yesterday</h1>
+      </header>
 
-      <p>{questionFor(commitment, day)}</p>
+      <div className="card card-pad stack">
+        <p>{questionFor(commitment, day)}</p>
 
-      {owing.length > 1 && <p className="row-muted">{owing.length - 1} more after this one.</p>}
+        {owing.length > 1 && <p className="row-muted">{owing.length - 1} more after this one.</p>}
 
-      {/* Two controls, identical in every way but their words. No default, no
-          pre-selection, and no confirmation on either — declaring a slip is not
-          destructive, it is honest, and friction there would tax the truth. */}
-      <button
-        type="button"
-        disabled={sending.kind === 'sending'}
-        onClick={() => void answer('held')}
-      >
-        It held
-      </button>
-      <button
-        type="button"
-        disabled={sending.kind === 'sending'}
-        onClick={() => void answer('slipped')}
-      >
-        I slipped
-      </button>
+        {/* Two controls, identical in every way but their words. No default, no
+            pre-selection, and no confirmation on either — declaring a slip is not
+            destructive, it is honest, and friction there would tax the truth.
+
+            `actions-equal` rather than the ordinary `actions`: with natural widths the longer
+            word would take the wider button, and a difference in size between the honest
+            answer and the costly one is exactly the thumb on the scale the rule above forbids. */}
+        <div className="actions actions-equal">
+          <button
+            type="button"
+            disabled={sending.kind === 'sending'}
+            onClick={() => void answer('held')}
+          >
+            It held
+          </button>
+          <button
+            type="button"
+            disabled={sending.kind === 'sending'}
+            onClick={() => void answer('slipped')}
+          >
+            I slipped
+          </button>
+        </div>
+      </div>
 
       {sending.kind === 'queued' && (
         <p className="row-muted">

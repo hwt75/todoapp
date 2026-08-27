@@ -203,11 +203,13 @@ export function Ledger({
   }
 
   return (
-    <section>
-      <h1>Ledger</h1>
-      <button type="button" onClick={onClose}>
-        Back to today
-      </button>
+    <section className="screen">
+      <header className="screen-head">
+        <h1>Ledger</h1>
+        <button type="button" className="quiet back" onClick={onClose}>
+          Back to today
+        </button>
+      </header>
 
       {view.kind === 'loading' && <p>Working…</p>}
 
@@ -221,130 +223,138 @@ export function Ledger({
         <p className="row-muted">No day has been judged yet.</p>
       )}
 
-      {view.kind === 'ready' &&
-        view.rows.map((row) => {
-          // A stable local reference, not a repeated `graceState[row.day]` lookup — TypeScript
-          // narrows a discriminated union through a `const` it can track, never through the
-          // same computed index re-evaluated at each use.
-          const rowGrace: GraceRowState = graceState[row.day] ?? { kind: 'idle' };
+      {/* One hairline frame around the history, not one per day: the rows inside it stay
+          hairline-separated and untinted exactly as before. Conditional, so a ledger with
+          nothing in it yet is an empty sentence rather than an empty rectangle. */}
+      {view.kind === 'ready' && view.rows.length > 0 && (
+        <div className="card">
+          {view.rows.map((row) => {
+            // A stable local reference, not a repeated `graceState[row.day]` lookup — TypeScript
+            // narrows a discriminated union through a `const` it can track, never through the
+            // same computed index re-evaluated at each use.
+            const rowGrace: GraceRowState = graceState[row.day] ?? { kind: 'idle' };
 
-          return (
-            <div
-              className={row.kind === 'week' ? 'row row-week' : 'row'}
-              key={`${row.kind}-${row.day}`}
-              role="group"
-              aria-label={
-                row.kind === 'week'
-                  ? row.verdict === 'clean'
-                    ? `Week of ${row.day}, clean`
-                    : `Week of ${row.day}, owed ${formatDong(row.amountDong ?? 0)}`
-                  : row.state === 'waived'
-                    ? `${row.day}, waived`
-                    : // Held/Dropped/Voided/Collected all checked before `verdict === 'expired'`
-                      // (Epic 4 retrospective, 2026-08-27, finding A6): a day can close `expired`
-                      // (silence from some *other* commitment) while still freezing one
-                      // commitment's own machine-filed `missed` and its Penalty, which can still
-                      // resolve to any of these four states — the reader must hear what actually
-                      // happened to the money, not the day's own unrelated silence.
-                      row.state === 'held'
-                      ? `${row.day}, ${formatDong(row.amountDong ?? 0)} on hold pending appeal, for ${row.missed.join(' and ')}`
-                      : row.state === 'dropped'
-                        ? `${row.day}, dropped, for ${row.missed.join(' and ')}`
-                        : row.state === 'voided'
-                          ? `${row.day}, voided, for ${row.missed.join(' and ')}`
-                          : row.state === 'collected'
-                            ? `${row.day}, collected, for ${row.missed.join(' and ')}`
-                            : row.verdict === 'clean'
-                              ? `${row.day}, clean`
-                              : row.verdict === 'expired'
-                                ? `${row.day}, expired unanswered, owed ${formatDong(row.amountDong ?? 0)}`
-                                : `${row.day}, owed ${formatDong(row.amountDong ?? 0)}, for ${row.missed.join(' and ')}`
-              }
-            >
-              <div className="row-main">
-                <div className="row-name">
-                  {row.kind === 'week' ? `Week of ${row.day}` : row.day}
-                </div>
-                <div className="row-muted" aria-hidden="true">
-                  {row.kind === 'week'
+            return (
+              <div
+                className={row.kind === 'week' ? 'row row-week' : 'row'}
+                key={`${row.kind}-${row.day}`}
+                role="group"
+                aria-label={
+                  row.kind === 'week'
                     ? row.verdict === 'clean'
-                      ? 'Everything held'
-                      : `Fell short${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`
-                    : row.verdict === 'expired'
-                      ? `Went unanswered${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`
-                      : row.verdict === 'clean'
+                      ? `Week of ${row.day}, clean`
+                      : `Week of ${row.day}, owed ${formatDong(row.amountDong ?? 0)}`
+                    : row.state === 'waived'
+                      ? `${row.day}, waived`
+                      : // Held/Dropped/Voided/Collected all checked before `verdict === 'expired'`
+                        // (Epic 4 retrospective, 2026-08-27, finding A6): a day can close `expired`
+                        // (silence from some *other* commitment) while still freezing one
+                        // commitment's own machine-filed `missed` and its Penalty, which can still
+                        // resolve to any of these four states — the reader must hear what actually
+                        // happened to the money, not the day's own unrelated silence.
+                        row.state === 'held'
+                        ? `${row.day}, ${formatDong(row.amountDong ?? 0)} on hold pending appeal, for ${row.missed.join(' and ')}`
+                        : row.state === 'dropped'
+                          ? `${row.day}, dropped, for ${row.missed.join(' and ')}`
+                          : row.state === 'voided'
+                            ? `${row.day}, voided, for ${row.missed.join(' and ')}`
+                            : row.state === 'collected'
+                              ? `${row.day}, collected, for ${row.missed.join(' and ')}`
+                              : row.verdict === 'clean'
+                                ? `${row.day}, clean`
+                                : row.verdict === 'expired'
+                                  ? `${row.day}, expired unanswered, owed ${formatDong(row.amountDong ?? 0)}`
+                                  : `${row.day}, owed ${formatDong(row.amountDong ?? 0)}, for ${row.missed.join(' and ')}`
+                }
+              >
+                <div className="row-main">
+                  <div className="row-name">
+                    {row.kind === 'week' ? `Week of ${row.day}` : row.day}
+                  </div>
+                  <div className="row-muted" aria-hidden="true">
+                    {row.kind === 'week'
+                      ? row.verdict === 'clean'
                         ? 'Everything held'
-                        : `${row.missed.join(' · ')}${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`}
-                </div>
+                        : `Fell short${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`
+                      : row.verdict === 'expired'
+                        ? `Went unanswered${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`
+                        : row.verdict === 'clean'
+                          ? 'Everything held'
+                          : `${row.missed.join(' · ')}${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`}
+                  </div>
 
-                {/* Contest: only on an eligible owed failed-day row (a machine-filed miss whose
+                  {/* Contest: only on an eligible owed failed-day row (a machine-filed miss whose
                   Penalty has not already moved to held/dropped/anything else). One control
                   per contestable commitment — a Failed Day can carry more than one. */}
-                {row.kind === 'day' &&
-                  onOpenAppeal &&
-                  row.appealable.map((miss) => (
-                    <button
-                      key={miss.commitmentId}
-                      type="button"
-                      onClick={() =>
-                        onOpenAppeal({
-                          commitmentId: miss.commitmentId,
-                          commitmentName: miss.commitmentName,
-                          forDay: row.day,
-                          amountDong: row.amountDong ?? 0,
-                        })
-                      }
-                    >
-                      Contest {miss.commitmentName}
-                    </button>
-                  ))}
+                  {row.kind === 'day' && onOpenAppeal && row.appealable.length > 0 && (
+                    <div className="actions">
+                      {row.appealable.map((miss) => (
+                        <button
+                          key={miss.commitmentId}
+                          type="button"
+                          onClick={() =>
+                            onOpenAppeal({
+                              commitmentId: miss.commitmentId,
+                              commitmentName: miss.commitmentName,
+                              forDay: row.day,
+                              amountDong: row.amountDong ?? 0,
+                            })
+                          }
+                        >
+                          Contest {miss.commitmentName}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
-                {/* Grace Day (Story 5.1): offered on every Failed, still-owed day — never only
+                  {/* Grace Day (Story 5.1): offered on every Failed, still-owed day — never only
                   inside a future Silence intervention (this story's own Never boundary) —
                   always stating how many remain. Once spent, the row states so and offers no
                   further control for it; it does not read Waived until the next hourly
                   settlement pass folds the correction in. */}
-                {row.kind === 'day' && row.graceable && (
-                  <div className="row-grace">
-                    {rowGrace.kind === 'spent' ? (
-                      <p role="status">{GRACE_DAY_COPY.spent}</p>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          // Distinguishes one row's control from every other's for a
-                          // screen-reader user — every row otherwise shares the identical
-                          // accessible name "Spend a Grace Day", the same gap
-                          // `referee-home.tsx`'s own "Open"/"Copy"/"Mark collected" controls
-                          // were already fixed for.
-                          aria-label={`Spend a Grace Day for ${row.day}`}
-                          onClick={() => void spendGraceDay(row.day)}
-                          disabled={rowGrace.kind === 'spending' || view.graceRemaining <= 0}
-                        >
-                          {rowGrace.kind === 'spending'
-                            ? GRACE_DAY_COPY.spending
-                            : GRACE_DAY_COPY.spend}
-                        </button>
-                        <span className="row-muted">
-                          {formatGraceAllowance(view.graceRemaining)}
-                        </span>
-                      </>
-                    )}
-                    {rowGrace.kind === 'failed' && (
-                      <p role="status">
-                        <strong>{GRACE_DAY_COPY.failed}</strong> {rowGrace.reason}
-                      </p>
-                    )}
-                  </div>
-                )}
+                  {row.kind === 'day' && row.graceable && (
+                    <div className="row-grace">
+                      {rowGrace.kind === 'spent' ? (
+                        <p role="status">{GRACE_DAY_COPY.spent}</p>
+                      ) : (
+                        <div className="actions">
+                          <button
+                            type="button"
+                            // Distinguishes one row's control from every other's for a
+                            // screen-reader user — every row otherwise shares the identical
+                            // accessible name "Spend a Grace Day", the same gap
+                            // `referee-home.tsx`'s own "Open"/"Copy"/"Mark collected" controls
+                            // were already fixed for.
+                            aria-label={`Spend a Grace Day for ${row.day}`}
+                            onClick={() => void spendGraceDay(row.day)}
+                            disabled={rowGrace.kind === 'spending' || view.graceRemaining <= 0}
+                          >
+                            {rowGrace.kind === 'spending'
+                              ? GRACE_DAY_COPY.spending
+                              : GRACE_DAY_COPY.spend}
+                          </button>
+                          <span className="row-muted">
+                            {formatGraceAllowance(view.graceRemaining)}
+                          </span>
+                        </div>
+                      )}
+                      {rowGrace.kind === 'failed' && (
+                        <p role="status">
+                          <strong>{GRACE_DAY_COPY.failed}</strong> {rowGrace.reason}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {/* The pill carries the colour. The row never does. */}
+                <span className={`pill pill-${ledgerPillFamily(row)}`} aria-hidden="true">
+                  {ledgerPillLabel(row)}
+                </span>
               </div>
-              {/* The pill carries the colour. The row never does. */}
-              <span className={`pill pill-${ledgerPillFamily(row)}`} aria-hidden="true">
-                {ledgerPillLabel(row)}
-              </span>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

@@ -112,7 +112,12 @@ describe('the monthly report', () => {
 
     render(<MonthlyReport onClose={() => {}} />);
 
-    expect(await screen.findByText('Gym: Day 5 · best 10')).toBeInTheDocument();
+    // The name and the figure are two elements in one row now, not one concatenated string,
+    // so this asserts what the test's own title claims — that they stay attached — through
+    // the row's accessible name rather than through how the two happen to be joined on screen.
+    expect(await screen.findByRole('group', { name: 'Gym, Day 5 · best 10' })).toBeInTheDocument();
+    expect(screen.getByText('Gym')).toBeInTheDocument();
+    expect(screen.getByText('Day 5 · best 10')).toBeInTheDocument();
   });
 
   it('SM-2 (primary): median days to return after a Failed Day', async () => {
@@ -174,8 +179,15 @@ describe('the monthly report', () => {
 
     render(<MonthlyReport onClose={() => {}} />);
 
-    expect(await screen.findByText('Gym: 28 of 30 (93%)')).toBeInTheDocument();
-    expect(screen.getByText('28 of 30 (93%)')).toBeInTheDocument();
+    expect(await screen.findByRole('group', { name: 'Gym, 28 of 30 (93%)' })).toBeInTheDocument();
+    // Twice over, and that is the point of this test: the per-commitment figure and the
+    // account-wide one are separate measures that happen to read the same this month. They
+    // used to be distinguishable only because the per-commitment one carried a `Gym: ` prefix
+    // in the same text node; now each is its own row, so both are asserted by count.
+    expect(screen.getAllByText('28 of 30 (93%)')).toHaveLength(2);
+    expect(
+      screen.getByRole('group', { name: 'Declaration answer rate, 28 of 30 (93%)' }),
+    ).toBeInTheDocument();
   });
 
   it('SM-C1 (counter-metric): Penalties Incurred and Penalties Collected, two figures, never merged', async () => {

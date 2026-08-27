@@ -312,7 +312,7 @@ describe('Contest, on an eligible owed failed-day row (Story 4.4)', () => {
     expect(screen.queryByText('Owed')).not.toBeInTheDocument();
   });
 
-  it("names Collected, distinct from Owed, once the referee has marked a Penalty paid", async () => {
+  it('names Collected, distinct from Owed, once the referee has marked a Penalty paid', async () => {
     // A `collected` Penalty is the same settlement's own row transitioned in place (Story
     // 4.7's `mark_penalty_collected()` writes no new settlement) — unlike `voided`, which
     // only ever lands on a superseded settlement `penalty_current` never surfaces, this state

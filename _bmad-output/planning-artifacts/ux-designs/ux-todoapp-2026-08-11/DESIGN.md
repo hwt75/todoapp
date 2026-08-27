@@ -8,7 +8,7 @@ sources:
   - ../../prds/prd-todoapp-2026-08-11/prd.md
   - ../../prds/prd-todoapp-2026-08-11/addendum.md
 colors:
-  surface-base: '#F1EFE8'
+  surface-base: '#FFFFFF'
   surface-base-dark: '#1C1C1E'
   surface-card: '#FFFFFF'
   surface-card-dark: '#2C2C2E'
@@ -41,17 +41,18 @@ colors:
   destructive-fill: '#F09595'
   destructive-ink: '#501313'
 typography:
+  note: 'Fluid. Every size below is the phone floor and never shrinks; the ceiling is reached on a desktop window and no wider composition exists past it'
   screen-title:
-    note: 'iOS Title 3, semibold · web 17px/500'
+    note: 'iOS Title 3, semibold · web 17px/500, growing to 21px'
   figure:
-    note: 'iOS Large Title, medium · used only for the debt total and the running timer'
+    note: 'iOS Large Title, medium · used only for the debt total and the running timer · web 34px, growing to 44px'
     letterSpacing: '-0.5px'
   body:
-    note: 'iOS Body · web 15px/400'
+    note: 'iOS Body · web 15px/400, growing to 16px'
   label:
-    note: 'iOS Subheadline · web 13px/400'
+    note: 'iOS Subheadline · web 13px/400, growing to 14px'
   caption:
-    note: 'iOS Caption 1 · web 11px/400'
+    note: 'iOS Caption 1 · web 11px/400, fixed — growing it would close the gap that makes it read as a caption'
   quoted:
     fontFamily: 'serif'
     note: 'The referee collection message only — nothing else in either surface is serif'
@@ -65,6 +66,7 @@ spacing:
   '3': '12px'
   '4': '16px'
   '5': '20px'
+  '6': '24px'
   card-pad: '16px'
   row-pad: '11px'
 components:
@@ -91,8 +93,22 @@ components:
   figure-block:
     background: '{colors.failed-tint}'
     color: '{colors.failed-ink}'
-    radius: '{rounded.DEFAULT}'
+    radius: '{rounded.card}'
     note: 'The debt total on Today. The only large colored area in the app'
+  list-frame:
+    background: '{colors.surface-card}'
+    border: '0.5px solid {colors.border}'
+    radius: '{rounded.card}'
+    note: 'One hairline boundary around a whole list. Rows stay hairline-separated inside it'
+  screen-head:
+    note: 'Screen title and its one navigation control on a single 44px row. Every screen'
+  button-quiet:
+    background: 'transparent'
+    color: '{colors.text-secondary}'
+    note: 'Navigation only — back, and the screen switch. Never an action, never a declaration'
+  tabbar:
+    background: 'transparent'
+    note: 'Today / Ledger / Settings. Absent on the Morning Gate and every sub-screen'
 ---
 
 # DESIGN: todoapp
@@ -164,11 +180,31 @@ would read as an alert panel; hairlines let the row's status pill carry the colo
 calm. Cards are reserved for objects that are genuinely separate — an appeal, a collection item, the
 debt block.
 
+A list of rows does sit inside one **list-frame**: a single hairline rectangle around the whole
+list, with the rows still hairline-separated inside it. This is not a card per row and does not
+reintroduce the stack of rectangles the rule above forbids — it is one boundary saying where the
+ledger begins and ends, which is the thing the rows were previously floating without.
+
 ## Elevation & Depth
 
-Flat. Hairline borders at 0.5px and a single tonal step (`{colors.surface-sunken}` inside
-`{colors.surface-card}`) do all the layering work. No shadows anywhere. Depth would be decoration
-here, and decoration is a cost on a screen the user is already reluctant to open.
+Flat. Hairline borders at 0.5px and a single tonal step (`{colors.surface-sunken}`) do all the
+layering work. No shadows anywhere. Depth would be decoration here, and decoration is a cost on a
+screen the user is already reluctant to open.
+
+`{colors.surface-base}` and `{colors.surface-card}` are the same white in light mode: a card is
+told from the page it sits on by its hairline, not by a tone. That leaves exactly one tonal step in
+the light palette, and it is spent on `{colors.surface-sunken}` — the quota track, a row under the
+cursor, a disabled control, and the utility band at the foot of Today. In dark mode the two stay
+apart, because a 0.5px hairline separates far less against `{colors.surface-base-dark}` than it
+does against white.
+
+## Layout
+
+One column, `max-width: 34rem`, centred, on every screen. The product is a phone app that happens
+to be reachable in a desktop browser; a commitment row stretched across a 1440px window puts the
+name at one edge and its status at the other and makes the reader's eye do work that the phone
+never asked of it. The column is the same column at every width — there is no second, wider
+composition to maintain, and no screen gains a sidebar at some breakpoint.
 
 ## Shapes
 
@@ -196,6 +232,25 @@ quota position (`1/3 · 3 days`), or the ledger outcome. Never uses a button fil
 The only large colored area in the product.
 
 **row** — commitment name left, status right, hairline above. The row is not tinted; only its pill is.
+
+**list-frame** — one hairline rectangle, `{rounded.card}`, around a whole list of rows. Rows carry
+the horizontal padding rather than the frame, so a pressable row's hover reaches both edges instead
+of stopping short inside a gutter.
+
+**screen-head** — the screen title and its one navigation control on a single row, 44px tall. The
+control is a **button-quiet**, never a bordered button: a screen that opens with a bordered
+rectangle standing alone under its title makes navigation the most prominent object on a surface
+whose subject is meant to be prominent instead.
+
+**button-quiet** — no border, no fill, `{colors.text-secondary}`, label-sized. Navigation only:
+_Back to today_, and the tab bar's items. It is never an action and never a self-declaration —
+those keep **button-neutral**, whose outline is the whole point of the rule below.
+
+**tabbar** — _Today_ / _Ledger_ / _Settings_, hairline above, the current screen marked with
+`aria-current` and `{colors.surface-sunken}` rather than a color. It exists because the Ledger had
+no entry point on a day with nothing owed: it was reachable only through the debt block, which
+renders nothing at zero. It appears on those three screens only — never on the Morning Gate, the
+Silence intervention, or any sub-screen reached from Today.
 
 ## Do's and Don'ts
 

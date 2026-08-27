@@ -1,10 +1,16 @@
 /*
- * Base element styles, consuming the tokens and adding nothing of its own.
+ * The stylesheet. Consumes the tokens and adds no colour, no size and no radius of
+ * its own — `lib/design-tokens.test.ts` enforces that, along with the rules this
+ * design is made of: no shadow anywhere, the pill silhouette reserved to things that
+ * cannot be pressed, and the `figure` role spent exactly twice.
  *
- * This is deliberately not a design. It stops the shell looking browser-default —
- * Times New Roman on white, link blue — without spending component work on a page
- * that Epic 2's Today screen replaces. Components are specified in DESIGN.md and get
- * built when there is a screen for them to sit in.
+ * This file used to say it was deliberately not a design — a shell to stop the app
+ * looking browser-default until there were screens worth designing. There are now, so
+ * this is the design: an app shell that is one column at every width, a hairline frame
+ * around each list, a single 44px row carrying every screen's title and its one
+ * navigation control, and states — hover, focus, disabled — on everything pressable.
+ *
+ * DESIGN.md remains the source of truth and was updated alongside this.
  */
 
 @import './tokens.css';
@@ -23,6 +29,7 @@ html {
 
 body {
   margin: 0;
+  min-height: 100dvh;
   background: var(--surface-base);
   color: var(--text-primary);
   font-family: var(--font-system);
@@ -35,6 +42,31 @@ body {
     max(var(--space-4), env(safe-area-inset-right)) max(var(--space-4), env(safe-area-inset-bottom))
     max(var(--space-4), env(safe-area-inset-left));
 }
+
+/* A window wide enough to have room to spare gets some above and below the column. The
+   horizontal inset stays where it is — widening it would only move a column that is
+   already centred. */
+@media (min-width: 40rem) {
+  body {
+    padding-top: max(var(--space-6), env(safe-area-inset-top));
+    padding-bottom: max(var(--space-6), env(safe-area-inset-bottom));
+  }
+}
+
+/* The shell. One column, centred, the same column at every width — see DESIGN.md's
+   Layout section for why there is no second, wider composition. `gap` rather than
+   margins between the screen, the tab bar and whatever the page hangs beneath them, so
+   nothing collapses and nothing doubles. */
+main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 100%;
+  max-width: 34rem;
+  margin-inline: auto;
+}
+
+/* ---------------------------------------------------------------- type */
 
 h1 {
   font-size: var(--type-screen-title);
@@ -49,17 +81,168 @@ h2 {
   margin: 0 0 var(--space-2);
 }
 
+h3 {
+  font-size: var(--type-label);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  margin: var(--space-4) 0 var(--space-2);
+}
+
 p {
   margin: 0 0 var(--space-3);
 }
 
-/* Sections are separated by hairlines rather than cards. Nine tinted rectangles stacked
-   vertically would read as an alert panel; a rule keeps the page calm. */
-section + section {
+ul {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-4);
+}
+
+/* ------------------------------------------------------------ structure */
+
+/* A screen. Flex with a gap rather than margins on its children, which is what lets the
+   Today screen reorder itself below without any of the spacing moving with it. */
+.screen,
+.today {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* A group of things inside a screen, tighter than the screen's own rhythm. The `gap` is the
+   whole of the spacing, so the block margins the elements carry for the flow layout
+   elsewhere are cleared here rather than added to it. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.stack > p,
+.stack > ul,
+.stack > input,
+.stack > select {
+  margin-bottom: 0;
+}
+
+.stack > h2,
+.stack > h3 {
+  margin: 0;
+}
+
+/* A padded card ends where its padding says it does, not a line lower. */
+.card-pad > :last-child {
+  margin-bottom: 0;
+}
+
+/* The screen's title and its one navigation control, on one row.
+   Every screen in the product opened with a full-size bordered button standing alone
+   under its heading, which made getting out of a screen the most prominent object on it.
+   The control is a `.quiet` button here; the 44px floor is on the row, so the touch
+   target survives the button losing its padding. */
+.screen-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 44px;
+}
+
+.screen-head h1 {
+  margin: 0;
+}
+
+/* One hairline boundary around a list — DESIGN.md's `list-frame`. Not a card per row:
+   the rows inside it stay hairline-separated exactly as before, and none of them is
+   tinted. What it adds is an edge, which is what the rows were previously floating
+   without now that the page behind them is white.
+
+   Horizontal padding lives on the rows rather than here, so a pressable row's hover
+   reaches both edges instead of stopping short inside a gutter. */
+.card,
+.today-rows {
+  background: var(--surface-card);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-card);
+  /* Keeps a row's hover and focus inside the frame's own corners. */
+  overflow: hidden;
+}
+
+/* A card holding prose or controls rather than rows pads itself. */
+.card-pad {
+  padding: var(--space-card-pad);
+}
+
+.card > .row,
+.today-rows > .row {
+  padding-inline: var(--space-card-pad);
+}
+
+/* The frame already draws this edge. */
+.card > .row:first-child,
+.today-rows > .row:first-child {
+  border-top: 0;
+}
+
+/* The band at the foot of the signed-in page: the install hint, the account, the push
+   probe. All three are true and none is what he opened the app for, so they sit below a
+   rule, in the one tonal step down, at a weight that does not compete with the screen
+   above them. */
+.utility {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
   border-top: var(--hairline) solid var(--border);
   padding-top: var(--space-4);
-  margin-top: var(--space-4);
 }
+
+.utility h2 {
+  margin: 0;
+}
+
+.utility .card {
+  background: var(--surface-sunken);
+}
+
+/* ----------------------------------------------------------- navigation */
+
+/* Today / Ledger / Settings. It exists because the Ledger had no entry point at all on a
+   day with nothing owed: it was reachable only through the debt block, which renders
+   nothing at zero. The current screen is a `span` carrying `aria-current`, not a button —
+   there is nothing to press, and that also keeps each screen's own name from being
+   offered twice.
+
+   Marked by the tonal step, never by a colour: the four state families each mean one
+   thing, and "you are here" is not one of them. */
+.tabbar {
+  display: flex;
+  gap: var(--space-1);
+  border-top: var(--hairline) solid var(--border);
+  padding-top: var(--space-2);
+}
+
+.tabbar > * {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-default);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--type-label);
+  font-weight: var(--weight-medium);
+  text-align: center;
+}
+
+.tabbar > [aria-current] {
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+}
+
+/* -------------------------------------------------------------- buttons */
 
 /* Buttons default to outline, and that is the load-bearing rule of the design system
    rather than a stylistic preference. Every control by which the author reports on
@@ -69,7 +252,10 @@ section + section {
    does not.
 
    So a fill is opt-in, at most one per card, and `.destructive` appears on exactly one
-   action in the whole product. */
+   action in the whole product.
+
+   No margin. Buttons that sit beside each other are laid out by `.actions` with a `gap`,
+   which is what stops a lone button carrying spacing it does not need on two sides. */
 button {
   font-family: inherit;
   font-size: var(--type-body);
@@ -81,8 +267,8 @@ button {
   color: var(--text-primary);
   /* 44px is the stated minimum touch target. */
   min-height: 44px;
-  margin-right: var(--space-2);
-  margin-bottom: var(--space-2);
+  margin: 0;
+  cursor: pointer;
 }
 
 /* The screen's purpose, where it has one. Never a self-declaration control. */
@@ -99,11 +285,78 @@ button.destructive {
   color: var(--destructive-ink);
 }
 
+/* Navigation only — back, and the tab bar. Never an action and never a declaration:
+   those keep the outline, which is the rule above. */
+button.quiet {
+  display: inline-flex;
+  align-items: center;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--type-label);
+  padding: var(--space-2);
+}
+
+/* A chevron, drawn rather than typed, so no glyph is added to the accessible name. At
+   the 0.5px hairline it would not be visible at all, which is why this is the one stroke
+   in the product that is not one. */
+button.back::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-left: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  margin-right: var(--space-2);
+}
+
+/* A pointer that changes nothing when it crosses a control is how a web page reads as
+   broken. The tonal step is the whole of the effect — there is no lift, no shadow and
+   nothing that moves. */
+button:not(.action):not(.destructive):hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+button.quiet:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+button.action:hover:not(:disabled),
+button.destructive:hover:not(:disabled) {
+  filter: brightness(0.95);
+}
+
 button:disabled {
   background: var(--surface-sunken);
   color: var(--text-muted);
   border-color: var(--border);
+  cursor: default;
 }
+
+/* Keyboard focus, on everything focusable and not only on buttons. `:focus-visible`
+   rather than `:focus` so a pointer press does not leave a ring behind it. */
+:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+/* Buttons standing beside each other. Equal widths are opt-in, because the pair on the
+   Morning Gate must be identical in every way but their words — and everywhere else a
+   button that is wider than its label needs to be is claiming an importance it does not
+   have. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.actions-equal button {
+  flex: 1 1 0;
+}
+
+/* ---------------------------------------------------------------- state */
 
 /* Pill radius is reserved to non-interactive status labels, so nothing pressable is ever
    pill-shaped. That silhouette is what lets a state label be told from a control before
@@ -115,6 +368,8 @@ button:disabled {
   padding: 2px var(--space-2);
   font-size: var(--type-label);
   white-space: nowrap;
+  /* `1/3 · 3 days` sits in a column of pills; digits that shift width make it wander. */
+  font-variant-numeric: tabular-nums;
 }
 
 .pill-neutral {
@@ -138,6 +393,8 @@ button:disabled {
   color: var(--failed-ink);
 }
 
+/* ----------------------------------------------------------------- rows */
+
 /* Commitment rows are separated by hairlines, not cards, and the row itself is never
    tinted — colour belongs to the pill. Nine tinted rectangles stacked vertically would
    read as an alert panel, which is the artifact this product exists to avoid.
@@ -155,6 +412,15 @@ button:disabled {
 .row-main {
   flex: 1;
   min-width: 0;
+}
+
+/* A control sitting at the end of a row — Settings' morning-hour select, the referee's
+   Open — sizes to itself. The block rules these elements carry are for a form, and a row
+   is not one. */
+.row > select,
+.row > input {
+  width: auto;
+  margin-bottom: 0;
 }
 
 .row-name {
@@ -179,6 +445,7 @@ button:disabled {
   color: var(--text-secondary);
   font-size: var(--type-label);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* A row that opens the Chains detail is a control, so it says so — but it must not become a
@@ -194,6 +461,19 @@ button:disabled {
   font: inherit;
   color: inherit;
   cursor: pointer;
+  /* The base button's floor would set a height the row's own content should be setting,
+     and Dynamic Type has to be free to grow it. */
+  min-height: 0;
+  padding-block: var(--space-row-pad);
+}
+
+.row-open:hover {
+  background: var(--surface-sunken);
+}
+
+/* The frame clips at its corners, so the ring goes inside rather than under the edge. */
+.row-open:focus-visible {
+  outline-offset: -2px;
 }
 
 /* Current and longest, one line, never separable. A reset read against zero says you have
@@ -201,25 +481,126 @@ button:disabled {
    yourself. That is the only reason this surface is worth opening on a bad day.
 
    Not the `figure` role, though it is the number this screen is about. DESIGN.md reserves
-   that size for exactly two things — the debt total and a running focus timer — and the
-   second is still unbuilt. Spending it here would take a slot from Epic 3 and, worse, would
-   put the chain at the same weight as the money, which is the comparison this product spends
-   most of its design budget refusing to make. */
+   that size for exactly two things — the debt total and a running focus timer — and both
+   are spent. Spending it here would put the chain at the same weight as the money, which is
+   the comparison this product spends most of its design budget refusing to make. */
 .chain-pair {
   font-size: var(--type-screen-title);
   font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  margin: 0;
 }
 
-textarea {
-  width: 100%;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: var(--type-caption);
-  color: var(--text-secondary);
-  background: var(--surface-sunken);
-  border: var(--hairline) solid var(--border);
-  border-radius: var(--radius-default);
-  padding: var(--space-3);
+/* --------------------------------------------------------------- Today */
+
+/* Today lays itself out so the debt block is seen first and heard last. The DOM order is
+   heading, rows, figure — which is the reading order — and `order` moves the figure above
+   the rows visually. A screen reader follows the DOM; the eye follows the layout. */
+.today-rows {
+  order: 2;
 }
+
+.debt-block {
+  order: 1;
+}
+
+/* The only large coloured area in the product, and the first of the two elements allowed to
+   claim the figure role. The second is the focus timer, below. */
+.debt-block-tap {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: var(--failed-tint);
+  color: var(--failed-ink);
+  border-radius: var(--radius-card);
+  padding: var(--space-5) var(--space-card-pad);
+  /* The screen's own `gap` spaces this; a floor here would only pad a block that is
+     already the tallest thing on the page. */
+  min-height: 0;
+}
+
+.debt-block-tap:hover {
+  filter: brightness(0.97);
+}
+
+.debt-block-label {
+  display: block;
+  font-size: var(--type-label);
+  font-weight: var(--weight-regular);
+  margin-bottom: var(--space-1);
+}
+
+.debt-block-figure {
+  display: block;
+  font-size: var(--type-figure);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--type-figure-tracking);
+  /* Scales with Dynamic Type like everything else — an easy thing to exempt and wrong to. */
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------- the focus session */
+
+/* The running session, and the second and last claimant of the figure role. The budget is now
+   spent; a third would take the size from meaning "this is the number" to meaning "this is a
+   number", which is the same as meaning nothing.
+
+   No tint, no fill and no coloured area: the debt block is the only one of those in the product,
+   and a large coloured rectangle here would put timed work at the visual weight of money — which
+   is exactly the comparison the epic refuses, since timer-backed work carries no Penalty at all.
+
+   No transition and no animation either. The quota bar below is the only one in the product, and
+   a figure that eased between values would be decoration on a screen whose whole job is to be
+   uneventful. */
+.focus-figure {
+  font-size: var(--type-figure);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--type-figure-tracking);
+  line-height: 1.1;
+  /* Digits that do not shift width as the seconds turn. Without this the whole figure jitters
+     once a second, which reads as something struggling rather than something running. */
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+
+/* The quota bar (Story 3.2, D4/D5) — the first fill this product has anywhere, sitting beside
+   the existing `Banked today` text rather than replacing it. `aria-hidden`: the row it lives in
+   already carries an `aria-label` stating the same fraction as text, and a bar that spoke too
+   would be a second announcement of the number the row already gives.
+
+   Track is `--surface-sunken`, the same tonal step every other sunken area in this product
+   uses. Fill is `--action-fill` — the bar fills with the colour of the button that deposits
+   the time. Radius is `--radius-default`, never `--radius-pill`: that silhouette is reserved
+   to non-interactive status labels, and a bar is neither a label nor pressable. */
+.quota-bar {
+  height: var(--space-2);
+  margin-top: var(--space-1);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-default);
+  overflow: hidden;
+}
+
+.quota-bar-fill {
+  height: 100%;
+  background: var(--action-fill);
+  border-radius: var(--radius-default);
+  /* D4: the only transition in the product, and only on this one property. */
+  transition: width var(--motion-duration) ease-out;
+}
+
+/* D4: Reduce Motion removes the transition outright rather than shortening it. The width still
+   updates on reload — nothing here is what draws the bar at its value, only what animates the
+   change to get there — and no JavaScript reads this media query, so there is nothing that can
+   fall out of sync with the OS setting after first paint. */
+@media (prefers-reduced-motion: reduce) {
+  .quota-bar-fill {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- forms */
 
 /* Text inputs. Outline only, like every neutral control — a coloured input would be
    reading as pressable when it is a place to type. */
@@ -260,6 +641,7 @@ select {
   border-radius: var(--radius-default);
   padding: var(--space-3);
   min-height: 44px;
+  cursor: pointer;
 }
 
 /* A checkbox sits inline with its own label, so it opts out of the block rules above. */
@@ -270,116 +652,22 @@ input[type='checkbox'] {
   margin: 0 var(--space-1) 0 0;
 }
 
-h3 {
-  font-size: var(--type-label);
-  font-weight: var(--weight-medium);
-  color: var(--text-secondary);
-  margin: var(--space-4) 0 var(--space-2);
-}
-
-ul {
-  margin: 0 0 var(--space-3);
-  padding-left: var(--space-4);
-}
-
-/* Today lays itself out so the debt block is seen first and heard last. The DOM order is
-   heading, rows, figure — which is the reading order — and `order` moves the figure above
-   the rows visually. A screen reader follows the DOM; the eye follows the layout. */
-.today {
-  display: flex;
-  flex-direction: column;
-}
-
-.today-rows {
-  order: 2;
-}
-
-.debt-block {
-  order: 1;
-}
-
-/* The only large coloured area in the product, and the first of the two elements allowed to
-   claim the figure role. The second is the focus timer, below. */
-.debt-block-tap {
+/* Appeal evidence on the referee's ruling screen — a photograph the doer uploaded, at
+   whatever size their phone produced. Without this it sets the width of the column. */
+img {
   display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-default);
+}
+
+textarea {
   width: 100%;
-  text-align: left;
-  border: none;
-  background: var(--failed-tint);
-  color: var(--failed-ink);
-  border-radius: var(--radius-default);
-  padding: var(--space-4);
-  margin-bottom: var(--space-4);
-}
-
-.debt-block-label {
-  display: block;
-  font-size: var(--type-label);
-  font-weight: var(--weight-regular);
-}
-
-.debt-block-figure {
-  display: block;
-  font-size: var(--type-figure);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--type-figure-tracking);
-  /* Scales with Dynamic Type like everything else — an easy thing to exempt and wrong to. */
-  line-height: 1.1;
-}
-
-/* The running session, and the second and last claimant of the figure role. The budget is now
-   spent; a third would take the size from meaning "this is the number" to meaning "this is a
-   number", which is the same as meaning nothing.
-
-   No tint, no fill and no coloured area: the debt block is the only one of those in the product,
-   and a large coloured rectangle here would put timed work at the visual weight of money — which
-   is exactly the comparison the epic refuses, since timer-backed work carries no Penalty at all.
-
-   No transition and no animation either. There is none anywhere in this product, there is no
-   motion token to resolve against, and a figure that eased between values would be decoration on
-   a screen whose whole job is to be uneventful. */
-.focus-figure {
-  font-size: var(--type-figure);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--type-figure-tracking);
-  line-height: 1.1;
-  /* Digits that do not shift width as the seconds turn. Without this the whole figure jitters
-     once a second, which reads as something struggling rather than something running. */
-  font-variant-numeric: tabular-nums;
-  margin: 0 0 var(--space-4);
-}
-
-/* The quota bar (Story 3.2, D4/D5) — the first fill this product has anywhere, sitting beside
-   the existing `Banked today` text rather than replacing it. `aria-hidden`: the row it lives in
-   already carries an `aria-label` stating the same fraction as text, and a bar that spoke too
-   would be a second announcement of the number the row already gives.
-
-   Track is `--surface-sunken`, the same tonal step every other sunken area in this product
-   uses. Fill is `--action-fill` — the bar fills with the colour of the button that deposits
-   the time. Radius is `--radius-default`, never `--radius-pill`: that silhouette is reserved
-   to non-interactive status labels, and a bar is neither a label nor pressable. */
-.quota-bar {
-  height: var(--space-2);
-  margin-top: var(--space-1);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--type-caption);
+  color: var(--text-secondary);
   background: var(--surface-sunken);
+  border: var(--hairline) solid var(--border);
   border-radius: var(--radius-default);
-  overflow: hidden;
-}
-
-.quota-bar-fill {
-  height: 100%;
-  background: var(--action-fill);
-  border-radius: var(--radius-default);
-  /* D4: the only transition in the product, and only on this one property. */
-  transition: width var(--motion-duration) ease-out;
-}
-
-/* D4: Reduce Motion removes the transition outright rather than shortening it. The width still
-   updates on reload — nothing here is what draws the bar at its value, only what animates the
-   change to get there — and no JavaScript reads this media query, so there is nothing that can
-   fall out of sync with the OS setting after first paint. */
-@media (prefers-reduced-motion: reduce) {
-  .quota-bar-fill {
-    transition: none;
-  }
+  padding: var(--space-3);
 }

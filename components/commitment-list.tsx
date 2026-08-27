@@ -206,26 +206,32 @@ export function CommitmentList({ ownerId }: { ownerId: string }) {
 
       {rows.length === 0 && <p className="row-muted">Nothing yet.</p>}
 
-      {rows.map((row) => (
-        <div className="row" key={row.id}>
-          <div>
-            <strong>{row.name}</strong>{' '}
-            {/* Plain text, not a pill. A pill carries *state* — a chain count, a quota
+      {rows.length > 0 && (
+        <div className="card">
+          {rows.map((row) => (
+            <div className="row" key={row.id}>
+              <div>
+                <strong>{row.name}</strong>{' '}
+                {/* Plain text, not a pill. A pill carries *state* — a chain count, a quota
                 position, a ledger outcome — and "costs money" is configuration. Spending
                 the pill vocabulary on a setting would blunt it where it has to be read at
                 a glance. */}
-            {row.carries_penalty && <span className="row-muted"> · costs money</span>}
-          </div>
-          <div className="row-muted">{describe(row)}</div>
-          <button type="button" onClick={() => setView({ kind: 'edit', row })}>
-            Edit
-          </button>
+                {row.carries_penalty && <span className="row-muted"> · costs money</span>}
+              </div>
+              <div className="row-muted">{describe(row)}</div>
+              <button type="button" onClick={() => setView({ kind: 'edit', row })}>
+                Edit
+              </button>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
 
-      <button type="button" className="action" onClick={() => setView({ kind: 'new' })}>
-        New commitment
-      </button>
+      <div className="actions">
+        <button type="button" className="action" onClick={() => setView({ kind: 'new' })}>
+          New commitment
+        </button>
+      </div>
     </section>
   );
 }

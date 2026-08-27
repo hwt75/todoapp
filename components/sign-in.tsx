@@ -129,64 +129,73 @@ export function SignIn({ onAccountChange }: { onAccountChange?: (userId: string 
     <section>
       <h2>Account</h2>
 
-      {stage.kind === 'loading' && <p>Working…</p>}
+      <div className="card card-pad stack">
+        {stage.kind === 'loading' && <p>Working…</p>}
 
-      {(stage.kind === 'signed-out' || stage.kind === 'failed') && (
-        <>
-          <p>Signing in creates the account everything you record afterwards belongs to.</p>
+        {(stage.kind === 'signed-out' || stage.kind === 'failed') && (
+          <>
+            <p>Signing in creates the account everything you record afterwards belongs to.</p>
 
-          <input
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(event) => setEmail(event.target.value.trim())}
-          />
-          <input
-            type="password"
-            autoComplete="current-password"
-            placeholder="Password, at least 6 characters"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
+            <div>
+              <input
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value.trim())}
+              />
+              <input
+                type="password"
+                autoComplete="current-password"
+                placeholder="Password, at least 6 characters"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </div>
 
-          <button
-            type="button"
-            className="action"
-            onClick={() => submit('sign-in')}
-            disabled={!canSubmit}
-          >
-            Sign in
-          </button>
-          <button type="button" onClick={() => submit('create')} disabled={!canSubmit}>
-            Create account
-          </button>
-        </>
-      )}
+            <div className="actions">
+              <button
+                type="button"
+                className="action"
+                onClick={() => submit('sign-in')}
+                disabled={!canSubmit}
+              >
+                Sign in
+              </button>
+              <button type="button" onClick={() => submit('create')} disabled={!canSubmit}>
+                Create account
+              </button>
+            </div>
+          </>
+        )}
 
-      {stage.kind === 'failed' && (
-        <p>
-          <strong>Failed.</strong> {stage.reason}
-        </p>
-      )}
-
-      {stage.kind === 'signed-in' && (
-        <>
+        {stage.kind === 'failed' && (
           <p>
-            Signed in as {stage.email} — role <strong>{stage.role ?? 'not readable'}</strong>.
+            <strong>Failed.</strong> {stage.reason}
           </p>
-          {stage.role === null && (
+        )}
+
+        {stage.kind === 'signed-in' && (
+          <>
             <p>
-              The profile row was not readable. Either the trigger that creates it did not run, or a
-              policy is denying the read — both are worth knowing before anything is built on this.
+              Signed in as {stage.email} — role <strong>{stage.role ?? 'not readable'}</strong>.
             </p>
-          )}
-          <button type="button" onClick={signOut}>
-            Sign out
-          </button>
-        </>
-      )}
+            {stage.role === null && (
+              <p>
+                The profile row was not readable. Either the trigger that creates it did not run, or
+                a policy is denying the read — both are worth knowing before anything is built on
+                this.
+              </p>
+            )}
+            <div className="actions">
+              <button type="button" onClick={signOut}>
+                Sign out
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </section>
   );
 }

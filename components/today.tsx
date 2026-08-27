@@ -58,14 +58,12 @@ export function Today({
   onOpenLedger,
   onOpenChain,
   onOpenFocus,
-  onOpenSettings,
 }: {
   ownerId: string;
   onOpenLedger: () => void;
   onOpenChain: (commitment: RowCommitment) => void;
   /** Where a *Put hours in* row goes instead. See the fork below. */
   onOpenFocus: (commitment: RowCommitment) => void;
-  onOpenSettings: () => void;
 }) {
   const [view, setView] = useState<View>({ kind: 'loading' });
   // Story 5.1, keyed by `for_day` — mirrors `components/ledger.tsx`'s own identical state.
@@ -225,15 +223,16 @@ export function Today({
        not need to add. So the DOM order is rows-then-figure and CSS `order` puts the
        figure on top. */
     <section className="today">
-      <h1>Today</h1>
-      {/* Reachable the same way the Ledger and Chains detail are: a callback this component
-          invokes itself, never a route the caller renders beside it (spec 3.0, Boundaries &
-          Constraints). Rendered unconditionally, ahead of the load state, so Settings stays
-          reachable even on a failed read — the one place that could turn the morning hour back
-          down to something sendable. */}
-      <button type="button" onClick={onOpenSettings}>
-        Settings
-      </button>
+      {/* No control beside the title. Settings used to be a full-size bordered button standing
+          alone under this heading — the most prominent object on the screen, on the one screen
+          whose subject is supposed to be prominent instead. It moved to the tab bar in
+          `app/page.tsx`, which sits outside this component and therefore keeps the property the
+          button was placed here for: Settings stays reachable even when every read below fails,
+          and it is the one place that can turn the morning hour back down to something
+          sendable. */}
+      <header className="screen-head">
+        <h1>Today</h1>
+      </header>
 
       {view.kind === 'loading' && <p>Working…</p>}
 
@@ -276,48 +275,55 @@ export function Today({
           {/* Grace Day (Story 5.1): "the Day summary" entry point FR-17's own AC names,
               alongside a Ledger row — never only inside a future Silence intervention. Says
               nothing at all when nothing is graceable, the same "nothing it cannot support"
-              rule the rest of this screen already keeps. */}
-          {view.graceRows.map((row) => {
-            const rowGrace: GraceRowState = graceState[row.day] ?? { kind: 'idle' };
+              rule the rest of this screen already keeps, and why the frame around them is
+              conditional rather than an empty rectangle on the clean days. */}
+          {view.graceRows.length > 0 && (
+            <div className="card">
+              {view.graceRows.map((row) => {
+                const rowGrace: GraceRowState = graceState[row.day] ?? { kind: 'idle' };
 
-            return (
-              <div
-                className="row row-grace"
-                key={row.day}
-                role="group"
-                aria-label={`Grace Day, ${row.day}`}
-              >
-                <div className="row-main">
-                  <div className="row-name">{row.day}</div>
-                  {rowGrace.kind === 'spent' ? (
-                    <p role="status">{GRACE_DAY_COPY.spent}</p>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        // Distinguishes one row's control from every other's for a
-                        // screen-reader user, the same fix `components/ledger.tsx`'s
-                        // identical control needed.
-                        aria-label={`Spend a Grace Day for ${row.day}`}
-                        onClick={() => void spendGraceDay(row.day)}
-                        disabled={rowGrace.kind === 'spending' || view.graceRemaining <= 0}
-                      >
-                        {rowGrace.kind === 'spending'
-                          ? GRACE_DAY_COPY.spending
-                          : GRACE_DAY_COPY.spend}
-                      </button>
-                      <span className="row-muted">{formatGraceAllowance(view.graceRemaining)}</span>
-                    </>
-                  )}
-                  {rowGrace.kind === 'failed' && (
-                    <p role="status">
-                      <strong>{GRACE_DAY_COPY.failed}</strong> {rowGrace.reason}
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                return (
+                  <div
+                    className="row row-grace"
+                    key={row.day}
+                    role="group"
+                    aria-label={`Grace Day, ${row.day}`}
+                  >
+                    <div className="row-main">
+                      <div className="row-name">{row.day}</div>
+                      {rowGrace.kind === 'spent' ? (
+                        <p role="status">{GRACE_DAY_COPY.spent}</p>
+                      ) : (
+                        <div className="actions">
+                          <button
+                            type="button"
+                            // Distinguishes one row's control from every other's for a
+                            // screen-reader user, the same fix `components/ledger.tsx`'s
+                            // identical control needed.
+                            aria-label={`Spend a Grace Day for ${row.day}`}
+                            onClick={() => void spendGraceDay(row.day)}
+                            disabled={rowGrace.kind === 'spending' || view.graceRemaining <= 0}
+                          >
+                            {rowGrace.kind === 'spending'
+                              ? GRACE_DAY_COPY.spending
+                              : GRACE_DAY_COPY.spend}
+                          </button>
+                          <span className="row-muted">
+                            {formatGraceAllowance(view.graceRemaining)}
+                          </span>
+                        </div>
+                      )}
+                      {rowGrace.kind === 'failed' && (
+                        <p role="status">
+                          <strong>{GRACE_DAY_COPY.failed}</strong> {rowGrace.reason}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
     </section>

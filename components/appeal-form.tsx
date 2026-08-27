@@ -168,13 +168,11 @@ export function AppealForm({
         return;
       }
 
-      const { error: insertError } = await supabase
-        .from('appeal_evidence')
-        .insert({
-          appeal_id: submission.appealId,
-          storage_path: path,
-          captured_on: fileCapturedOn(file),
-        });
+      const { error: insertError } = await supabase.from('appeal_evidence').insert({
+        appeal_id: submission.appealId,
+        storage_path: path,
+        captured_on: fileCapturedOn(file),
+      });
 
       if (insertError) {
         setEvidence({ kind: 'failed', reason: APPEAL_COPY.evidenceFailed });
@@ -188,69 +186,77 @@ export function AppealForm({
   }
 
   return (
-    <section>
-      <h1>{commitmentName}</h1>
-      <button type="button" onClick={onClose}>
-        Back to the ledger
-      </button>
-
-      <p>
-        {forDay} · {formatDong(amountDong)}
-      </p>
-      <p>{APPEAL_COPY.claim}</p>
-
-      {(submission.kind === 'idle' || submission.kind === 'submitting') && (
-        <button
-          type="button"
-          className="action"
-          disabled={submission.kind === 'submitting'}
-          aria-busy={submission.kind === 'submitting'}
-          onClick={() => void submit()}
-        >
-          {submission.kind === 'submitting' ? APPEAL_COPY.submitting : APPEAL_COPY.contest}
+    <section className="screen">
+      <header className="screen-head">
+        <h1>{commitmentName}</h1>
+        <button type="button" className="quiet back" onClick={onClose}>
+          Back to the ledger
         </button>
-      )}
+      </header>
 
-      {submission.kind === 'failed' && (
-        <>
-          <p role="status">
-            <strong>{APPEAL_COPY.failed}</strong> {submission.reason}
-          </p>
-          <button type="button" className="action" onClick={() => void submit()}>
-            {APPEAL_COPY.contest}
-          </button>
-        </>
-      )}
+      <div className="card card-pad stack">
+        <p>
+          {forDay} · {formatDong(amountDong)}
+        </p>
+        <p>{APPEAL_COPY.claim}</p>
 
-      {submission.kind === 'held' && (
-        <>
-          {/* The single most trust-critical sentence in the product (EXPERIENCE.md) —
+        {(submission.kind === 'idle' || submission.kind === 'submitting') && (
+          <div className="actions">
+            <button
+              type="button"
+              className="action"
+              disabled={submission.kind === 'submitting'}
+              aria-busy={submission.kind === 'submitting'}
+              onClick={() => void submit()}
+            >
+              {submission.kind === 'submitting' ? APPEAL_COPY.submitting : APPEAL_COPY.contest}
+            </button>
+          </div>
+        )}
+
+        {submission.kind === 'failed' && (
+          <>
+            <p role="status">
+              <strong>{APPEAL_COPY.failed}</strong> {submission.reason}
+            </p>
+            <div className="actions">
+              <button type="button" className="action" onClick={() => void submit()}>
+                {APPEAL_COPY.contest}
+              </button>
+            </div>
+          </>
+        )}
+
+        {submission.kind === 'held' && (
+          <>
+            {/* The single most trust-critical sentence in the product (EXPERIENCE.md) —
               the amount and the real, server-stamped deadline, never the template's own
               bracketed placeholders. */}
-          <p role="status">{holdStateCopy(amountDong, new Date(submission.deadline))}</p>
+            <p role="status">{holdStateCopy(amountDong, new Date(submission.deadline))}</p>
 
-          <label htmlFor="appeal-evidence">Evidence</label>
-          <input
-            id="appeal-evidence"
-            type="file"
-            accept="image/*"
-            disabled={evidence.kind === 'uploading'}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void uploadEvidence(file);
-            }}
-          />
-          <p className="row-muted">{APPEAL_COPY.evidenceHint}</p>
+            <label htmlFor="appeal-evidence">Evidence</label>
+            <input
+              id="appeal-evidence"
+              type="file"
+              accept="image/*"
+              disabled={evidence.kind === 'uploading'}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void uploadEvidence(file);
+              }}
+            />
+            <p className="row-muted">{APPEAL_COPY.evidenceHint}</p>
 
-          {evidence.kind === 'uploading' && <p role="status">{APPEAL_COPY.evidenceUploading}</p>}
-          {evidence.kind === 'saved' && <p role="status">{APPEAL_COPY.evidenceSaved}</p>}
-          {evidence.kind === 'failed' && (
-            <p role="status">
-              <strong>{APPEAL_COPY.failed}</strong> {evidence.reason}
-            </p>
-          )}
-        </>
-      )}
+            {evidence.kind === 'uploading' && <p role="status">{APPEAL_COPY.evidenceUploading}</p>}
+            {evidence.kind === 'saved' && <p role="status">{APPEAL_COPY.evidenceSaved}</p>}
+            {evidence.kind === 'failed' && (
+              <p role="status">
+                <strong>{APPEAL_COPY.failed}</strong> {evidence.reason}
+              </p>
+            )}
+          </>
+        )}
+      </div>
     </section>
   );
 }

@@ -89,13 +89,7 @@ beforeEach(() => {
 describe('the today screen', () => {
   it('reads the money and the chains through the views that follow a correction', async () => {
     render(
-      <Today
-        ownerId="u1"
-        onOpenLedger={vi.fn()}
-        onOpenChain={vi.fn()}
-        onOpenFocus={vi.fn()}
-        onOpenSettings={vi.fn()}
-      />,
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
     );
     await screen.findByRole('button', { name: /Gym/ });
 
@@ -116,13 +110,7 @@ describe('the today screen', () => {
     rows.penalty_current = { data: [{ amount_dong: 500000 }], error: null };
 
     const { container } = render(
-      <Today
-        ownerId="u1"
-        onOpenLedger={vi.fn()}
-        onOpenChain={vi.fn()}
-        onOpenFocus={vi.fn()}
-        onOpenSettings={vi.fn()}
-      />,
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
     );
     await screen.findByRole('button', { name: /Gym/ });
 
@@ -136,13 +124,7 @@ describe('the today screen', () => {
 
   it('says nothing at all when nothing is owed', async () => {
     render(
-      <Today
-        ownerId="u1"
-        onOpenLedger={vi.fn()}
-        onOpenChain={vi.fn()}
-        onOpenFocus={vi.fn()}
-        onOpenSettings={vi.fn()}
-      />,
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
     );
     await screen.findByRole('button', { name: /Gym/ });
 
@@ -164,7 +146,6 @@ describe('the today screen', () => {
         onOpenLedger={onOpenLedger}
         onOpenChain={vi.fn()}
         onOpenFocus={vi.fn()}
-        onOpenSettings={vi.fn()}
       />,
     );
 
@@ -186,13 +167,7 @@ describe('the today screen', () => {
     rows.penalty_current = { data: [{ amount_dong: 500000 }], error: null };
 
     render(
-      <Today
-        ownerId="u1"
-        onOpenLedger={vi.fn()}
-        onOpenChain={vi.fn()}
-        onOpenFocus={vi.fn()}
-        onOpenSettings={vi.fn()}
-      />,
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
     );
 
     await screen.findByRole('button', { name: /Owed since you started/ });
@@ -208,13 +183,7 @@ describe('the today screen', () => {
     rows.chain_current = { data: [{ commitment_id: 'c1', current_days: 4 }], error: null };
 
     render(
-      <Today
-        ownerId="u1"
-        onOpenLedger={vi.fn()}
-        onOpenChain={vi.fn()}
-        onOpenFocus={vi.fn()}
-        onOpenSettings={vi.fn()}
-      />,
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
     );
 
     // FR-10 forbids a mid-day verdict, so every row is honestly `not yet` — and the chain
@@ -240,13 +209,7 @@ describe('the today screen', () => {
     };
 
     render(
-      <Today
-        ownerId="u1"
-        onOpenLedger={vi.fn()}
-        onOpenChain={vi.fn()}
-        onOpenFocus={vi.fn()}
-        onOpenSettings={vi.fn()}
-      />,
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
     );
 
     // The pill reads the live position, and the row's one accessibility label states the same
@@ -285,13 +248,7 @@ describe('the today screen', () => {
     };
 
     render(
-      <Today
-        ownerId="u1"
-        onOpenLedger={vi.fn()}
-        onOpenChain={vi.fn()}
-        onOpenFocus={vi.fn()}
-        onOpenSettings={vi.fn()}
-      />,
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
     );
 
     // The weekly row reads its own position, by its own id.
@@ -314,13 +271,7 @@ describe('the today screen', () => {
     // `gym` here is a Daily commitment, so `weekly_quota_progress` has nothing for it — the
     // merge must not invent a position for a commitment the view was never asked about.
     render(
-      <Today
-        ownerId="u1"
-        onOpenLedger={vi.fn()}
-        onOpenChain={vi.fn()}
-        onOpenFocus={vi.fn()}
-        onOpenSettings={vi.fn()}
-      />,
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
     );
 
     expect(await screen.findByRole('button', { name: /Gym/ })).toHaveAccessibleName(
@@ -331,13 +282,7 @@ describe('the today screen', () => {
   it('opens a chain with the commitment the row was drawn from', async () => {
     const onOpenChain = vi.fn();
     render(
-      <Today
-        ownerId="u1"
-        onOpenLedger={vi.fn()}
-        onOpenChain={onOpenChain}
-        onOpenFocus={vi.fn()}
-        onOpenSettings={vi.fn()}
-      />,
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={onOpenChain} onOpenFocus={vi.fn()} />,
     );
 
     await userEvent.click(await screen.findByRole('button', { name: /Gym/ }));
@@ -368,7 +313,6 @@ describe('the today screen', () => {
         onOpenLedger={vi.fn()}
         onOpenChain={onOpenChain}
         onOpenFocus={onOpenFocus}
-        onOpenSettings={vi.fn()}
       />,
     );
 
@@ -382,45 +326,31 @@ describe('the today screen', () => {
     expect(onOpenFocus).toHaveBeenCalledOnce();
   });
 
-  it('opens settings the same way it opens the ledger or a chain — a callback it owns', async () => {
-    const onOpenSettings = vi.fn();
+  // Settings used to be a full-size bordered button standing alone under this screen's
+  // heading — the most prominent object on the one screen whose subject is supposed to be
+  // prominent instead. It moved to the tab bar (`components/tabbar.tsx`), which
+  // `app/page.tsx` renders outside this component, and which therefore keeps the property
+  // the button was placed here for: Settings stays reachable when every read below fails.
+  it('offers no navigation of its own — the tab bar owns it', async () => {
     render(
-      <Today
-        ownerId="u1"
-        onOpenLedger={vi.fn()}
-        onOpenChain={vi.fn()}
-        onOpenFocus={vi.fn()}
-        onOpenSettings={onOpenSettings}
-      />,
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
-    expect(onOpenSettings).toHaveBeenCalledOnce();
+    await screen.findByRole('button', { name: /Gym/ });
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
   });
 
   it('tells an empty setup apart from a broken read', async () => {
     rows.commitment = { data: [], error: null };
     const { unmount } = render(
-      <Today
-        ownerId="u1"
-        onOpenLedger={vi.fn()}
-        onOpenChain={vi.fn()}
-        onOpenFocus={vi.fn()}
-        onOpenSettings={vi.fn()}
-      />,
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
     );
     expect(await screen.findByText(/Nothing set up yet/)).toBeInTheDocument();
     unmount();
 
     rows.commitment = { data: null, error: { message: 'permission denied' } };
     render(
-      <Today
-        ownerId="u1"
-        onOpenLedger={vi.fn()}
-        onOpenChain={vi.fn()}
-        onOpenFocus={vi.fn()}
-        onOpenSettings={vi.fn()}
-      />,
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
     );
 
     expect(await screen.findByText(/permission denied/)).toBeInTheDocument();
@@ -446,13 +376,7 @@ describe('the today screen', () => {
       rows[table] = { data: null, error: { message: `${table} unreadable` } };
 
       const { unmount } = render(
-        <Today
-          ownerId="u1"
-          onOpenLedger={vi.fn()}
-          onOpenChain={vi.fn()}
-          onOpenFocus={vi.fn()}
-          onOpenSettings={vi.fn()}
-        />,
+        <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
       );
 
       expect(await screen.findByText(new RegExp(`${table} unreadable`))).toBeInTheDocument();
@@ -473,13 +397,7 @@ describe('the today screen', () => {
       rows.grace_allowance_remaining = { data: { remaining: 2 }, error: null };
 
       render(
-        <Today
-          ownerId="u1"
-          onOpenLedger={vi.fn()}
-          onOpenChain={vi.fn()}
-          onOpenFocus={vi.fn()}
-          onOpenSettings={vi.fn()}
-        />,
+        <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
       );
 
       expect(await screen.findByRole('button', { name: /Spend a Grace Day/ })).toBeInTheDocument();
@@ -497,13 +415,7 @@ describe('the today screen', () => {
       };
 
       render(
-        <Today
-          ownerId="u1"
-          onOpenLedger={vi.fn()}
-          onOpenChain={vi.fn()}
-          onOpenFocus={vi.fn()}
-          onOpenSettings={vi.fn()}
-        />,
+        <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
       );
       await screen.findByRole('button', { name: /Spend a Grace Day/ });
 
@@ -516,13 +428,7 @@ describe('the today screen', () => {
 
     it('says nothing at all when nothing is graceable — the same "say nothing it cannot support" rule as the rest of this screen', async () => {
       render(
-        <Today
-          ownerId="u1"
-          onOpenLedger={vi.fn()}
-          onOpenChain={vi.fn()}
-          onOpenFocus={vi.fn()}
-          onOpenSettings={vi.fn()}
-        />,
+        <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
       );
 
       await screen.findByRole('button', { name: /Gym/ });
@@ -545,7 +451,6 @@ describe('the today screen', () => {
           onOpenLedger={vi.fn()}
           onOpenChain={vi.fn()}
           onOpenFocus={vi.fn()}
-          onOpenSettings={vi.fn()}
         />,
       );
 
@@ -577,13 +482,7 @@ describe('the today screen', () => {
       };
 
       render(
-        <Today
-          ownerId="u1"
-          onOpenLedger={vi.fn()}
-          onOpenChain={vi.fn()}
-          onOpenFocus={vi.fn()}
-          onOpenSettings={vi.fn()}
-        />,
+        <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
       );
 
       await userEvent.click(await screen.findByRole('button', { name: /Spend a Grace Day/ }));
@@ -615,13 +514,7 @@ describe('the today screen', () => {
       graceInsertResult = { error: { code: '23505', message: 'duplicate key value' } };
 
       render(
-        <Today
-          ownerId="u1"
-          onOpenLedger={vi.fn()}
-          onOpenChain={vi.fn()}
-          onOpenFocus={vi.fn()}
-          onOpenSettings={vi.fn()}
-        />,
+        <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
       );
       await screen.findAllByText('2 Grace Days remaining this month.');
 

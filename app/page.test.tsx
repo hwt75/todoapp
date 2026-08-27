@@ -121,22 +121,16 @@ vi.mock('@/components/focus-session', () => ({
   ),
 }));
 
+// The Settings control is no longer Today's: it lives in the tab bar, which this file
+// renders for real rather than mocking, so every `name: 'Settings'` assertion below is now
+// an assertion about the bar. That is deliberate — the bar is what decides which screen is
+// offered, and the current screen renders as a `span` rather than a button, which is what
+// keeps "Settings is not offered while Settings is open" true.
 vi.mock('@/components/today', () => ({
-  Today: ({
-    onOpenSettings,
-    onOpenFocus,
-  }: {
-    onOpenSettings: () => void;
-    onOpenFocus: (commitment: { id: string; name: string }) => void;
-  }) => (
-    <>
-      <button type="button" onClick={onOpenSettings}>
-        Settings
-      </button>
-      <button type="button" onClick={() => onOpenFocus({ id: 'c1', name: 'Company work' })}>
-        Open Company work
-      </button>
-    </>
+  Today: ({ onOpenFocus }: { onOpenFocus: (commitment: { id: string; name: string }) => void }) => (
+    <button type="button" onClick={() => onOpenFocus({ id: 'c1', name: 'Company work' })}>
+      Open Company work
+    </button>
   ),
 }));
 

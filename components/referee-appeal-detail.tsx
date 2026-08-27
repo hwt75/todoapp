@@ -231,10 +231,12 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
 
   return (
     <main>
-      <section>
-        <button type="button" onClick={() => router.push('/referee')}>
-          {REFEREE_APPEAL_DETAIL_COPY.back}
-        </button>
+      <section className="screen">
+        <header className="screen-head">
+          <button type="button" className="quiet back" onClick={() => router.push('/referee')}>
+            {REFEREE_APPEAL_DETAIL_COPY.back}
+          </button>
+        </header>
 
         {view.kind === 'loading' && <p>{REFEREE_APPEAL_DETAIL_COPY.loading}</p>}
 
@@ -285,27 +287,29 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
                   )}
                 </p>
 
-                <button
-                  type="button"
-                  className="action"
-                  disabled={ruling.kind === 'ruling'}
-                  aria-busy={ruling.kind === 'ruling'}
-                  onClick={() => void rule(true)}
-                >
-                  {ruling.kind === 'ruling'
-                    ? REFEREE_APPEAL_DETAIL_COPY.ruling
-                    : REFEREE_APPEAL_DETAIL_COPY.approve}
-                </button>
-                <button
-                  type="button"
-                  disabled={ruling.kind === 'ruling'}
-                  aria-busy={ruling.kind === 'ruling'}
-                  onClick={() => void rule(false)}
-                >
-                  {ruling.kind === 'ruling'
-                    ? REFEREE_APPEAL_DETAIL_COPY.ruling
-                    : REFEREE_APPEAL_DETAIL_COPY.reject}
-                </button>
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="action"
+                    disabled={ruling.kind === 'ruling'}
+                    aria-busy={ruling.kind === 'ruling'}
+                    onClick={() => void rule(true)}
+                  >
+                    {ruling.kind === 'ruling'
+                      ? REFEREE_APPEAL_DETAIL_COPY.ruling
+                      : REFEREE_APPEAL_DETAIL_COPY.approve}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={ruling.kind === 'ruling'}
+                    aria-busy={ruling.kind === 'ruling'}
+                    onClick={() => void rule(false)}
+                  >
+                    {ruling.kind === 'ruling'
+                      ? REFEREE_APPEAL_DETAIL_COPY.ruling
+                      : REFEREE_APPEAL_DETAIL_COPY.reject}
+                  </button>
+                </div>
 
                 {ruling.kind === 'failed' && (
                   <p role="status">

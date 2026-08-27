@@ -73,29 +73,33 @@ export function PushProbe({
   return (
     <section>
       <h2>Push probe</h2>
-      <button
-        type="button"
-        className="action"
-        onClick={subscribe}
-        disabled={state.kind === 'working'}
-      >
-        {state.kind === 'working' ? 'Working…' : 'Subscribe this device'}
-      </button>
+      <div className="card card-pad stack">
+        <div className="actions">
+          <button
+            type="button"
+            className="action"
+            onClick={subscribe}
+            disabled={state.kind === 'working'}
+          >
+            {state.kind === 'working' ? 'Working…' : 'Subscribe this device'}
+          </button>
+        </div>
 
-      {state.kind === 'refused' && (
-        <p>
-          <strong>Refused.</strong> {state.reason}
-        </p>
-      )}
-
-      {state.kind === 'subscribed' && (
-        <>
+        {state.kind === 'refused' && (
           <p>
-            Save this to `.push-subscription.json` in the project root, then run the send script.
+            <strong>Refused.</strong> {state.reason}
           </p>
-          <textarea readOnly rows={12} cols={60} value={state.json} />
-        </>
-      )}
+        )}
+
+        {state.kind === 'subscribed' && (
+          <>
+            <p>
+              Save this to `.push-subscription.json` in the project root, then run the send script.
+            </p>
+            <textarea readOnly rows={12} cols={60} value={state.json} />
+          </>
+        )}
+      </div>
     </section>
   );
 }

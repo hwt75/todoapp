@@ -8,6 +8,7 @@ import { PushProbe } from '@/components/push-probe';
 import { SignIn } from '@/components/sign-in';
 import { SilenceIntervention } from '@/components/silence-intervention';
 import { Today } from '@/components/today';
+import { Tabbar, type Tab } from '@/components/tabbar';
 import { Ledger, type AppealTarget } from '@/components/ledger';
 import { Settings } from '@/components/settings';
 import { MonthlyReport } from '@/components/monthly-report';
@@ -211,6 +212,22 @@ export default function Home() {
     );
   }
 
+  // Which of the three top-level screens the ternary below will land on, and whether the tab
+  // bar belongs over it at all. Derived from the same state the ternary reads rather than
+  // stored beside it, so the bar cannot drift out of step with what is actually on screen.
+  // The order matters and mirrors the chain exactly: a sub-screen (a Focus Session, a Chains
+  // detail, an appeal, the monthly report) wins over all three and takes the bar with it,
+  // because each of those has its own way back and a second one would be two answers to the
+  // same question.
+  const onSubScreen = Boolean(focusOf || chainOf || appealOf || showMonthlyReport);
+  const showTabbar = Boolean(ownerId) && !onSubScreen;
+  const activeTab: Tab = showLedger ? 'ledger' : showSettings ? 'settings' : 'today';
+
+  function selectTab(tab: Tab) {
+    setShowLedger(tab === 'ledger');
+    setShowSettings(tab === 'settings');
+  }
+
   return (
     <main>
       {ownerId &&
@@ -257,31 +274,46 @@ export default function Home() {
             onOpenLedger={() => setShowLedger(true)}
             onOpenChain={(c) => setChainOf({ id: c.id, name: c.name })}
             onOpenFocus={(c) => setFocusOf({ id: c.id, name: c.name })}
-            onOpenSettings={() => setShowSettings(true)}
           />
         ))}
 
-      {/* Server-rendered so it survives a JavaScript failure. Hidden before
-          hydration on an installed launch by the display-mode rule in the layout;
-          the JS check below then covers legacy iOS, which reports standalone only
-          through navigator.standalone. */}
-      {installState !== 'installed' && (
-        <section data-install-hint>
-          <h2>Add this to your home screen</h2>
-          <p>
-            On iOS, notifications are only delivered to a web app that has been added to the home
-            screen — and without notifications there is no product, because every part of this one
-            reaches you by notification or not at all.
-          </p>
-          <p>Share button, then &ldquo;Add to Home Screen&rdquo;, then open it from its icon.</p>
-        </section>
-      )}
-
-      <SignIn onAccountChange={setOwnerId} />
+      {/* The way between the three top-level screens, and the only route into the Ledger on
+          a day with nothing owed — the debt block, its other entry point, renders nothing at
+          zero. Never over a sub-screen, which has its own way back, and never over the gate
+          or the Silence intervention, which are early returns above precisely because
+          blocking the app means being the only thing on it. */}
+      {showTabbar && <Tabbar active={activeTab} onSelect={selectTab} />}
 
       {ownerId && <CommitmentList ownerId={ownerId} />}
 
-      <PushProbe installState={installState} ownerId={ownerId} />
+      {/* All true, none of it what he opened the app for. Signed in, the band sits below a
+          rule at a weight that does not compete with the screen above it; signed out, the
+          account *is* the screen, so it is only a stack. */}
+      <div className={ownerId ? 'utility' : 'stack'}>
+        {/* Server-rendered so it survives a JavaScript failure. Hidden before
+            hydration on an installed launch by the display-mode rule in the layout;
+            the JS check below then covers legacy iOS, which reports standalone only
+            through navigator.standalone. */}
+        {installState !== 'installed' && (
+          <section data-install-hint>
+            <h2>Add this to your home screen</h2>
+            <div className="card card-pad">
+              <p>
+                On iOS, notifications are only delivered to a web app that has been added to the
+                home screen — and without notifications there is no product, because every part of
+                this one reaches you by notification or not at all.
+              </p>
+              <p>
+                Share button, then &ldquo;Add to Home Screen&rdquo;, then open it from its icon.
+              </p>
+            </div>
+          </section>
+        )}
+
+        <SignIn onAccountChange={setOwnerId} />
+
+        <PushProbe installState={installState} ownerId={ownerId} />
+      </div>
     </main>
   );
 }

@@ -93,8 +93,13 @@ export function SilenceIntervention({
   const pending = owing.length > 0;
 
   return (
-    <section>
-      <h1>{SILENCE_COPY.title}</h1>
+    <section className="screen">
+      {/* No control beside the title, and no tab bar over this screen: like the Morning Gate
+          it blocks by being the only thing rendered. The two ways out below are the episode's
+          own, and they are offered only when there is nothing to answer. */}
+      <header className="screen-head">
+        <h1>{SILENCE_COPY.title}</h1>
+      </header>
 
       <p>{silenceCopy(pending, startedDay)}</p>
 
@@ -113,14 +118,14 @@ export function SilenceIntervention({
       {pending && <MorningGate ownerId={ownerId} owing={owing} now={now} onAnswered={onAnswered} />}
 
       {!pending && (
-        <p>
+        <div className="actions">
           <button type="button" onClick={onOpenLedger}>
             {SILENCE_COPY.openLedger}
-          </button>{' '}
+          </button>
           <button type="button" onClick={onOpenSettings}>
             {SILENCE_COPY.openSettings}
           </button>
-        </p>
+        </div>
       )}
     </section>
   );

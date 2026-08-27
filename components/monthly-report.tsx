@@ -53,6 +53,78 @@ type View =
   { kind: 'loading' } | { kind: 'ready'; data: ReportData } | { kind: 'failed'; reason: string };
 
 /**
+ * One account-wide measure: its name, and its figure out at the row's right edge.
+ *
+ * The whole screen used to be nine `h2` + `p` pairs stacked down the page, so every measure
+ * put its name and its number on two separate lines and a reader had nothing to run an eye
+ * down. The figures line up on one edge instead — which is the only reason a report of this
+ * shape is quicker to read than the same sentences in prose.
+ *
+ * `note` rather than `value` for a measure whose answer is a sentence: a sentence dragged out
+ * to the right edge is not a column, it is a ragged paragraph pretending to be one. Those sit
+ * under the name, the same shape a Settings row uses for its consequence line.
+ *
+ * One `aria-label` on the group and `aria-hidden` on the parts, so the row is announced as a
+ * single fact — the convention every other row in this product already follows.
+ */
+function Measure({ name, value, note }: { name: string; value?: string; note?: string }) {
+  return (
+    <div className="row" role="group" aria-label={`${name}, ${value ?? note ?? ''}`}>
+      <div className="row-main">
+        <div className="row-name">{name}</div>
+        {note !== undefined && (
+          <div className="row-muted" aria-hidden="true">
+            {note}
+          </div>
+        )}
+      </div>
+      {value !== undefined && (
+        <span className="row-muted" aria-hidden="true">
+          {value}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** `Incurred: 1 · 500.000₫`, or `Incurred: None.` — one string, so neither half can be read
+ *  without the other. */
+function penaltyFigure(label: string, entry: { count: number; totalDong: number }): string {
+  const figure =
+    entry.count === 0
+      ? MONTHLY_REPORT_COPY.noPenalties
+      : MONTHLY_REPORT_COPY.penaltyLine(entry.count, entry.totalDong);
+  return `${label}: ${figure}`;
+}
+
+/**
+ * SM-C1's counter-metric: what the month cost, and what was actually collected of it.
+ *
+ * **Two figures, never merged.** They stay on separate lines under one name rather than out
+ * at the row's right edge, because a single edge with two numbers on it is exactly the
+ * merge this measure exists to refuse.
+ */
+function Penalties({ incurred, collected }: { incurred: string; collected: string }) {
+  return (
+    <div
+      className="row"
+      role="group"
+      aria-label={`${MONTHLY_REPORT_COPY.penaltiesHeading}, ${incurred}, ${collected}`}
+    >
+      <div className="row-main">
+        <div className="row-name">{MONTHLY_REPORT_COPY.penaltiesHeading}</div>
+        <div className="row-muted" aria-hidden="true">
+          {incurred}
+        </div>
+        <div className="row-muted" aria-hidden="true">
+          {collected}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * The Monthly report (Story 5.4, FR-24) — the only screen in this app that states every PRD
  * §8 measure together, at the altitude where a month can look fine on Today while the
  * mechanism underneath (the Referee's own ruling and collecting, or Silence quietly becoming
@@ -259,11 +331,13 @@ export function MonthlyReport({ onClose }: { onClose: () => void }) {
   }, []);
 
   return (
-    <section>
-      <h1>{MONTHLY_REPORT_COPY.title}</h1>
-      <button type="button" onClick={onClose}>
-        Back to today
-      </button>
+    <section className="screen">
+      <header className="screen-head">
+        <h1>{MONTHLY_REPORT_COPY.title}</h1>
+        <button type="button" className="quiet back" onClick={onClose}>
+          Back to today
+        </button>
+      </header>
 
       {view.kind === 'loading' && <p>{MONTHLY_REPORT_COPY.loading}</p>}
 
@@ -277,82 +351,121 @@ export function MonthlyReport({ onClose }: { onClose: () => void }) {
         <>
           <p className="row-muted">{MONTHLY_REPORT_COPY.subtitle(view.data.monthLabel)}</p>
 
-          <h2>{MONTHLY_REPORT_COPY.chainsHeading}</h2>
-          {view.data.chains.length === 0 ? (
-            <p>{MONTHLY_REPORT_COPY.noChains}</p>
-          ) : (
-            <ul>
-              {view.data.chains.map((c) => (
-                <li key={c.commitmentId}>
-                  {c.commitmentName}: {MONTHLY_REPORT_COPY.chainLine(c.currentDays, c.longestDays)}
-                </li>
-              ))}
-            </ul>
-          )}
+          {/* Per-commitment, so it keeps its own heading and its own frame — the measures
+              below are account-wide and share one. */}
+          <section>
+            <h2>{MONTHLY_REPORT_COPY.chainsHeading}</h2>
+            {view.data.chains.length === 0 ? (
+              <p>{MONTHLY_REPORT_COPY.noChains}</p>
+            ) : (
+              <div className="card">
+                {view.data.chains.map((c) => {
+                  const value = MONTHLY_REPORT_COPY.chainLine(c.currentDays, c.longestDays);
+                  return (
+                    <div
+                      className="row"
+                      key={c.commitmentId}
+                      role="group"
+                      aria-label={`${c.commitmentName}, ${value}`}
+                    >
+                      <div className="row-main">
+                        <div className="row-name">{c.commitmentName}</div>
+                      </div>
+                      <span className="row-muted" aria-hidden="true">
+                        {value}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
 
-          <h2>{MONTHLY_REPORT_COPY.returnHeading}</h2>
-          <p>{formatDays(view.data.medianDaysToReturn)}</p>
+          <section>
+            <h2>{MONTHLY_REPORT_COPY.completionHeading}</h2>
+            {view.data.commitmentCompletion.length === 0 ? (
+              <p>{MONTHLY_REPORT_COPY.noCompletionData}</p>
+            ) : (
+              <div className="card">
+                {view.data.commitmentCompletion.map((c) => {
+                  const value = `${MONTHLY_REPORT_COPY.completionLine(c.answered, c.asked)} (${formatRate(c.rate)})`;
+                  return (
+                    <div
+                      className="row"
+                      key={c.commitmentId}
+                      role="group"
+                      aria-label={`${c.commitmentName}, ${value}`}
+                    >
+                      <div className="row-main">
+                        <div className="row-name">{c.commitmentName}</div>
+                      </div>
+                      <span className="row-muted" aria-hidden="true">
+                        {value}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
 
-          <h2>{MONTHLY_REPORT_COPY.completionHeading}</h2>
-          {view.data.commitmentCompletion.length === 0 ? (
-            <p>{MONTHLY_REPORT_COPY.noCompletionData}</p>
-          ) : (
-            <ul>
-              {view.data.commitmentCompletion.map((c) => (
-                <li key={c.commitmentId}>
-                  {c.commitmentName}: {MONTHLY_REPORT_COPY.completionLine(c.answered, c.asked)} (
-                  {formatRate(c.rate)})
-                </li>
-              ))}
-            </ul>
-          )}
+          {/* Every account-wide measure, one row each, in one frame. This screen used to be
+              nine `h2` + `p` pairs stacked down the page, which put the name of a measure and
+              its number on separate lines nine times over and gave a reader nothing to scan
+              down. A report is read by running an eye along one edge, so the figures line up
+              on that edge. */}
+          <div className="card">
+            <Measure
+              name={MONTHLY_REPORT_COPY.returnHeading}
+              value={formatDays(view.data.medianDaysToReturn)}
+            />
+            <Measure
+              name={MONTHLY_REPORT_COPY.silenceHeading}
+              value={MONTHLY_REPORT_COPY.silenceCount(view.data.silenceEpisodeCount)}
+            />
+            {/* A sentence, not a figure, so it sits under its name rather than out at the
+                edge — the same shape Settings uses for a row's consequence line. */}
+            <Measure
+              name={MONTHLY_REPORT_COPY.refereeHeading}
+              note={
+                view.data.refereeStillActive
+                  ? MONTHLY_REPORT_COPY.refereeActive
+                  : MONTHLY_REPORT_COPY.refereeInactive
+              }
+            />
+            <Measure
+              name={MONTHLY_REPORT_COPY.answerRateHeading}
+              value={
+                view.data.askedTotal === 0
+                  ? MONTHLY_REPORT_COPY.noAnswerRateData
+                  : `${MONTHLY_REPORT_COPY.completionLine(view.data.answeredTotal, view.data.askedTotal)} (${formatRate(view.data.answerRate)})`
+              }
+            />
 
-          <h2>{MONTHLY_REPORT_COPY.silenceHeading}</h2>
-          <p>{MONTHLY_REPORT_COPY.silenceCount(view.data.silenceEpisodeCount)}</p>
+            <Penalties
+              incurred={penaltyFigure(
+                MONTHLY_REPORT_COPY.incurredLabel,
+                view.data.penaltiesIncurred,
+              )}
+              collected={penaltyFigure(
+                MONTHLY_REPORT_COPY.collectedLabel,
+                view.data.penaltiesCollected,
+              )}
+            />
 
-          <h2>{MONTHLY_REPORT_COPY.refereeHeading}</h2>
-          <p>
-            {view.data.refereeStillActive
-              ? MONTHLY_REPORT_COPY.refereeActive
-              : MONTHLY_REPORT_COPY.refereeInactive}
-          </p>
-
-          <h2>{MONTHLY_REPORT_COPY.answerRateHeading}</h2>
-          <p>
-            {view.data.askedTotal === 0
-              ? MONTHLY_REPORT_COPY.noAnswerRateData
-              : `${MONTHLY_REPORT_COPY.completionLine(view.data.answeredTotal, view.data.askedTotal)} (${formatRate(view.data.answerRate)})`}
-          </p>
-
-          <h2>{MONTHLY_REPORT_COPY.penaltiesHeading}</h2>
-          <p>
-            {MONTHLY_REPORT_COPY.incurredLabel}:{' '}
-            {view.data.penaltiesIncurred.count === 0
-              ? MONTHLY_REPORT_COPY.noPenalties
-              : MONTHLY_REPORT_COPY.penaltyLine(
-                  view.data.penaltiesIncurred.count,
-                  view.data.penaltiesIncurred.totalDong,
-                )}
-          </p>
-          <p>
-            {MONTHLY_REPORT_COPY.collectedLabel}:{' '}
-            {view.data.penaltiesCollected.count === 0
-              ? MONTHLY_REPORT_COPY.noPenalties
-              : MONTHLY_REPORT_COPY.penaltyLine(
-                  view.data.penaltiesCollected.count,
-                  view.data.penaltiesCollected.totalDong,
-                )}
-          </p>
-
-          <h2>{MONTHLY_REPORT_COPY.acknowledgeHeading}</h2>
-          <p>{formatDays(view.data.medianDaysToAcknowledge)}</p>
-
-          <h2>{MONTHLY_REPORT_COPY.appealsHeading}</h2>
-          <p>
-            {view.data.appealShare === null
-              ? MONTHLY_REPORT_COPY.noAppealsData
-              : `${MONTHLY_REPORT_COPY.appealShareLine(view.data.appealOutcomes)} (${formatRate(view.data.appealShare)})`}
-          </p>
+            <Measure
+              name={MONTHLY_REPORT_COPY.acknowledgeHeading}
+              value={formatDays(view.data.medianDaysToAcknowledge)}
+            />
+            <Measure
+              name={MONTHLY_REPORT_COPY.appealsHeading}
+              value={
+                view.data.appealShare === null
+                  ? MONTHLY_REPORT_COPY.noAppealsData
+                  : `${MONTHLY_REPORT_COPY.appealShareLine(view.data.appealOutcomes)} (${formatRate(view.data.appealShare)})`
+              }
+            />
+          </div>
         </>
       )}
     </section>

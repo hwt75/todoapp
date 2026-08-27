@@ -95,11 +95,13 @@ export function ChainsDetail({
   }, [commitmentId]);
 
   return (
-    <section>
-      <h1>{name}</h1>
-      <button type="button" onClick={onClose}>
-        Back to today
-      </button>
+    <section className="screen">
+      <header className="screen-head">
+        <h1>{name}</h1>
+        <button type="button" className="quiet back" onClick={onClose}>
+          Back to today
+        </button>
+      </header>
 
       {view.kind === 'loading' && <p>Working…</p>}
 
@@ -127,27 +129,31 @@ export function ChainsDetail({
             <p className="row-muted">No day has been judged for this yet.</p>
           )}
 
-          {view.days.map((d) => (
-            <div
-              className="row"
-              key={d.day}
-              role="group"
-              aria-label={`${d.day}, ${OUTCOME_PRESENTATION[d.outcome].spoken}`}
-            >
-              <div className="row-main">
-                <div className="row-name">{d.day}</div>
-              </div>
-              {/* Colour lives in the pill and nowhere else, the same rule the Ledger keeps —
-                  this list is structurally a history of failures and must not become a wall
-                  of red on the day it is most likely to be opened. */}
-              <span
-                className={`pill pill-${OUTCOME_PRESENTATION[d.outcome].family}`}
-                aria-hidden="true"
-              >
-                {OUTCOME_PRESENTATION[d.outcome].label}
-              </span>
+          {view.days.length > 0 && (
+            <div className="card">
+              {view.days.map((d) => (
+                <div
+                  className="row"
+                  key={d.day}
+                  role="group"
+                  aria-label={`${d.day}, ${OUTCOME_PRESENTATION[d.outcome].spoken}`}
+                >
+                  <div className="row-main">
+                    <div className="row-name">{d.day}</div>
+                  </div>
+                  {/* Colour lives in the pill and nowhere else, the same rule the Ledger keeps —
+                      this list is structurally a history of failures and must not become a wall
+                      of red on the day it is most likely to be opened. */}
+                  <span
+                    className={`pill pill-${OUTCOME_PRESENTATION[d.outcome].family}`}
+                    aria-hidden="true"
+                  >
+                    {OUTCOME_PRESENTATION[d.outcome].label}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </>
       )}
     </section>

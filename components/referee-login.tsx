@@ -48,40 +48,50 @@ export function RefereeLogin() {
 
   return (
     <main>
-      <section>
-        <h1>{REFEREE_LOGIN_COPY.title}</h1>
+      <section className="screen">
+        <header className="screen-head">
+          <h1>{REFEREE_LOGIN_COPY.title}</h1>
+        </header>
 
-        <input
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          placeholder="you@example.com"
-          value={email}
-          onChange={(event) => setEmail(event.target.value.trim())}
-        />
-        <input
-          type="password"
-          autoComplete="current-password"
-          placeholder="Password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
+        <div className="card card-pad stack">
+          <div>
+            <input
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value.trim())}
+            />
+            <input
+              type="password"
+              autoComplete="current-password"
+              placeholder="Password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </div>
 
-        <button
-          type="button"
-          className="action"
-          disabled={!canSubmit || stage.kind === 'submitting'}
-          aria-busy={stage.kind === 'submitting'}
-          onClick={() => void submit()}
-        >
-          {stage.kind === 'submitting' ? REFEREE_LOGIN_COPY.submitting : REFEREE_LOGIN_COPY.submit}
-        </button>
+          <div className="actions">
+            <button
+              type="button"
+              className="action"
+              disabled={!canSubmit || stage.kind === 'submitting'}
+              aria-busy={stage.kind === 'submitting'}
+              onClick={() => void submit()}
+            >
+              {stage.kind === 'submitting'
+                ? REFEREE_LOGIN_COPY.submitting
+                : REFEREE_LOGIN_COPY.submit}
+            </button>
+          </div>
 
-        {stage.kind === 'failed' && (
-          <p role="status">
-            <strong>{REFEREE_LOGIN_COPY.failed}</strong> {stage.reason}
-          </p>
-        )}
+          {stage.kind === 'failed' && (
+            <p role="status">
+              <strong>{REFEREE_LOGIN_COPY.failed}</strong> {stage.reason}
+            </p>
+          )}
+        </div>
       </section>
     </main>
   );

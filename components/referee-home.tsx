@@ -330,8 +330,10 @@ export function RefereeHome() {
 
   return (
     <main>
-      <section>
-        <h1>{REFEREE_HOME_COPY.title}</h1>
+      <section className="screen">
+        <header className="screen-head">
+          <h1>{REFEREE_HOME_COPY.title}</h1>
+        </header>
 
         {view.kind === 'loading' && <p>{REFEREE_HOME_COPY.loading}</p>}
 
@@ -376,36 +378,38 @@ export function RefereeHome() {
         {view.kind === 'ready' && view.appeals.length > 0 && (
           <section aria-label={REFEREE_HOME_COPY.appealsHeading}>
             <h2>{REFEREE_HOME_COPY.appealsHeading}</h2>
-            {view.appeals.map((appeal) => {
-              // `for_day` is a plain calendar date (`YYYY-MM-DD`), never a timestamptz —
-              // parsed as UTC midnight, formatDeadline's own Asia/Ho_Chi_Minh conversion
-              // only ever shifts it forward within the same calendar day, so this always
-              // lands on the date the row itself names. Same formatting convention as
-              // `components/referee-appeal-detail.tsx`'s own deadline, for consistency.
-              const day = formatDeadline(new Date(appeal.forDay));
-              const commitmentName = appeal.commitmentName ?? 'A commitment';
+            <div className="card">
+              {view.appeals.map((appeal) => {
+                // `for_day` is a plain calendar date (`YYYY-MM-DD`), never a timestamptz —
+                // parsed as UTC midnight, formatDeadline's own Asia/Ho_Chi_Minh conversion
+                // only ever shifts it forward within the same calendar day, so this always
+                // lands on the date the row itself names. Same formatting convention as
+                // `components/referee-appeal-detail.tsx`'s own deadline, for consistency.
+                const day = formatDeadline(new Date(appeal.forDay));
+                const commitmentName = appeal.commitmentName ?? 'A commitment';
 
-              return (
-                <div className="row" key={appeal.id}>
-                  <div className="row-main">
-                    <div className="row-name">{commitmentName}</div>
-                    {/* Not aria-hidden: the day is part of what identifies this row, not
+                return (
+                  <div className="row" key={appeal.id}>
+                    <div className="row-main">
+                      <div className="row-name">{commitmentName}</div>
+                      {/* Not aria-hidden: the day is part of what identifies this row, not
                         decoration — a screen-reader user needs it too. */}
-                    <div className="row-muted">{day}</div>
+                      <div className="row-muted">{day}</div>
+                    </div>
+                    <button
+                      type="button"
+                      // Every row's button otherwise shares the identical accessible name
+                      // ("Open"), which a screen-reader user cannot tell apart from any
+                      // other row's.
+                      aria-label={`Open appeal for ${commitmentName}, ${day}`}
+                      onClick={() => router.push(`/referee/appeals/${appeal.id}`)}
+                    >
+                      {REFEREE_HOME_COPY.openAppeal}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    // Every row's button otherwise shares the identical accessible name
-                    // ("Open"), which a screen-reader user cannot tell apart from any
-                    // other row's.
-                    aria-label={`Open appeal for ${commitmentName}, ${day}`}
-                    onClick={() => router.push(`/referee/appeals/${appeal.id}`)}
-                  >
-                    {REFEREE_HOME_COPY.openAppeal}
-                  </button>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </section>
         )}
 
@@ -416,70 +420,83 @@ export function RefereeHome() {
         {view.kind === 'ready' && view.owedPenalties.length > 0 && (
           <section aria-label={OWED_PENALTIES_COPY.heading}>
             <h2>{OWED_PENALTIES_COPY.heading}</h2>
-            {view.owedPenalties.map((penalty) => {
-              // formatOwedDay, not formatDeadline: an owed Penalty persists indefinitely
-              // (this story's own "never written off automatically"), so the year has to be
-              // part of the label — two rows more than a year apart with formatDeadline's
-              // own bare "Aug 18" would be indistinguishable.
-              const day = formatOwedDay(new Date(penalty.forDay));
-              const missed =
-                penalty.missedCommitments.length > 0
-                  ? penalty.missedCommitments.join(', ')
-                  : 'A commitment';
-              const rowMark = markStatus[penalty.id] ?? 'idle';
-              const rowCopy = copyStatus[penalty.id] ?? 'idle';
+            <div className="card">
+              {view.owedPenalties.map((penalty) => {
+                // formatOwedDay, not formatDeadline: an owed Penalty persists indefinitely
+                // (this story's own "never written off automatically"), so the year has to be
+                // part of the label — two rows more than a year apart with formatDeadline's
+                // own bare "Aug 18" would be indistinguishable.
+                const day = formatOwedDay(new Date(penalty.forDay));
+                const missed =
+                  penalty.missedCommitments.length > 0
+                    ? penalty.missedCommitments.join(', ')
+                    : 'A commitment';
+                const rowMark = markStatus[penalty.id] ?? 'idle';
+                const rowCopy = copyStatus[penalty.id] ?? 'idle';
 
-              return (
-                <div className="row" key={penalty.id}>
-                  <div className="row-main">
-                    <div className="row-name">
-                      {formatDong(penalty.amountDong)} — {missed}
-                    </div>
-                    {/* Not aria-hidden: the day is part of what identifies this row, not
+                return (
+                  <div className="row" key={penalty.id}>
+                    <div className="row-main">
+                      <div className="row-name">
+                        {formatDong(penalty.amountDong)} — {missed}
+                      </div>
+                      {/* Not aria-hidden: the day is part of what identifies this row, not
                         decoration — a screen-reader user needs it too. */}
-                    <div className="row-muted">{day}</div>
+                      <div className="row-muted">{day}</div>
+
+                      {/* What just happened to this row, under the row it happened to. These
+                          used to be direct children of the row itself, which put a sentence on
+                          the same baseline as two buttons and shoved them out of line the
+                          moment either one spoke. */}
+                      {rowCopy === 'copied' && <p role="status">{OWED_PENALTIES_COPY.copied}</p>}
+                      {rowCopy === 'failed' && (
+                        <p role="status">{OWED_PENALTIES_COPY.copyFailed}</p>
+                      )}
+                      {rowMark === 'failed' && (
+                        <p role="status">
+                          <strong>{OWED_PENALTIES_COPY.markFailed}</strong> {markErrors[penalty.id]}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="actions">
+                      <button
+                        type="button"
+                        // The day alone is not enough to distinguish rows — this list is not
+                        // scoped to one doer account (RLS grants the referee every account's
+                        // own Penalties, Story 4.5), so two different accounts can each owe a
+                        // same-day Penalty. Commitment name(s) plus day, mirroring how the
+                        // appeals list above disambiguates its own "Open" buttons.
+                        aria-label={`Copy collection message for ${missed}, ${day}`}
+                        onClick={() => void copyMessage(penalty)}
+                      >
+                        {OWED_PENALTIES_COPY.copy}
+                      </button>
+
+                      <button
+                        type="button"
+                        aria-label={`Mark collected for ${missed}, ${day}`}
+                        disabled={rowMark === 'busy'}
+                        aria-busy={rowMark === 'busy'}
+                        onClick={() => void markCollected(penalty.id)}
+                      >
+                        {rowMark === 'busy'
+                          ? OWED_PENALTIES_COPY.marking
+                          : OWED_PENALTIES_COPY.markCollected}
+                      </button>
+                    </div>
                   </div>
-
-                  <button
-                    type="button"
-                    // The day alone is not enough to distinguish rows — this list is not
-                    // scoped to one doer account (RLS grants the referee every account's own
-                    // Penalties, Story 4.5), so two different accounts can each owe a
-                    // same-day Penalty. Commitment name(s) plus day, mirroring how the
-                    // appeals list above disambiguates its own "Open" buttons.
-                    aria-label={`Copy collection message for ${missed}, ${day}`}
-                    onClick={() => void copyMessage(penalty)}
-                  >
-                    {OWED_PENALTIES_COPY.copy}
-                  </button>
-                  {rowCopy === 'copied' && <p role="status">{OWED_PENALTIES_COPY.copied}</p>}
-                  {rowCopy === 'failed' && <p role="status">{OWED_PENALTIES_COPY.copyFailed}</p>}
-
-                  <button
-                    type="button"
-                    aria-label={`Mark collected for ${missed}, ${day}`}
-                    disabled={rowMark === 'busy'}
-                    aria-busy={rowMark === 'busy'}
-                    onClick={() => void markCollected(penalty.id)}
-                  >
-                    {rowMark === 'busy'
-                      ? OWED_PENALTIES_COPY.marking
-                      : OWED_PENALTIES_COPY.markCollected}
-                  </button>
-                  {rowMark === 'failed' && (
-                    <p role="status">
-                      <strong>{OWED_PENALTIES_COPY.markFailed}</strong> {markErrors[penalty.id]}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </section>
         )}
 
-        <button type="button" onClick={() => void signOut()}>
-          {REFEREE_HOME_COPY.signOut}
-        </button>
+        <div className="actions">
+          <button type="button" onClick={() => void signOut()}>
+            {REFEREE_HOME_COPY.signOut}
+          </button>
+        </div>
       </section>
     </main>
   );

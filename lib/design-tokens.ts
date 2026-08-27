@@ -114,6 +114,6 @@ export function contrastRatio(foreground: string, background: string): number {
  * stylesheet.
  */
 export const METADATA_COLORS = {
-  surfaceBase: '#F1EFE8',
+  surfaceBase: '#FFFFFF',
   surfaceBaseDark: '#1C1C1E',
 } as const;

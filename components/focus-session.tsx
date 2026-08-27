@@ -348,11 +348,13 @@ export function FocusSession({
   const clockAvailable = view.kind === 'ready' || view.kind === 'unreadable';
 
   return (
-    <section>
-      <h1>{name}</h1>
-      <button type="button" onClick={onClose}>
-        Back to today
-      </button>
+    <section className="screen">
+      <header className="screen-head">
+        <h1>{name}</h1>
+        <button type="button" className="quiet back" onClick={onClose}>
+          Back to today
+        </button>
+      </header>
 
       {view.kind === 'loading' && <p>Working…</p>}
 
@@ -366,56 +368,64 @@ export function FocusSession({
 
       {clockAvailable && (
         <>
-          {/* The sentence stands whether or not anything is running: it is the reason he presses
-              start, so it must be readable before he does. */}
-          <p className="row-muted">{FOCUS_COPY.unwatched}</p>
+          <div className="card card-pad stack">
+            {/* The sentence stands whether or not anything is running: it is the reason he presses
+                start, so it must be readable before he does. */}
+            <p className="row-muted">{FOCUS_COPY.unwatched}</p>
 
-          {mine ? (
-            <>
-              {/* The second and last claimant of the `figure` role in the whole product. The debt
-                  total spent the first and has been holding this one open since 2.6 — and, like
-                  it, the element carries the sentence and hides the bare digits, so a reader is
-                  told what the number is rather than handed one. */}
-              <p
-                className="focus-figure"
-                role="timer"
-                aria-label={elapsedLabel(elapsedSeconds(mine, now))}
-              >
-                <span aria-hidden="true">{formatElapsed(elapsedSeconds(mine, now))}</span>
-              </p>
+            {mine ? (
+              <>
+                {/* The second and last claimant of the `figure` role in the whole product. The debt
+                    total spent the first and has been holding this one open since 2.6 — and, like
+                    it, the element carries the sentence and hides the bare digits, so a reader is
+                    told what the number is rather than handed one. */}
+                <p
+                  className="focus-figure"
+                  role="timer"
+                  aria-label={elapsedLabel(elapsedSeconds(mine, now))}
+                >
+                  <span aria-hidden="true">{formatElapsed(elapsedSeconds(mine, now))}</span>
+                </p>
 
-              {/* The only filled button on this screen. Stopping is the only thing here that
-                  deposits anything, and the word says so. */}
-              <button
-                type="button"
-                className="action"
-                disabled={sending.kind === 'sending'}
-                aria-busy={sending.kind === 'sending'}
-                onClick={() => void stop(mine)}
-              >
-                {sending.kind === 'sending' ? FOCUS_COPY.stopping : FOCUS_COPY.stop}
-              </button>
-            </>
-          ) : (
-            <button type="button" onClick={start}>
-              {FOCUS_COPY.start}
-            </button>
-          )}
+                {/* The only filled button on this screen. Stopping is the only thing here that
+                    deposits anything, and the word says so. */}
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="action"
+                    disabled={sending.kind === 'sending'}
+                    aria-busy={sending.kind === 'sending'}
+                    onClick={() => void stop(mine)}
+                  >
+                    {sending.kind === 'sending' ? FOCUS_COPY.stopping : FOCUS_COPY.stop}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="actions">
+                <button type="button" onClick={start}>
+                  {FOCUS_COPY.start}
+                </button>
+              </div>
+            )}
+          </div>
 
           {total !== null && percent !== null && (
-            <div className="row" role="group" aria-label={`${FOCUS_COPY.banked}, ${total}`}>
-              <div className="row-main">
-                <div className="row-name">{FOCUS_COPY.banked}</div>
-                {/* aria-hidden: the row's own aria-label above already states this fraction as
-                    text. A bar that spoke too would be a second announcement of the same
-                    number, not a second piece of information. */}
-                <div className="quota-bar" aria-hidden="true">
-                  <div className="quota-bar-fill" style={{ width: `${percent}%` }} />
+            <div className="card">
+              <div className="row" role="group" aria-label={`${FOCUS_COPY.banked}, ${total}`}>
+                <div className="row-main">
+                  <div className="row-name">{FOCUS_COPY.banked}</div>
+                  {/* aria-hidden: the row's own aria-label above already states this fraction as
+                      text. A bar that spoke too would be a second announcement of the same
+                      number, not a second piece of information. */}
+                  <div className="quota-bar" aria-hidden="true">
+                    <div className="quota-bar-fill" style={{ width: `${percent}%` }} />
+                  </div>
                 </div>
+                <span className="row-muted" aria-hidden="true">
+                  {total}
+                </span>
               </div>
-              <span className="row-muted" aria-hidden="true">
-                {total}
-              </span>
             </div>
           )}
         </>

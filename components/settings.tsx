@@ -271,11 +271,13 @@ export function Settings({
   const permissionActionable = permissionRow.actionable && installState === 'installed';
 
   return (
-    <section>
-      <h1>Settings</h1>
-      <button type="button" onClick={onClose}>
-        Back to today
-      </button>
+    <section className="screen">
+      <header className="screen-head">
+        <h1>Settings</h1>
+        <button type="button" className="quiet back" onClick={onClose}>
+          Back to today
+        </button>
+      </header>
 
       {view.kind === 'loading' && <p>Working…</p>}
 
@@ -285,148 +287,153 @@ export function Settings({
         </p>
       )}
 
-      {view.kind === 'ready' && (
-        <div className="row" role="group" aria-label={`Morning hour, ${hourLabel(view.hour)}`}>
-          <div className="row-main">
-            <label className="row-name" htmlFor="morning-hour">
-              Morning hour
-            </label>
-            <div className="row-muted">
-              When yesterday is asked about. The reminders and the 48-hour deadline follow it.
+      {/* One hairline frame around every setting. The rows inside it are the same untinted,
+          hairline-separated rows the rest of the product uses. */}
+      <div className="card">
+        {view.kind === 'ready' && (
+          <div className="row" role="group" aria-label={`Morning hour, ${hourLabel(view.hour)}`}>
+            <div className="row-main">
+              <label className="row-name" htmlFor="morning-hour">
+                Morning hour
+              </label>
+              <div className="row-muted">
+                When yesterday is asked about. The reminders and the 48-hour deadline follow it.
+              </div>
             </div>
+            <select
+              id="morning-hour"
+              value={view.hour}
+              disabled={saving.kind === 'saving'}
+              onChange={(event) => void setHour(Number(event.target.value))}
+            >
+              {HOURS.map((hour) => (
+                <option key={hour} value={hour}>
+                  {hourLabel(hour)}
+                </option>
+              ))}
+            </select>
+            {/* Inside the row it is about, rather than loose beneath the list. The field keeps
+              the hour he chose — this says only that it did not stick. */}
+            {saving.kind === 'failed' && (
+              <p role="status">
+                <strong>Not saved.</strong> {saving.reason}
+              </p>
+            )}
           </div>
-          <select
-            id="morning-hour"
-            value={view.hour}
-            disabled={saving.kind === 'saving'}
-            onChange={(event) => void setHour(Number(event.target.value))}
-          >
-            {HOURS.map((hour) => (
-              <option key={hour} value={hour}>
-                {hourLabel(hour)}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+        )}
 
-      {saving.kind === 'failed' && (
-        <p>
-          <strong>Not saved.</strong> {saving.reason}
-        </p>
-      )}
-
-      {/* Read-only (Story 5.1): spending one happens from the Day summary or a Ledger row,
+        {/* Read-only (Story 5.1): spending one happens from the Day summary or a Ledger row,
           never from here — this row only states the count, the same one source
           (grace_allowance_remaining) every other surface that shows it reads (AD-8). */}
-      <div className="row" role="group" aria-label="Grace Days">
-        <div className="row-main">
-          <div className="row-name">Grace Days</div>
-          <div className="row-muted">
-            A limited, non-carrying monthly allowance that voids a Failed Day&rsquo;s Penalty.
+        <div className="row" role="group" aria-label="Grace Days">
+          <div className="row-main">
+            <div className="row-name">Grace Days</div>
+            <div className="row-muted">
+              A limited, non-carrying monthly allowance that voids a Failed Day&rsquo;s Penalty.
+            </div>
+            {grace.kind === 'failed' && (
+              <p role="status">
+                <strong>Failed.</strong> {grace.reason}
+              </p>
+            )}
           </div>
-          {grace.kind === 'failed' && (
-            <p role="status">
-              <strong>Failed.</strong> {grace.reason}
-            </p>
+          {grace.kind !== 'failed' && (
+            <span className="row-muted">
+              {grace.kind === 'loading' ? 'Working…' : formatGraceAllowance(grace.remaining)}
+            </span>
           )}
         </div>
-        {grace.kind !== 'failed' && (
-          <span className="row-muted">
-            {grace.kind === 'loading' ? 'Working…' : formatGraceAllowance(grace.remaining)}
-          </span>
-        )}
-      </div>
 
-      {/* Story 5.4 (FR-24): the monthly report's only entry point, mirroring
+        {/* Story 5.4 (FR-24): the monthly report's only entry point, mirroring
           `onOpenLedger`/`onOpenSettings`'s own callback shape — a new screen `app/page.tsx`
           renders in its existing ternary chain, never a route. */}
-      <div className="row" role="group" aria-label="Monthly report">
-        <div className="row-main">
-          <div className="row-name">Monthly report</div>
-          <div className="row-muted">
-            Every measure, for the most recently completed month — whether the whole arrangement is
-            still working.
-          </div>
-        </div>
-        <button type="button" onClick={onOpenMonthlyReport}>
-          Open
-        </button>
-      </div>
-
-      {/* Install state leads the two read-only rows. Without home-screen installation there is no
-          push at all, and without push there is no product. */}
-      <div className="row" role="group" aria-label={`Home screen, ${installRow.state}`}>
-        <div className="row-main">
-          <div className="row-name">Home screen</div>
-          <div className="row-muted">{installRow.consequence}</div>
-        </div>
-        <span className="row-muted">{installRow.state}</span>
-      </div>
-
-      <div className="row" role="group" aria-label={`Notifications, ${permissionRow.state}`}>
-        <div className="row-main">
-          <div className="row-name">Notifications</div>
-          <div className="row-muted">{permissionRow.consequence}</div>
-        </div>
-        {permissionActionable ? (
-          <button type="button" onClick={() => void turnOnNotifications()} disabled={subscribing}>
-            {subscribing ? 'Working…' : 'Turn on notifications'}
-          </button>
-        ) : (
-          <span className="row-muted">{permissionRow.state}</span>
-        )}
-      </div>
-
-      {subscribeError && (
-        <p>
-          <strong>Refused.</strong> {subscribeError}
-        </p>
-      )}
-
-      <div className="row" role="group" aria-label={REFEREE_PAIRING_COPY.rowName}>
-        <div className="row-main">
-          <div className="row-name">{REFEREE_PAIRING_COPY.rowName}</div>
-          <div className="row-muted">{REFEREE_PAIRING_COPY.consequence}</div>
-
-          {pairing.kind !== 'paired' && (
-            <>
-              <input
-                type="email"
-                inputMode="email"
-                autoComplete="off"
-                placeholder={REFEREE_PAIRING_COPY.emailPlaceholder}
-                value={refereeEmail}
-                disabled={pairing.kind === 'pairing'}
-                onChange={(event) => setRefereeEmail(event.target.value.trim())}
-              />
-              <button
-                type="button"
-                onClick={() => void pairReferee()}
-                disabled={pairing.kind === 'pairing' || !isPairableEmail(refereeEmail)}
-              >
-                {pairing.kind === 'pairing'
-                  ? REFEREE_PAIRING_COPY.pairing
-                  : REFEREE_PAIRING_COPY.pair}
-              </button>
-            </>
-          )}
-
-          {pairing.kind === 'failed' && (
-            <p role="status">
-              <strong>{REFEREE_PAIRING_COPY.failed}</strong> {pairing.reason}
-            </p>
-          )}
-
-          {pairing.kind === 'paired' && (
-            <div role="status">
-              <p>{REFEREE_PAIRING_COPY.paired(pairing.email)}</p>
-              <p>
-                <strong>{REFEREE_PAIRING_COPY.passwordLabel}</strong> {pairing.password}
-              </p>
-              <p className="row-muted">{REFEREE_PAIRING_COPY.shownOnce}</p>
+        <div className="row" role="group" aria-label="Monthly report">
+          <div className="row-main">
+            <div className="row-name">Monthly report</div>
+            <div className="row-muted">
+              Every measure, for the most recently completed month — whether the whole arrangement
+              is still working.
             </div>
+          </div>
+          <button type="button" onClick={onOpenMonthlyReport}>
+            Open
+          </button>
+        </div>
+
+        {/* Install state leads the two read-only rows. Without home-screen installation there is no
+          push at all, and without push there is no product. */}
+        <div className="row" role="group" aria-label={`Home screen, ${installRow.state}`}>
+          <div className="row-main">
+            <div className="row-name">Home screen</div>
+            <div className="row-muted">{installRow.consequence}</div>
+          </div>
+          <span className="row-muted">{installRow.state}</span>
+        </div>
+
+        <div className="row" role="group" aria-label={`Notifications, ${permissionRow.state}`}>
+          <div className="row-main">
+            <div className="row-name">Notifications</div>
+            <div className="row-muted">{permissionRow.consequence}</div>
+            {/* Inside the row that asked for the permission, rather than loose beneath the list. */}
+            {subscribeError && (
+              <p role="status">
+                <strong>Refused.</strong> {subscribeError}
+              </p>
+            )}
+          </div>
+          {permissionActionable ? (
+            <button type="button" onClick={() => void turnOnNotifications()} disabled={subscribing}>
+              {subscribing ? 'Working…' : 'Turn on notifications'}
+            </button>
+          ) : (
+            <span className="row-muted">{permissionRow.state}</span>
           )}
+        </div>
+
+        <div className="row" role="group" aria-label={REFEREE_PAIRING_COPY.rowName}>
+          <div className="row-main">
+            <div className="row-name">{REFEREE_PAIRING_COPY.rowName}</div>
+            <div className="row-muted">{REFEREE_PAIRING_COPY.consequence}</div>
+
+            {pairing.kind !== 'paired' && (
+              <div className="stack">
+                <input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="off"
+                  placeholder={REFEREE_PAIRING_COPY.emailPlaceholder}
+                  value={refereeEmail}
+                  disabled={pairing.kind === 'pairing'}
+                  onChange={(event) => setRefereeEmail(event.target.value.trim())}
+                />
+                <button
+                  type="button"
+                  onClick={() => void pairReferee()}
+                  disabled={pairing.kind === 'pairing' || !isPairableEmail(refereeEmail)}
+                >
+                  {pairing.kind === 'pairing'
+                    ? REFEREE_PAIRING_COPY.pairing
+                    : REFEREE_PAIRING_COPY.pair}
+                </button>
+              </div>
+            )}
+
+            {pairing.kind === 'failed' && (
+              <p role="status">
+                <strong>{REFEREE_PAIRING_COPY.failed}</strong> {pairing.reason}
+              </p>
+            )}
+
+            {pairing.kind === 'paired' && (
+              <div role="status">
+                <p>{REFEREE_PAIRING_COPY.paired(pairing.email)}</p>
+                <p>
+                  <strong>{REFEREE_PAIRING_COPY.passwordLabel}</strong> {pairing.password}
+                </p>
+                <p className="row-muted">{REFEREE_PAIRING_COPY.shownOnce}</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </section>
