@@ -31,6 +31,9 @@ let invokeResult: unknown = { data: null, error: null };
 // What `grace_allowance_remaining` comes back with (Story 5.1). Set per test; the default
 // leaves plenty of room so no test is coupled to the exact allowance unless it says so.
 let graceResult: unknown = { data: { remaining: 2 }, error: null };
+// What the outstanding-invitation read comes back with. Default is "none outstanding", which
+// is the state every pre-existing test in this file was written against.
+let inviteRowResult: unknown = { data: null, error: null };
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
@@ -38,6 +41,13 @@ vi.mock('@/lib/supabase/client', () => ({
       select: () => ({
         maybeSingle: () =>
           Promise.resolve(table === 'grace_allowance_remaining' ? graceResult : profileResult),
+        // The outstanding-invitation read is the only one that filters before
+        // `maybeSingle` — two `.is(...)` calls, for `accepted_at` and `revoked_at`.
+        is: () => ({
+          is: () => ({
+            maybeSingle: () => Promise.resolve(inviteRowResult),
+          }),
+        }),
       }),
       update: (payload: unknown) => {
         update(payload);
@@ -67,6 +77,7 @@ beforeEach(() => {
   invokeResult = { data: null, error: null };
   profileResult = { data: { morning_hour: 7 }, error: null };
   graceResult = { data: { remaining: 2 }, error: null };
+  inviteRowResult = { data: null, error: null };
 
   subscribe.mockResolvedValue({
     toJSON: () => ({
@@ -400,6 +411,147 @@ describe('the settings surface', () => {
     ).toBeInTheDocument();
     // Refused, so the form is still here for another attempt — not swapped for a success state.
     expect(screen.getByPlaceholderText('referee@example.com')).toBeInTheDocument();
+  });
+
+  it('mints an invite link, shows it once, and never renders it as a clickable anchor', async () => {
+    invokeResult = {
+      data: {
+        email: 'ref@example.com',
+        token: 'tok-abc',
+        expiresAt: '2026-08-31T03:00:00.000Z',
+      },
+      error: null,
+    };
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
+    await screen.findByLabelText('Morning hour');
+
+    expect(screen.getByRole('button', { name: 'Create invite link' })).toBeDisabled();
+
+    await userEvent.type(screen.getByPlaceholderText('referee@example.com'), 'ref@example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Create invite link' }));
+
+    expect(invoke).toHaveBeenCalledWith('invite-referee', {
+      body: { email: 'ref@example.com' },
+    });
+
+    expect(await screen.findByText('Invitation for ref@example.com.')).toBeInTheDocument();
+    // Built from the browser's own origin, not from anything the server sent.
+    expect(
+      screen.getByText(`${window.location.origin}/referee/signup?token=tok-abc`),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/never emailed/)).toBeInTheDocument();
+
+    // The whole point of the row: a bearer link the doer sends on, not one he opens. An
+    // anchor here would make the doer the most likely person to spend the invitation.
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+
+    // Nothing left to submit a second time, exactly as pairing does.
+    expect(screen.queryByPlaceholderText('referee@example.com')).not.toBeInTheDocument();
+  });
+
+  it('never shows a password when the invite path was taken — that is the point of it', async () => {
+    invokeResult = {
+      data: {
+        email: 'ref@example.com',
+        token: 'tok-abc',
+        expiresAt: '2026-08-31T03:00:00.000Z',
+      },
+      error: null,
+    };
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
+    await screen.findByLabelText('Morning hour');
+
+    await userEvent.type(screen.getByPlaceholderText('referee@example.com'), 'ref@example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Create invite link' }));
+    await screen.findByText('Invitation for ref@example.com.');
+
+    expect(screen.queryByText('One-time password:')).not.toBeInTheDocument();
+  });
+
+  it('says an invitation is already outstanding, read on mount rather than remembered', async () => {
+    inviteRowResult = {
+      data: { email: 'ref@example.com', expires_at: '2026-08-31T03:00:00.000Z' },
+      error: null,
+    };
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
+
+    expect(
+      await screen.findByText(/An invitation for ref@example.com is outstanding/),
+    ).toBeInTheDocument();
+    // Said as a warning, not a lock: minting again is allowed and replaces it.
+    expect(screen.getByRole('button', { name: 'Create invite link' })).toBeInTheDocument();
+  });
+
+  it('surfaces the invite refusal verbatim and leaves the form to try again', async () => {
+    invokeResult = {
+      data: null,
+      error: { message: 'Only the live doer account may invite a referee.' },
+    };
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
+    await screen.findByLabelText('Morning hour');
+
+    await userEvent.type(screen.getByPlaceholderText('referee@example.com'), 'ref@example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Create invite link' }));
+
+    expect(
+      await screen.findByText('Only the live doer account may invite a referee.'),
+    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('referee@example.com')).toBeInTheDocument();
+  });
+
+  it('refuses a reply that carries no token rather than rendering a broken link', async () => {
+    // The shape `isMintedInvite` exists to reject: a 200 with a field missing. Rendering it
+    // would produce a link ending in `token=` that fails in the referee's hands, after the
+    // doer has already sent it.
+    invokeResult = {
+      data: { email: 'ref@example.com', expiresAt: '2026-08-31T03:00:00.000Z' },
+      error: null,
+    };
+    render(
+      <Settings
+        ownerId="u1"
+        installState="installed"
+        onClose={vi.fn()}
+        onOpenMonthlyReport={vi.fn()}
+      />,
+    );
+    await screen.findByLabelText('Morning hour');
+
+    await userEvent.type(screen.getByPlaceholderText('referee@example.com'), 'ref@example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Create invite link' }));
+
+    expect(
+      await screen.findByText('The server did not return an invite link.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/referee\/signup/)).not.toBeInTheDocument();
   });
 
   it('subscribes this device when permission is granted from here', async () => {

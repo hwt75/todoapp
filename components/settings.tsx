@@ -16,6 +16,7 @@ import {
   isPairedReferee,
   refereeFunctionErrorMessage,
 } from '@/lib/referee';
+import { REFEREE_INVITE_COPY, inviteLink, isMintedInvite } from '@/lib/referee-invite';
 import { formatGraceAllowance } from '@/lib/grace';
 import { createClient } from '@/lib/supabase/client';
 
@@ -30,6 +31,27 @@ type Pairing =
   | { kind: 'idle' }
   | { kind: 'pairing' }
   | { kind: 'paired'; email: string; password: string }
+  | { kind: 'failed'; reason: string };
+
+/** Minting an invitation, and the link it produced. `minted` carries the link already built
+ *  rather than the raw token: `inviteLink` needs an origin, `window` is the only place that
+ *  answer lives, and reading it once at the moment of success beats re-deriving it on every
+ *  render of a value that cannot change. */
+type Invite =
+  | { kind: 'idle' }
+  | { kind: 'inviting' }
+  | { kind: 'minted'; email: string; link: string; expiresAt: string }
+  | { kind: 'failed'; reason: string };
+
+/** The invitation already outstanding when this screen opens. Read on mount, because
+ *  `Invite` above only ever knows about a link minted in this session — without this, a
+ *  reload would make a live link look like one that was never created, and the doer's fix for
+ *  "did I already send that?" would be to mint another and quietly revoke the one already in
+ *  someone's hands. Four states rather than a nullable row, for `GraceView`'s own reason. */
+type Outstanding =
+  | { kind: 'loading' }
+  | { kind: 'none' }
+  | { kind: 'one'; email: string; expiresAt: string }
   | { kind: 'failed'; reason: string };
 
 /** Story 5.1. `'loading'` renders as "Working…"; `'failed'` surfaces the read's own reason
@@ -81,6 +103,9 @@ export function Settings({
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
   const [refereeEmail, setRefereeEmail] = useState('');
   const [pairing, setPairing] = useState<Pairing>({ kind: 'idle' });
+  const [invite, setInvite] = useState<Invite>({ kind: 'idle' });
+  const [outstanding, setOutstanding] = useState<Outstanding>({ kind: 'loading' });
+  const [copied, setCopied] = useState(false);
   const [grace, setGrace] = useState<GraceView>({ kind: 'loading' });
   // Shared by `setHour` and `turnOnNotifications`, not only `load()`'s own effect: both fire a
   // request from a click and can still be in flight when `onClose` unmounts this screen.
@@ -232,6 +257,54 @@ export function Settings({
     }
   }
 
+  // A third independent read, on the same terms as the grace one above: its failure is
+  // surfaced in its own row and never blocks the hour or the notification state. Scoped by
+  // nothing in the query itself — `referee_invite: read own` is what limits this to rows this
+  // account minted, which is why there is no `.eq('created_by', ...)` here to drift out of
+  // step with the policy that actually decides (AD-1).
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOutstandingInvite() {
+      try {
+        const { data, error } = await createClient()
+          .from('referee_invite')
+          .select('email,expires_at')
+          .is('accepted_at', null)
+          .is('revoked_at', null)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        if (error) {
+          setOutstanding({ kind: 'failed', reason: error.message });
+          return;
+        }
+
+        setOutstanding(
+          data
+            ? {
+                kind: 'one',
+                email: data.email as string,
+                expiresAt: data.expires_at as string,
+              }
+            : { kind: 'none' },
+        );
+      } catch (cause) {
+        if (cancelled) return;
+        setOutstanding({
+          kind: 'failed',
+          reason: cause instanceof Error ? cause.message : String(cause),
+        });
+      }
+    }
+
+    void loadOutstandingInvite();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   /**
    * Pairing (Story 4.5). One call to the `pair-referee` Edge Function — the one place in
    * this codebase a service-role client may live — and nothing decided here: eligibility
@@ -262,6 +335,61 @@ export function Settings({
     }
 
     setPairing({ kind: 'paired', email: data.email, password: data.password });
+  }
+
+  /**
+   * Minting an invitation (this story). The same one call `pairReferee` makes, to a function
+   * that repeats every one of `pair-referee`'s guards — live doer, not your own address, no
+   * referee yet — because the slot it opens is the same unrepeatable one.
+   *
+   * The link is assembled here rather than server-side: the function knows the token, but
+   * only the browser knows which origin the doer is actually on, and a link built from a
+   * configured base URL is the kind that keeps working in production and silently points at
+   * the wrong host from a preview deployment.
+   */
+  async function inviteReferee() {
+    if (!isPairableEmail(refereeEmail)) return;
+
+    setInvite({ kind: 'inviting' });
+    setCopied(false);
+
+    const { data, error } = await createClient().functions.invoke('invite-referee', {
+      body: { email: refereeEmail },
+    });
+
+    if (error) {
+      setInvite({ kind: 'failed', reason: await refereeFunctionErrorMessage(error) });
+      return;
+    }
+
+    if (!isMintedInvite(data)) {
+      setInvite({ kind: 'failed', reason: REFEREE_INVITE_COPY.noLink });
+      return;
+    }
+
+    setInvite({
+      kind: 'minted',
+      email: data.email,
+      link: inviteLink(window.location.origin, data.token),
+      expiresAt: data.expiresAt,
+    });
+
+    // Kept in step with what was just minted rather than re-read: `invite-referee` revoked
+    // whatever was outstanding before inserting this one, so the row this screen loaded on
+    // mount is now stale in a way only this component knows about.
+    setOutstanding({ kind: 'one', email: data.email, expiresAt: data.expiresAt });
+  }
+
+  /** Best-effort. The Clipboard API is unavailable on an insecure origin and can be refused
+   *  outright by the browser, and neither case is worth an error state — the link is on screen
+   *  and selectable either way, which is the actual fallback. */
+  async function copyInviteLink(link: string) {
+    try {
+      await navigator.clipboard?.writeText(link);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
   }
 
   const permissionRow = PERMISSION_ROWS[permission];
@@ -395,7 +523,22 @@ export function Settings({
             <div className="row-name">{REFEREE_PAIRING_COPY.rowName}</div>
             <div className="row-muted">{REFEREE_PAIRING_COPY.consequence}</div>
 
-            {pairing.kind !== 'paired' && (
+            {/* An invitation already in someone's hands, from a previous visit to this
+                screen. Said before the form rather than after it, because it changes what
+                pressing either button means: both mint or pair over the top of it. */}
+            {outstanding.kind === 'one' && invite.kind !== 'minted' && (
+              <p role="status">
+                {REFEREE_INVITE_COPY.outstanding(outstanding.email, outstanding.expiresAt)}
+              </p>
+            )}
+
+            {outstanding.kind === 'failed' && (
+              <p role="status">
+                <strong>{REFEREE_INVITE_COPY.notReadable}</strong> {outstanding.reason}
+              </p>
+            )}
+
+            {pairing.kind !== 'paired' && invite.kind !== 'minted' && (
               <div className="stack">
                 <input
                   type="email"
@@ -403,18 +546,71 @@ export function Settings({
                   autoComplete="off"
                   placeholder={REFEREE_PAIRING_COPY.emailPlaceholder}
                   value={refereeEmail}
-                  disabled={pairing.kind === 'pairing'}
+                  disabled={pairing.kind === 'pairing' || invite.kind === 'inviting'}
                   onChange={(event) => setRefereeEmail(event.target.value.trim())}
                 />
-                <button
-                  type="button"
-                  onClick={() => void pairReferee()}
-                  disabled={pairing.kind === 'pairing' || !isPairableEmail(refereeEmail)}
-                >
-                  {pairing.kind === 'pairing'
-                    ? REFEREE_PAIRING_COPY.pairing
-                    : REFEREE_PAIRING_COPY.pair}
-                </button>
+
+                {/* Two ways in, and the difference between them is a real decision rather
+                    than a preference, so it is stated next to the buttons instead of being
+                    left to the labels. */}
+                <p className="row-muted">{REFEREE_INVITE_COPY.choice}</p>
+
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="action"
+                    onClick={() => void inviteReferee()}
+                    disabled={
+                      invite.kind === 'inviting' ||
+                      pairing.kind === 'pairing' ||
+                      !isPairableEmail(refereeEmail)
+                    }
+                    aria-busy={invite.kind === 'inviting'}
+                  >
+                    {invite.kind === 'inviting'
+                      ? REFEREE_INVITE_COPY.inviting
+                      : REFEREE_INVITE_COPY.invite}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void pairReferee()}
+                    disabled={
+                      pairing.kind === 'pairing' ||
+                      invite.kind === 'inviting' ||
+                      !isPairableEmail(refereeEmail)
+                    }
+                  >
+                    {pairing.kind === 'pairing'
+                      ? REFEREE_PAIRING_COPY.pairing
+                      : REFEREE_PAIRING_COPY.pair}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {invite.kind === 'failed' && (
+              <p role="status">
+                <strong>{REFEREE_INVITE_COPY.failed}</strong> {invite.reason}
+              </p>
+            )}
+
+            {invite.kind === 'minted' && (
+              <div role="status" className="stack">
+                <p>{REFEREE_INVITE_COPY.minted(invite.email)}</p>
+                <p>
+                  <strong>{REFEREE_INVITE_COPY.linkLabel}</strong>{' '}
+                  {/* Rendered as text, not an anchor. This is a link the doer sends to
+                      someone else; making it clickable invites him to open it himself, and
+                      the first person to open it is the one who becomes the referee. */}
+                  <code>{invite.link}</code>
+                </p>
+                <p className="row-muted">{REFEREE_INVITE_COPY.expiresAt(invite.expiresAt)}</p>
+                <p className="row-muted">{REFEREE_INVITE_COPY.shownOnce}</p>
+                <div className="actions">
+                  <button type="button" onClick={() => void copyInviteLink(invite.link)}>
+                    {copied ? REFEREE_INVITE_COPY.copied : REFEREE_INVITE_COPY.copy}
+                  </button>
+                </div>
               </div>
             )}
 
