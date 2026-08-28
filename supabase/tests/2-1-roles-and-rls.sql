@@ -31,7 +31,7 @@ begin;
 -- The environment's part, made explicit rather than assumed. Rolled back with everything else.
 grant select on table public.profile, public.commitment, public.declaration,
                    public.settlement, public.settlement_commitment,
-                   public.appeal, public.appeal_evidence
+                   public.appeal, public.evidence
   to authenticated;
 
 -- Steps 5c/5d are the first things in this file that need a genuinely *successful* client
@@ -42,7 +42,7 @@ grant select on table public.profile, public.commitment, public.declaration,
 -- SELECT above -- to give `appeal: file own`'s policy, and `declaration_derive_day()`'s
 -- own `filed_by` guard (5d), something real to be tested through, never widened beyond
 -- the tables this file's own steps need it for.
-grant insert on table public.appeal, public.appeal_evidence, public.declaration to authenticated;
+grant insert on table public.appeal, public.evidence, public.declaration to authenticated;
 
 do $$
 declare
@@ -257,7 +257,7 @@ begin
     '`declaration: read own` exactly like its own; a different account sees nothing.';
 
   -- -------------------------------------------------------------------------------
-  -- 5c. `appeal`/`appeal_evidence` (Story 4.4): read-own and file-own RLS, and a
+  -- 5c. `appeal`/`evidence` (Story 4.4): read-own and file-own RLS, and a
   --     cross-account attempt at either is refused. Filed against the exact machine-
   --     filed miss 5b just proved is readable -- settled here for the first time in
   --     this file, so `appeal_hold_penalty()`'s own eligibility join has something
@@ -299,15 +299,15 @@ begin
         '`appeal: read own` did not let the owning account read back its own appeal.';
     end if;
 
-    insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+    insert into public.evidence (appeal_id, storage_path, captured_on)
     values (v_appeal, v_appeal::text || '/one.jpg', v_day)
     returning id into v_evidence;
 
-    select count(*) into v_count from public.appeal_evidence where id = v_evidence;
+    select count(*) into v_count from public.evidence where id = v_evidence;
     if v_count <> 1 then
       perform set_config('role', 'postgres', true);
       raise exception using message =
-        '`appeal_evidence: read own` did not let the owning account read back its own evidence.';
+        '`evidence: read own` did not let the owning account read back its own evidence.';
     end if;
 
     -- v_b: a different account reads neither row.
@@ -321,16 +321,16 @@ begin
         'A different account read %s row(s) of another account''s appeal.', v_count);
     end if;
 
-    select count(*) into v_count from public.appeal_evidence where id = v_evidence;
+    select count(*) into v_count from public.evidence where id = v_evidence;
     if v_count <> 0 then
       perform set_config('role', 'postgres', true);
       raise exception using message = format(
-        'A different account read %s row(s) of another account''s appeal_evidence -- NFR4 '
+        'A different account read %s row(s) of another account''s evidence -- NFR4 '
         'requires evidence visible only to the submitting account (and, once Story 4.5/4.6 '
         'exist, the ruling referee).', v_count);
     end if;
 
-    -- v_b cannot attach evidence to v_a's appeal either: `appeal_evidence_derive_owner()`
+    -- v_b cannot attach evidence to v_a's appeal either: `evidence_derive_owner()`
     -- overwrites owner_id with the appeal's own (v_a), so v_b's `with check
     -- (auth.uid() = owner_id)` fails even though v_b never claimed to be anyone else.
     v_refused := false;
@@ -338,7 +338,7 @@ begin
       -- captured_on = v_day (the appeal's own for_day) so the Epic 4 retrospective's
       -- captured_on guard (2026-08-27, finding A3) never fires here — this step is about
       -- ownership (v_b cannot claim v_a's appeal), not evidence dating.
-      insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+      insert into public.evidence (appeal_id, storage_path, captured_on)
       values (v_appeal, v_appeal::text || '/planted.jpg', v_day);
     exception when others then
       v_refused := true;
@@ -347,7 +347,7 @@ begin
     if not v_refused then
       perform set_config('role', 'postgres', true);
       raise exception using message =
-        'A different account inserted appeal_evidence against another account''s appeal -- '
+        'A different account inserted evidence against another account''s appeal -- '
         'NFR4''s owner-derivation should have refused it.';
     end if;
 
@@ -373,7 +373,7 @@ begin
   end;
 
   raise notice using message =
-    'Step 5c ok: appeal/appeal_evidence are readable and writable only by their own '
+    'Step 5c ok: appeal/evidence are readable and writable only by their own '
     'account -- a different account reads neither and cannot write into either.';
 
   -- -------------------------------------------------------------------------------
@@ -459,7 +459,7 @@ begin
     'public.auto_check_pending(uuid, date)',
     'public.appeal_hold_penalty()',
     'public.appeal_deadline(timestamptz)',
-    'public.appeal_evidence_derive_owner()',
+    'public.evidence_derive_owner()',
     'public.void_expired_appeals()'
   ]
   loop

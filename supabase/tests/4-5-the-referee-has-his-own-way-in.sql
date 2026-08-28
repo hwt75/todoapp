@@ -10,7 +10,7 @@
 -- same policies that grant them to a referee. `profile_single_referee` -- the partial unique
 -- index this migration adds -- refuses a second account ever reaching `role = 'referee'` at
 -- all. And the referee session can insert, update or delete nothing on `appeal`,
--- `appeal_evidence`, `penalty`, `settlement` or `commitment` (Step 6) -- this story's own
+-- `evidence`, `penalty`, `settlement` or `commitment` (Step 6) -- this story's own
 -- "read-only for the referee, throughout" boundary, proven by attempt rather than left to
 -- the absence of a policy in the migration file speaking for itself.
 --
@@ -35,7 +35,7 @@ begin;
 -- Rolled back with everything else.
 grant select on table
   public.commitment, public.declaration, public.focus_session, public.push_subscription,
-  public.appeal, public.appeal_evidence, public.settlement, public.penalty,
+  public.appeal, public.evidence, public.settlement, public.penalty,
   public.settlement_commitment
   to authenticated;
 grant select on public.settlement_current, public.penalty_current, public.chain_current
@@ -48,7 +48,7 @@ grant select on public.settlement_current, public.penalty_current, public.chain_
 -- the privilege and then watching RLS refuse the write anyway is what makes RLS the thing
 -- actually under test.
 grant insert, update, delete on table
-  public.appeal, public.appeal_evidence, public.penalty, public.settlement, public.commitment
+  public.appeal, public.evidence, public.penalty, public.settlement, public.commitment
   to authenticated;
 
 do $$
@@ -162,7 +162,7 @@ begin
       'for a client one; triggers do not consult the caller''s own role.', v_state);
   end if;
 
-  insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+  insert into public.evidence (appeal_id, storage_path, captured_on)
   values (v_appeal_a, v_appeal_a::text || '/proof.jpg', v_day_a)
   returning id into v_evidence_a;
 
@@ -232,7 +232,7 @@ begin
     'Step 1 ok: profile_single_referee refuses a second referee profile outright.';
 
   -- -------------------------------------------------------------------------------
-  -- 2. The referee session: appeal, appeal_evidence, penalty/penalty_current and
+  -- 2. The referee session: appeal, evidence, penalty/penalty_current and
   --    settlement/settlement_current, across BOTH doer accounts -- none of these policies
   --    scope by owner_id, on purpose (there is at most one referee, so "every appeal" and
   --    "the one doer's appeals" are the same set).
@@ -248,7 +248,7 @@ begin
       'The referee session read %s appeal row(s), expected exactly 1.', v_count);
   end if;
 
-  select count(*) into v_count from public.appeal_evidence where id = v_evidence_a;
+  select count(*) into v_count from public.evidence where id = v_evidence_a;
   if v_count <> 1 then
     raise exception using message =
       'The referee session could not read account A''s appeal evidence -- NFR4 requires it '
@@ -479,7 +479,7 @@ begin
       'appeal for any role.', v_count);
   end if;
 
-  -- 6c. appeal_evidence: insert. appeal_evidence_derive_owner() only refuses an insert
+  -- 6c. evidence: insert. evidence_derive_owner() only refuses an insert
   --     naming an appeal that does not exist -- account A's real v_evidence_a proves one
   --     does, so the trigger derives the real (account A) owner and lets the "file own"
   --     policy's own `role_from_table() = 'doer'` check refuse it.
@@ -488,7 +488,7 @@ begin
     -- captured_on = v_day_a (the appeal's own for_day) so the Epic 4 retrospective's
     -- captured_on guard (2026-08-27, finding A3) never fires here — this step is about
     -- the RLS "file own" policy refusing a referee session, not that one.
-    insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+    insert into public.evidence (appeal_id, storage_path, captured_on)
     values (v_appeal_a, v_appeal_a::text || '/second.jpg', v_day_a);
   exception when insufficient_privilege then
     v_refused := true;
@@ -496,26 +496,26 @@ begin
 
   if not v_refused then
     raise exception using message =
-      'The referee session inserted an appeal_evidence row -- only the missing referee '
+      'The referee session inserted an evidence row -- only the missing referee '
       'INSERT policy should have stopped it.';
   end if;
 
-  -- 6d. appeal_evidence: update and delete. Same shape as appeal above -- no policy of
+  -- 6d. evidence: update and delete. Same shape as appeal above -- no policy of
   --     either kind exists for any role.
-  update public.appeal_evidence set storage_path = 'tampered.jpg' where id = v_evidence_a;
+  update public.evidence set storage_path = 'tampered.jpg' where id = v_evidence_a;
   get diagnostics v_count = row_count;
   if v_count <> 0 then
     raise exception using message = format(
-      'The referee session updated %s appeal_evidence row(s) -- there is no update '
-      'policy on appeal_evidence for any role.', v_count);
+      'The referee session updated %s evidence row(s) -- there is no update '
+      'policy on evidence for any role.', v_count);
   end if;
 
-  delete from public.appeal_evidence where id = v_evidence_a;
+  delete from public.evidence where id = v_evidence_a;
   get diagnostics v_count = row_count;
   if v_count <> 0 then
     raise exception using message = format(
-      'The referee session deleted %s appeal_evidence row(s) -- there is no delete '
-      'policy on appeal_evidence for any role.', v_count);
+      'The referee session deleted %s evidence row(s) -- there is no delete '
+      'policy on evidence for any role.', v_count);
   end if;
 
   -- 6e. penalty and settlement: update and delete only. AD-8 gives both tables exactly one
@@ -592,7 +592,7 @@ begin
 
   raise notice using message =
     'Step 6 ok: read-only for the referee, throughout -- every insert, update and delete '
-    'attempted against appeal, appeal_evidence, penalty, settlement and commitment was '
+    'attempted against appeal, evidence, penalty, settlement and commitment was '
     'refused, including an appeal insert whose every other precondition was genuinely met.';
 
   raise notice using message =
@@ -601,7 +601,7 @@ begin
     'it reads zero rows of declaration, chain_current, focus_session or push_subscription, '
     'proven against real data; a doer session is granted none of that width; '
     'profile_single_referee refuses a second referee outright; and the referee session can '
-    'insert, update or delete nothing on appeal, appeal_evidence, penalty, settlement or '
+    'insert, update or delete nothing on appeal, evidence, penalty, settlement or '
     'commitment, proven by attempt.';
 end $$;
 

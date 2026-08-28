@@ -70,7 +70,7 @@ vi.mock('@/lib/supabase/client', () => ({
           }),
         };
       }
-      if (table === 'appeal_evidence') {
+      if (table === 'evidence') {
         return { select: () => ({ eq: () => Promise.resolve(evidenceResult) }) };
       }
       throw new Error(`referee-appeal-detail.test.tsx: unexpected table ${table}`);

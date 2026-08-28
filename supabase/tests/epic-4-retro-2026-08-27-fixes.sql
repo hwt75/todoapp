@@ -12,7 +12,7 @@
 --      its `profile.role` row disagree.
 --   5. `commitment_auto_check_not_on_hours_quota` (finding A7) -- a new constraint, its own
 --      first test.
---   6. `appeal_evidence.captured_on` (finding A3, FR-14) -- a new column/trigger validation,
+--   6. `evidence.captured_on` (finding A3, FR-14) -- a new column/trigger validation,
 --      its own first test.
 --
 --   docker exec -i supabase_db_todoapp psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
@@ -23,7 +23,7 @@
 begin;
 
 grant select on table public.profile to authenticated;
-grant select, insert on table public.appeal, public.appeal_evidence to authenticated;
+grant select, insert on table public.appeal, public.evidence to authenticated;
 
 do $$
 declare
@@ -475,7 +475,7 @@ begin
 end $$;
 
 -- =====================================================================================
--- Step 6: appeal_evidence.captured_on (finding A3, FR-14) — evidence dated a day other
+-- Step 6: evidence.captured_on (finding A3, FR-14) — evidence dated a day other
 -- than the one being appealed is refused; evidence dated the appealed day is accepted.
 -- =====================================================================================
 do $$
@@ -515,47 +515,47 @@ begin
   returning id into v_appeal6;
 
   begin
-    insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+    insert into public.evidence (appeal_id, storage_path, captured_on)
     values (v_appeal6, v_appeal6::text || '/wrong-day.jpg', v_day6 - 1);
   exception when others then
     v_refused := true;
     v_message := sqlerrm;
   end;
 
-  if not v_refused or v_message not ilike '%dated the day being appealed%' then
+  if not v_refused or v_message not ilike '%dated the day it proves%' then
     raise exception using message = format(
-      'Step 6 FAILED: evidence dated a day other than the one being appealed must be '
+      'Step 6 FAILED: evidence dated a day other than the one being proved must be '
       'refused, got refused=%s, message=%s.', v_refused, coalesce(v_message, '<null>'));
   end if;
 
   v_refused := false;
   begin
-    insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+    insert into public.evidence (appeal_id, storage_path, captured_on)
     values (v_appeal6, v_appeal6::text || '/no-day.jpg', null);
   exception when others then
     v_refused := true;
     v_message := sqlerrm;
   end;
 
-  if not v_refused or v_message not ilike '%dated the day being appealed%' then
+  if not v_refused or v_message not ilike '%dated the day it proves%' then
     raise exception using message = format(
       'Step 6 FAILED: evidence with no captured_on at all must be refused the same way, '
       'got refused=%s, message=%s.', v_refused, coalesce(v_message, '<null>'));
   end if;
 
-  insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+  insert into public.evidence (appeal_id, storage_path, captured_on)
   values (v_appeal6, v_appeal6::text || '/right-day.jpg', v_day6);
 
   perform set_config('role', 'postgres', true);
 
   if not exists (
-    select 1 from public.appeal_evidence
+    select 1 from public.evidence
      where appeal_id = v_appeal6 and captured_on = v_day6
   ) then
     raise exception 'Step 6 FAILED: evidence dated exactly the appealed day was not accepted.';
   end if;
 
-  raise notice 'Step 6 ok: appeal_evidence.captured_on refuses a missing or wrong-day '
+  raise notice 'Step 6 ok: evidence.captured_on refuses a missing or wrong-day '
     'capture date, and accepts one that matches the appealed day exactly.';
 end $$;
 

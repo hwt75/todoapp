@@ -24,7 +24,7 @@ begin;
 -- is written into the migration itself and needs nothing extra here, but the ordinary table
 -- reads/writes this fixture exercises through RLS still do.
 grant select on table public.profile to authenticated;
-grant select, insert on table public.appeal, public.appeal_evidence to authenticated;
+grant select, insert on table public.appeal, public.evidence to authenticated;
 grant select on public.penalty, public.settlement, public.settlement_commitment, public.commitment
   to authenticated;
 
@@ -256,7 +256,7 @@ begin
   insert into public.appeal (owner_id, commitment_id, idempotency_key, for_day)
   values (v_user1, v_c1, gen_random_uuid(), v_day) returning id into v_appeal1;
 
-  insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+  insert into public.evidence (appeal_id, storage_path, captured_on)
   values (v_appeal1, v_appeal1::text || '/proof.jpg', v_day) returning id into v_evidence1;
 
   perform set_config('request.jwt.claims',

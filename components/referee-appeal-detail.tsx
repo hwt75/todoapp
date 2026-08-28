@@ -155,7 +155,7 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
       const penaltyState = penaltyRow.state as PenaltyState;
 
       const { data: evidenceRows, error: evidenceError } = await supabase
-        .from('appeal_evidence')
+        .from('evidence')
         .select('id,storage_path')
         .eq('appeal_id', appealId);
       if (cancelled) return;

@@ -2,15 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { classifyConflict, classifyWriteError } from '@/lib/declaration-submit';
-import {
-  APPEAL_COPY,
-  evidenceObjectPath,
-  fileCapturedOn,
-  holdStateCopy,
-  isEvidenceDated,
-  toRow,
-  type AppealDraft,
-} from '@/lib/appeal';
+import { APPEAL_COPY, holdStateCopy, toRow, type AppealDraft } from '@/lib/appeal';
+import { evidenceObjectPath, fileCapturedOn, isEvidenceDated } from '@/lib/evidence';
 import { formatDong } from '@/lib/money';
 import { createClient } from '@/lib/supabase/client';
 
@@ -146,7 +139,7 @@ export function AppealForm({
     if (submission.kind !== 'held') return;
 
     // FR-14: refused before any upload starts — an evidently wrong-dated file never reaches
-    // Storage at all. The server enforces the same rule again on the appeal_evidence insert
+    // Storage at all. The server enforces the same rule again on the `evidence` insert
     // below (AD-1: a client check alone is never authoritative).
     if (!isEvidenceDated(file, forDay)) {
       setEvidence({ kind: 'failed', reason: APPEAL_COPY.evidenceWrongDay });
@@ -168,7 +161,7 @@ export function AppealForm({
         return;
       }
 
-      const { error: insertError } = await supabase.from('appeal_evidence').insert({
+      const { error: insertError } = await supabase.from('evidence').insert({
         appeal_id: submission.appealId,
         storage_path: path,
         captured_on: fileCapturedOn(file),

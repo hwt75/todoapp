@@ -30,9 +30,20 @@ const inserted: Array<{ table: string; payload: unknown }> = [];
 // What a `grace_day` insert comes back with (Story 5.1). Set per test; the default is a
 // clean success — most tests here have nothing to do with spending one at all.
 let graceInsertResult: unknown = { error: null };
+// Story 6.3: what `supabase.storage.from(...).upload(...)` comes back with. Default clean.
+let uploadResult: unknown = { error: null };
+const uploaded: Array<{ bucket: string; path: string }> = [];
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
+    storage: {
+      from: (bucket: string) => ({
+        upload: (path: string) => {
+          uploaded.push({ bucket, path });
+          return Promise.resolve(uploadResult);
+        },
+      }),
+    },
     from: (table: string) => {
       seen.push(table);
       let key = table;
@@ -74,6 +85,8 @@ beforeEach(() => {
   fromCalls.length = 0;
   inserted.length = 0;
   graceInsertResult = { error: null };
+  uploadResult = { error: null };
+  uploaded.length = 0;
   for (const key of Object.keys(rows)) delete rows[key];
   rows.commitment = { data: [gym], error: null };
   rows.penalty_current = { data: [], error: null };
@@ -621,5 +634,102 @@ describe('claiming a timed commitment', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Claim Pill' }));
 
     expect(await screen.findByText(/dated when you tapped/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Story 6.3 — the photo that proves a claim.
+ *
+ * The rules live in `evidence_derive_owner()` and are driven from the database side by
+ * `supabase/tests/6-3-evidence-detaches-from-an-appeal.sql`. What this screen owns is offering
+ * the control only when there is a row to attach to, and never reporting a refusal as a save.
+ */
+function photoTakenOn(day: string): File {
+  // Noon local, so no timezone edge decides what day this file claims to be from.
+  const at = new Date(`${day}T12:00:00+07:00`).getTime();
+  return new File(['x'], 'proof.jpg', { type: 'image/jpeg', lastModified: at });
+}
+
+function todayLocal(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+}
+
+describe('proving a claim with a photo', () => {
+  it('offers nothing to upload before the claim is made', async () => {
+    rows.commitment = { data: [pill], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByRole('button', { name: 'Claim Pill' });
+
+    expect(screen.queryByLabelText('Proof')).not.toBeInTheDocument();
+  });
+
+  it('offers it once the claim has landed and come back with a row to attach to', async () => {
+    rows.commitment = { data: [pill], error: null };
+    rows.declaration = { data: { id: 'decl-1' }, error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Claim Pill' }));
+
+    expect(await screen.findByLabelText('Proof')).toBeInTheDocument();
+  });
+
+  it('offers nothing to upload for a claim still in the offline queue', async () => {
+    rows.commitment = { data: [pill], error: null };
+    rows.declaration = { data: { id: 'decl-1' }, error: null };
+    graceInsertResult = { error: { message: 'Failed to fetch' } };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Claim Pill' }));
+
+    // Evidence references a declaration row by id, and a queued claim has no row. The claim
+    // survives having no signal; the photo does not, and pretending otherwise would offer an
+    // upload that could only fail.
+    await screen.findByText(/dated when you tapped/);
+    expect(screen.queryByLabelText('Proof')).not.toBeInTheDocument();
+  });
+
+  it('stores the photo under the claim it proves', async () => {
+    rows.commitment = { data: [pill], error: null };
+    rows.declaration = { data: { id: 'decl-1' }, error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Claim Pill' }));
+    await userEvent.upload(await screen.findByLabelText('Proof'), photoTakenOn(todayLocal()));
+
+    // The path leads with the declaration's own id — that is what the bucket's policy reads
+    // via storage.foldername(name) to derive access from its owner.
+    expect(uploaded).toHaveLength(1);
+    expect(uploaded[0].bucket).toBe('appeal-evidence');
+    expect(uploaded[0].path.startsWith('decl-1/')).toBe(true);
+
+    const evidence = inserted.find((i) => i.table === 'evidence');
+    expect(evidence?.payload).toMatchObject({ declaration_id: 'decl-1' });
+    // Never sent: the trigger derives it from the claim, which is the whole of NFR4.
+    expect(evidence?.payload).not.toHaveProperty('owner_id');
+    expect(await screen.findByText('Proof saved.')).toBeInTheDocument();
+  });
+
+  it('refuses a photo from another day before it reaches Storage', async () => {
+    rows.commitment = { data: [pill], error: null };
+    rows.declaration = { data: { id: 'decl-1' }, error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Claim Pill' }));
+    await userEvent.upload(await screen.findByLabelText('Proof'), photoTakenOn('2020-01-01'));
+
+    expect(await screen.findByText(/not taken today/)).toBeInTheDocument();
+    // An evidently wrong file never becomes an object nobody will ever read.
+    expect(uploaded).toHaveLength(0);
   });
 });

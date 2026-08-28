@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { CommitmentRow, type RowCommitment } from '@/components/commitment-row';
 import { submitDeclaration, type QueuedClaim } from '@/lib/declaration-write';
+import { calendarMoment } from '@/lib/declaration';
+import { EVIDENCE_COPY, evidenceObjectPath, fileCapturedOn, isEvidenceDated } from '@/lib/evidence';
 import { stateToday } from '@/lib/commitment-state';
 import { createClient } from '@/lib/supabase/client';
 import { DebtBlock } from '@/components/debt-block';
@@ -49,9 +51,15 @@ type GraceRowState =
 type ClaimState =
   | { kind: 'idle' }
   | { kind: 'claiming' }
-  | { kind: 'claimed' }
+  /** `declarationId` is what a photo attaches to (Story 6.3). Null when the claim landed but
+   *  the read that would fetch its id did not — the claim stands, the upload waits. */
+  | { kind: 'claimed'; declarationId: string | null }
   | { kind: 'queued' }
   | { kind: 'failed'; reason: string };
+
+/** Story 6.3, keyed by commitment id alongside `claimState`. */
+type EvidenceState =
+  { kind: 'idle' } | { kind: 'uploading' } | { kind: 'saved' } | { kind: 'failed'; reason: string };
 
 const SELECT =
   'id,name,cadence,carries_penalty,weekly_target,daily_minutes_target,due_time,late_window_minutes';
@@ -83,6 +91,7 @@ export function Today({
   // and for the same reason: a claim may be sitting in the offline queue, so there is nothing
   // on the server to re-read that would tell this screen what happened.
   const [claimState, setClaimState] = useState<Record<string, ClaimState>>({});
+  const [evidenceState, setEvidenceState] = useState<Record<string, EvidenceState>>({});
   // Guards `spendGraceDay`'s own state updates after the insert's await resolves — mirrors
   // `components/settings.tsx`'s identical `mounted` ref, needed for the same reason: a spend
   // fired from a click can still be in flight when this screen unmounts (opening the Ledger,
@@ -236,12 +245,78 @@ export function Today({
             ? { kind: 'failed', reason: outcome.reason }
             : outcome.kind === 'queued'
               ? { kind: 'queued' }
-              : { kind: 'claimed' },
+              : { kind: 'claimed', declarationId: outcome.declarationId ?? null },
       }));
     } catch (error) {
       if (!mounted.current) return;
       setClaimState((current) => ({
         ...current,
+        [commitmentId]: { kind: 'failed', reason: String(error) },
+      }));
+    }
+  }
+
+  /**
+   * Attach one photo to a claim that has landed.
+   *
+   * Mirrors `components/appeal-form.tsx`'s own upload, deliberately: object first, metadata
+   * row second, and a refusal never reported as a save. Every rule it applies is applied again
+   * by `evidence_derive_owner()` — the owner is derived from the claim, the capture date must
+   * match the day it proves, and a claim cannot be proved once its day has ended (AD-1).
+   *
+   * `owner_id` is not sent. The trigger sets it before the NOT NULL is checked, and a client
+   * that sent one would just have it overwritten — the whole point of NFR4.
+   */
+  async function attachProof(commitmentId: string, declarationId: string, file: File) {
+    const today = calendarMoment(new Date()).day;
+
+    // Refused before any upload starts, so an evidently wrong-dated file never reaches Storage.
+    if (!isEvidenceDated(file, today)) {
+      setEvidenceState((c) => ({
+        ...c,
+        [commitmentId]: { kind: 'failed', reason: EVIDENCE_COPY.wrongDay },
+      }));
+      return;
+    }
+
+    setEvidenceState((c) => ({ ...c, [commitmentId]: { kind: 'uploading' } }));
+
+    try {
+      const supabase = createClient();
+      const path = evidenceObjectPath(declarationId, crypto.randomUUID(), file.name);
+
+      const { error: uploadError } = await supabase.storage
+        .from('appeal-evidence')
+        .upload(path, file, { contentType: file.type || undefined });
+
+      if (!mounted.current) return;
+
+      if (uploadError) {
+        setEvidenceState((c) => ({
+          ...c,
+          [commitmentId]: { kind: 'failed', reason: EVIDENCE_COPY.failed },
+        }));
+        return;
+      }
+
+      const { error: insertError } = await supabase.from('evidence').insert({
+        declaration_id: declarationId,
+        storage_path: path,
+        captured_on: fileCapturedOn(file),
+      });
+
+      if (!mounted.current) return;
+
+      setEvidenceState((c) => ({
+        ...c,
+        [commitmentId]: insertError
+          ? { kind: 'failed', reason: insertError.message }
+          : { kind: 'saved' },
+      }));
+    } catch (error) {
+      if (!mounted.current) return;
+      setEvidenceState((c) => ({
+        ...c,
         [commitmentId]: { kind: 'failed', reason: String(error) },
       }));
     }
@@ -363,7 +438,58 @@ export function Today({
                         </button>
                       </div>
 
-                      {state.kind === 'claimed' && <p className="row-muted">Claimed for today.</p>}
+                      {state.kind === 'claimed' && (
+                        <>
+                          <p className="row-muted">Claimed for today.</p>
+
+                          {/* Story 6.3 — the photo, and only once the claim has actually
+                              landed. Evidence references the declaration row by id, and a
+                              claim sitting in the offline queue has no row and no id. That is
+                              the honest shape of the split: the claim survives having no
+                              signal, the photo does not. */}
+                          {state.declarationId !== null &&
+                            (() => {
+                              const proof: EvidenceState = evidenceState[row.id] ?? {
+                                kind: 'idle',
+                              };
+                              const inputId = `proof-${row.id}`;
+
+                              return (
+                                <>
+                                  <label htmlFor={inputId}>{EVIDENCE_COPY.label}</label>
+                                  <input
+                                    id={inputId}
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/heic"
+                                    // `capture` opens the camera rather than the library where
+                                    // the device offers one — a photo taken now is the point.
+                                    capture="environment"
+                                    disabled={proof.kind === 'uploading'}
+                                    onChange={(event) => {
+                                      const file = event.target.files?.[0];
+                                      if (file) {
+                                        void attachProof(row.id, state.declarationId!, file);
+                                      }
+                                    }}
+                                  />
+                                  <p className="row-muted">{EVIDENCE_COPY.hint}</p>
+
+                                  {proof.kind === 'uploading' && (
+                                    <p role="status">{EVIDENCE_COPY.uploading}</p>
+                                  )}
+                                  {proof.kind === 'saved' && (
+                                    <p role="status">{EVIDENCE_COPY.saved}</p>
+                                  )}
+                                  {proof.kind === 'failed' && (
+                                    <p>
+                                      <strong>{EVIDENCE_COPY.failed}</strong> {proof.reason}
+                                    </p>
+                                  )}
+                                </>
+                              );
+                            })()}
+                        </>
+                      )}
 
                       {state.kind === 'queued' && (
                         <p className="row-muted">

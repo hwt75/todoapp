@@ -87,7 +87,7 @@ describe('one declaration on its way to the server', () => {
   it('reports a clean write as sent and leaves nothing queued', async () => {
     const outcome = await submitDeclaration(storage, claim());
 
-    expect(outcome).toEqual({ kind: 'sent' });
+    expect(outcome).toMatchObject({ kind: 'sent' });
     expect(readQueue(storage)).toHaveLength(0);
   });
 
@@ -134,7 +134,7 @@ describe('which day the duplicate read looks on', () => {
 
     expect(eq).toHaveBeenCalledWith('for_day', '2026-08-19');
     // Its own key won the race: this is the author's own answer arriving out of order.
-    expect(outcome).toEqual({ kind: 'sent' });
+    expect(outcome).toMatchObject({ kind: 'sent' });
   });
 
   it('looks at the day before for a morning answer', async () => {
@@ -178,5 +178,52 @@ describe('which day the duplicate read looks on', () => {
 
     expect(outcome).toEqual({ kind: 'queued' });
     expect(readQueue(storage)).toHaveLength(1);
+  });
+});
+
+/**
+ * Story 6.3 — the id a photo will reference.
+ *
+ * Evidence hangs off the declaration row it proves, so the claim has to come back with one.
+ * A morning answer has nothing to attach and must not pay for the read.
+ */
+describe('the id a photo will attach to', () => {
+  it('is read back for a timed claim that landed', async () => {
+    maybeSingle.mockResolvedValue({ data: { id: 'decl-1' }, error: null });
+
+    const outcome = await submitDeclaration(storage, claim({ timed: true }));
+
+    expect(outcome).toEqual({ kind: 'sent', declarationId: 'decl-1' });
+  });
+
+  it('is not looked for at all on a morning answer', async () => {
+    const outcome = await submitDeclaration(storage, claim({ timed: false }));
+
+    // No follow-up read: the gate has nothing to attach, and a round trip it never uses is a
+    // round trip taken on a phone with no signal to spare.
+    expect(eq).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ kind: 'sent', declarationId: null });
+  });
+
+  it('comes back on the claim’s own duplicate retry, from the row that won', async () => {
+    insert.mockResolvedValue({ error: { code: '23505' } });
+    maybeSingle.mockResolvedValue({
+      data: { id: 'decl-1', idempotency_key: 'key-1' },
+      error: null,
+    });
+
+    const outcome = await submitDeclaration(storage, claim({ timed: true }));
+
+    expect(outcome).toEqual({ kind: 'sent', declarationId: 'decl-1' });
+  });
+
+  it('is null when the claim landed but the read that would fetch it did not', async () => {
+    maybeSingle.mockResolvedValue({ data: null, error: { message: 'read failed' } });
+
+    // The claim itself is on the server. Reporting it as unsent over a failed follow-up read
+    // would be the worse lie; the author simply gets no upload control until he reopens.
+    const outcome = await submitDeclaration(storage, claim({ timed: true }));
+
+    expect(outcome).toEqual({ kind: 'sent', declarationId: null });
   });
 });

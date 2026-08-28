@@ -37,8 +37,14 @@ export interface QueuedClaim extends QueuedDeclaration {
 }
 
 export type SubmitOutcome =
-  /** The server has it. */
-  | { kind: 'sent' }
+  /**
+   * The server has it. `declarationId` is present only for a timed claim, which is the only
+   * caller that needs one — a photo references the row it proves (Story 6.3), and a morning
+   * answer has nothing to attach. Null when the read that would fetch it failed: the claim
+   * itself still landed, and reporting it as unsent over a failed follow-up read would be a
+   * worse lie than offering no upload control.
+   */
+  | { kind: 'sent'; declarationId?: string | null }
   /** No connection; it is in the queue and will be tried again. */
   | { kind: 'queued' }
   /** The server decided, and retrying would change nothing. Nothing was recorded. */
@@ -59,6 +65,7 @@ export async function submitDeclaration(
   enqueue(storage, claim);
 
   let refusal: string | null = null;
+  let landedId: string | null = null;
 
   const outcome = await flush<QueuedClaim>(storage, async (pending) => {
     const { error } = await createClient().from('declaration').insert({
@@ -71,6 +78,21 @@ export async function submitDeclaration(
 
     const result = classifyWriteError(error);
 
+    // The id of the row this claim just created, for the photo that will reference it.
+    // Read back rather than returned by the insert, so the insert keeps the plain shape every
+    // existing caller and its tests already use — and only for a timed claim, because the
+    // morning answer has nothing to attach and should not pay for a round trip it never uses.
+    if (result === 'sent' && pending.timed && pending.idempotencyKey === claim.idempotencyKey) {
+      const { data: landed } = await createClient()
+        .from('declaration')
+        .select('id')
+        .eq('commitment_id', pending.commitmentId)
+        .eq('for_day', dayDeclarationLandsOn(new Date(pending.answeredAt), true))
+        .maybeSingle();
+
+      landedId = (landed?.id as string | undefined) ?? null;
+    }
+
     // A 23505 alone doesn't say whether this is my own answer arriving out of order or
     // someone else's already sitting there — Postgres's error carries the violated
     // constraint, not the winning row's key. FR-2a changes what else can win that race: once
@@ -79,7 +101,7 @@ export async function submitDeclaration(
     if (result === 'duplicate') {
       const { data: existing, error: readError } = await createClient()
         .from('declaration')
-        .select('idempotency_key')
+        .select('id,idempotency_key')
         .eq('commitment_id', pending.commitmentId)
         // Derived from this item's own instant, and from whether its commitment is timed —
         // a claim lands on the day it was made, a morning answer on the day before it.
@@ -94,6 +116,12 @@ export async function submitDeclaration(
       if (readError) return 'failed';
 
       const conflict = classifyConflict(existing?.idempotency_key ?? null, pending.idempotencyKey);
+
+      // This attempt's own answer, arriving out of order. The row it is a duplicate of is the
+      // row a photo would attach to, so its id is the one to carry back.
+      if (conflict === 'duplicate' && pending.idempotencyKey === claim.idempotencyKey) {
+        landedId = (existing?.id as string | undefined) ?? null;
+      }
 
       if (conflict === 'conflict') {
         if (pending.idempotencyKey === claim.idempotencyKey) {
@@ -129,5 +157,7 @@ export async function submitDeclaration(
 
   if (refusal) return { kind: 'refused', reason: refusal };
 
-  return outcome.kept.includes(claim.idempotencyKey) ? { kind: 'queued' } : { kind: 'sent' };
+  return outcome.kept.includes(claim.idempotencyKey)
+    ? { kind: 'queued' }
+    : { kind: 'sent', declarationId: landedId };
 }

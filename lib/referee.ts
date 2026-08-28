@@ -317,7 +317,7 @@ export interface RefereeAppealDetail {
 }
 
 /** One piece of evidence, resolved to a URL the referee's own browser can actually load —
- *  the bucket is private, so the row `appeal_evidence` carries is a storage path, never a
+ *  the bucket is private, so the row `evidence` carries is a storage path, never a
  *  URL by itself. */
 export interface RefereeEvidenceItem {
   id: string;

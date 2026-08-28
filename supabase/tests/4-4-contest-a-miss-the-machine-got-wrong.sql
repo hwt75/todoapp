@@ -31,7 +31,7 @@ begin;
 -- rights on purpose (`20260819121500_close_function_exposure.sql`: "role_from_table
 -- never needed SECURITY DEFINER"). Rolled back with everything else.
 grant select on table public.profile to authenticated;
-grant select, insert on table public.appeal, public.appeal_evidence to authenticated;
+grant select, insert on table public.appeal, public.evidence to authenticated;
 
 do $$
 declare
@@ -484,7 +484,7 @@ begin
   -- this step is about storage_path's own check constraint, not that one.
   v_refused := false;
   begin
-    insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+    insert into public.evidence (appeal_id, storage_path, captured_on)
     values (v_appeal1, gen_random_uuid()::text || '/not-this-appeals-folder.jpg', v_day);
   exception when others then
     v_refused := true;
@@ -492,17 +492,17 @@ begin
 
   if not v_refused then
     raise exception using message =
-      'appeal_evidence accepted a storage_path outside its own appeal_id''s folder -- the '
+      'evidence accepted a storage_path outside its own appeal_id''s folder -- the '
       'check constraint on storage_path did not fire.';
   end if;
 
-  insert into public.appeal_evidence (appeal_id, storage_path, captured_on)
+  insert into public.evidence (appeal_id, storage_path, captured_on)
   values (v_appeal1, v_appeal1::text || '/proof.jpg', v_day);
 
   perform set_config('role', 'postgres', true);
 
   raise notice using message =
-    'Step 6 ok: appeal_evidence.storage_path must lead with its own appeal_id -- a '
+    'Step 6 ok: evidence.storage_path must lead with its own appeal_id -- a '
     'mismatched path is refused, a correctly-scoped one is accepted.';
 
   -- -------------------------------------------------------------------------------

@@ -34,7 +34,7 @@ vi.mock('@/lib/supabase/client', () => ({
           },
         };
       }
-      if (table === 'appeal_evidence') {
+      if (table === 'evidence') {
         return {
           insert: (row: Record<string, unknown>) => {
             lastEvidenceInsert = row;
