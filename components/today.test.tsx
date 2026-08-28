@@ -531,3 +531,95 @@ describe('the today screen', () => {
     });
   });
 });
+
+/**
+ * Story 6.2 — claiming a timed commitment from Today.
+ *
+ * The window itself is not tested here and is not implemented here: `declaration_derive_day()`
+ * decides whether a tap was inside it, and `supabase/tests/6-2-a-claim-lands-on-the-day-it-was-made.sql`
+ * drives both of its edges. What this screen owns is offering the control only where there is a
+ * moment to claim, and never reporting a refusal as a save.
+ */
+const pill = {
+  id: 'c2',
+  name: 'Pill',
+  cadence: 'daily',
+  carries_penalty: false,
+  weekly_target: null,
+  daily_minutes_target: null,
+  due_time: '20:00:00',
+  late_window_minutes: 30,
+};
+
+describe('claiming a timed commitment', () => {
+  it('offers no claim at all when nothing carries a time', async () => {
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByRole('button', { name: /Gym/ });
+
+    expect(screen.queryByRole('button', { name: /^Claim/ })).not.toBeInTheDocument();
+  });
+
+  it('offers it for the timed commitment and not for the untimed one beside it', async () => {
+    rows.commitment = { data: [gym, pill], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Claim Pill' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Claim Gym' })).not.toBeInTheDocument();
+  });
+
+  it('sends the instant of the tap and never a day', async () => {
+    rows.commitment = { data: [pill], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Claim Pill' }));
+
+    // AD-6: the client sends when he tapped. Which day that belongs to is the server's call,
+    // and a client that sent a date could pick a day whose window is still open.
+    const claim = inserted.find((i) => i.table === 'declaration');
+    expect(claim).toBeDefined();
+    expect(claim?.payload).toMatchObject({ commitment_id: 'c2', answer: 'held' });
+    expect(claim?.payload).not.toHaveProperty('for_day');
+    expect(await screen.findByText('Claimed for today.')).toBeInTheDocument();
+  });
+
+  it('reports a refusal rather than reporting a claim that did not happen', async () => {
+    rows.commitment = { data: [pill], error: null };
+    // The server's own sentence, passed through rather than reworded: it names the window,
+    // which is more than this screen could say without keeping a second copy of the rule.
+    graceInsertResult = {
+      error: {
+        code: 'P0001',
+        message: 'This commitment could be claimed from 20:00 for 30 minutes.',
+      },
+    };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Claim Pill' }));
+
+    expect(await screen.findByText(/Not claimed/)).toBeInTheDocument();
+    expect(screen.getByText(/could be claimed from 20:00 for 30 minutes/)).toBeInTheDocument();
+    expect(screen.queryByText('Claimed for today.')).not.toBeInTheDocument();
+  });
+
+  it('says the claim is on the device, dated when it was tapped, with no connection', async () => {
+    rows.commitment = { data: [pill], error: null };
+    // No SQLSTATE: the write never reached a decision, so it is worth retrying.
+    graceInsertResult = { error: { message: 'Failed to fetch' } };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Claim Pill' }));
+
+    expect(await screen.findByText(/dated when you tapped/)).toBeInTheDocument();
+  });
+});

@@ -83,6 +83,38 @@ export function isDeclared(cadence: CommitmentCadence): boolean {
   return cadence !== 'daily_hours_quota';
 }
 
+/**
+ * Whether the morning question asks about this commitment at all.
+ *
+ * A timed commitment is claimed on its own day, at the moment the thing is done (Story 6.2).
+ * Asking about it again the next morning would offer a second, softer answer to a question
+ * already settled — and worse, that answer would collide with
+ * `declaration_one_per_commitment_day` on a row he cannot see, so the gate would fail on a
+ * constraint rather than simply asking something pointless.
+ *
+ * This is the *asking* side and only the asking side. `public.commitments_owing()` decides
+ * what is *true* — what settlement, penalties, expiry and the day summary all read — and it
+ * does not know about `due_time` yet. That division is the one written above
+ * `commitments_owing()` in `20260819220000_settlement.sql`, not a new seam.
+ */
+export function isAskedNextMorning(commitment: {
+  cadence: CommitmentCadence;
+  due_time?: string | null;
+}): boolean {
+  return isDeclared(commitment.cadence) && (commitment.due_time ?? null) === null;
+}
+
+/**
+ * The day a declaration will land on, as `declaration_derive_day()` will derive it.
+ *
+ * A mirror, and only used to *read back* a row whose day the server already chose — never to
+ * send one (AD-6). The morning gate needs it to tell its own retry apart from a row somebody
+ * else filed, and that read has to look on the right day or a duplicate reads as a conflict.
+ */
+export function dayDeclarationLandsOn(answeredAt: Date, timed: boolean): string {
+  return timed ? calendarMoment(answeredAt).day : dayInQuestion(answeredAt);
+}
+
 export interface OwedCommitment {
   id: string;
   name: string;
@@ -97,7 +129,10 @@ export interface OwedCommitment {
  * question.
  */
 export function commitmentsOwing(
-  commitments: readonly (OwedCommitment & { archived_at?: string | null })[],
+  commitments: readonly (OwedCommitment & {
+    archived_at?: string | null;
+    due_time?: string | null;
+  })[],
   alreadyAnsweredCommitmentIds: readonly string[],
   now: Date,
   morningHour: number,
@@ -108,7 +143,7 @@ export function commitmentsOwing(
   const day = dayInQuestion(now);
 
   return commitments
-    .filter((c) => isDeclared(c.cadence))
+    .filter((c) => isAskedNextMorning(c))
     .filter((c) => !answered.has(c.id))
     .filter((c) => !archivedBefore(c.archived_at ?? null, day))
     .map(({ id, name, cadence }) => ({ id, name, cadence }));

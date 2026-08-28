@@ -1,15 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { dayInQuestion, questionFor, type OwedCommitment } from '@/lib/declaration';
-import { enqueue, flush, removeFromQueue, type QueuedDeclaration } from '@/lib/offline-queue';
-import {
-  classifyConflict,
-  classifyWriteError,
-  dayRolledOver,
-  shouldRetry,
-} from '@/lib/declaration-submit';
+import { submitDeclaration, type QueuedClaim } from '@/lib/declaration-write';
+import { dayRolledOver } from '@/lib/declaration-submit';
 
 type Sending =
   { kind: 'idle' } | { kind: 'sending' } | { kind: 'queued' } | { kind: 'failed'; reason: string };
@@ -80,96 +74,28 @@ export function MorningGate({
         return;
       }
 
-      const queued: QueuedDeclaration = {
+      const queued: QueuedClaim = {
         idempotencyKey: crypto.randomUUID(),
         ownerId,
         commitmentId: commitment.id,
         answer: value,
         answeredAt: tappedAt.toISOString(),
+        // The morning question is only ever asked about untimed commitments — a timed one
+        // is claimed on its own day from Today, and `commitmentsOwing()` filters it out of
+        // this list entirely (Story 6.2).
+        timed: false,
       };
 
-      enqueue(window.localStorage, queued);
+      // One implementation of enqueue, flush, classify and remove, shared with Today.
+      const outcome = await submitDeclaration(window.localStorage, queued);
 
-      let rejection: string | null = null;
-
-      const outcome = await flush(window.localStorage, async (pending) => {
-        const { error } = await createClient().from('declaration').insert({
-          owner_id: pending.ownerId,
-          commitment_id: pending.commitmentId,
-          idempotency_key: pending.idempotencyKey,
-          answer: pending.answer,
-          answered_at: pending.answeredAt,
-        });
-
-        const result = classifyWriteError(error);
-
-        // A 23505 alone doesn't say whether this is my own answer arriving out of order or
-        // someone else's already sitting there — Postgres's error carries the violated
-        // constraint, not the winning row's key. FR-2a changes what else can win that race:
-        // once a Penalty-carrying commitment's Auto-check has filed the day, a contradicting
-        // tap here must not look like it succeeded (Story 4.3).
-        if (result === 'duplicate') {
-          // `flush` walks every item still in the queue, not only the one just tapped — a
-          // stale item from an earlier offline session carries its own day, which need not
-          // be today's. Derived from `pending.answeredAt` itself (the same instant its own
-          // insert above already used), not the single `day` this render started with.
-          const { data: existing, error: readError } = await createClient()
-            .from('declaration')
-            .select('idempotency_key')
-            .eq('commitment_id', pending.commitmentId)
-            .eq('for_day', dayInQuestion(new Date(pending.answeredAt)))
-            .maybeSingle();
-
-          // The read that tells "my own retry" apart from "someone else's row" can itself
-          // fail — the same flaky connection that produced this retry in the first place.
-          // Treat that like any other unreachable write: stay queued, try again later.
-          // Never report a conflict on a read that did not actually complete.
-          if (readError) return 'failed';
-
-          const conflict = classifyConflict(
-            existing?.idempotency_key ?? null,
-            pending.idempotencyKey,
-          );
-
-          if (conflict === 'conflict') {
-            if (pending.idempotencyKey === queued.idempotencyKey) {
-              // Not "an Auto-check" specifically: `classifyConflict` only proves the row
-              // wasn't filed by this attempt, never who actually filed it — it could just
-              // as well be the same author answering from a second device.
-              rejection =
-                'This day has already been answered — from another device, or by an ' +
-                'Auto-check if one is attached — before this reached the server. Reopen ' +
-                "the app and it will be gone from today's questions.";
-            }
-            // Retrying changes nothing — this row will never accept it. Leaving it queued
-            // would retry forever against a day that is already, and permanently, decided.
-            removeFromQueue(window.localStorage, pending.idempotencyKey);
-          }
-
-          return 'sent';
-        }
-
-        // A refusal is permanent. Keeping it queued would retry forever against a rule that
-        // will never accept it, while the author is told it is safely saved.
-        if (result === 'rejected' && pending.idempotencyKey === queued.idempotencyKey) {
-          rejection = error?.message ?? 'The server refused this answer.';
-        }
-        if (result === 'rejected') {
-          removeFromQueue(window.localStorage, pending.idempotencyKey);
-        }
-
-        return shouldRetry(result) ? 'failed' : 'sent';
-      });
-
-      if (rejection) {
+      if (outcome.kind === 'refused') {
         // Not advanced past the question: nothing was recorded, so he has not answered.
-        setSending({ kind: 'failed', reason: rejection });
+        setSending({ kind: 'failed', reason: outcome.reason });
         return;
       }
 
-      setSending(
-        outcome.kept.includes(queued.idempotencyKey) ? { kind: 'queued' } : { kind: 'idle' },
-      );
+      setSending(outcome.kind === 'queued' ? { kind: 'queued' } : { kind: 'idle' });
       onAnswered(commitment.id);
     } catch (error) {
       setSending({ kind: 'failed', reason: String(error) });

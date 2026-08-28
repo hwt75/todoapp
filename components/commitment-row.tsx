@@ -15,6 +15,9 @@ export interface RowCommitment {
   carries_penalty: boolean;
   weekly_target: number | null;
   daily_minutes_target: number | null;
+  /** `HH:MM:SS` as Postgres renders a `time`, or null on an untimed commitment (Story 6.1). */
+  due_time?: string | null;
+  late_window_minutes?: number | null;
 }
 
 /**

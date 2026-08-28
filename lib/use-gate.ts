@@ -36,7 +36,10 @@ export function useGate(ownerId: string | null): GateState {
 
       const [{ data: profile }, { data: commitments }, { data: filed }] = await Promise.all([
         supabase.from('profile').select('morning_hour').maybeSingle(),
-        supabase.from('commitment').select('id,name,cadence,archived_at'),
+        // `due_time` is read for what it decides rather than for what it says: a commitment
+        // that carries one is claimed on its own day and must not be asked about here
+        // (`isAskedNextMorning()`, Story 6.2).
+        supabase.from('commitment').select('id,name,cadence,archived_at,due_time'),
         supabase.from('declaration').select('commitment_id').eq('for_day', day),
       ]);
 

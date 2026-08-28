@@ -3,7 +3,9 @@ import { COMMITMENT_CADENCES } from './commitment';
 import {
   calendarMoment,
   commitmentsOwing,
+  dayDeclarationLandsOn,
   dayInQuestion,
+  isAskedNextMorning,
   isAskingTime,
   isDeclared,
   previousDay,
@@ -168,5 +170,59 @@ describe('how the question is phrased', () => {
     expect(questionFor({ id: 'x', name: 'Gym', cadence: 'daily' }, '2026-08-18')).toContain(
       '2026-08-18',
     );
+  });
+});
+
+/**
+ * Story 6.2 — what the morning question asks about, and which day an answer lands on.
+ *
+ * Both mirror `declaration_derive_day()`, which is the authority;
+ * `supabase/tests/6-2-a-claim-lands-on-the-day-it-was-made.sql` drives it from that side.
+ */
+describe('what the morning question asks about', () => {
+  it('asks about a commitment with no time, as it always has', () => {
+    expect(isAskedNextMorning({ cadence: 'daily' })).toBe(true);
+    expect(isAskedNextMorning({ cadence: 'daily', due_time: null })).toBe(true);
+  });
+
+  it('does not ask about one that carries a time', () => {
+    // It was claimed on its own day. Asking again would offer a second, softer answer — and
+    // that answer would collide with declaration_one_per_commitment_day on a row he cannot
+    // see, so the gate would fail on a constraint rather than merely ask something pointless.
+    expect(isAskedNextMorning({ cadence: 'daily', due_time: '20:00:00' })).toBe(false);
+    expect(isAskedNextMorning({ cadence: 'weekly_quota', due_time: '20:00:00' })).toBe(false);
+  });
+
+  it('still does not ask about an hours quota, timed or not', () => {
+    expect(isAskedNextMorning({ cadence: 'daily_hours_quota' })).toBe(false);
+  });
+
+  it('leaves a timed commitment out of what is owed', () => {
+    const commitments = [
+      { id: 'gym', name: 'Gym', cadence: 'daily' as const },
+      { id: 'pill', name: 'Pill', cadence: 'daily' as const, due_time: '20:00:00' },
+    ];
+
+    expect(commitmentsOwing(commitments, [], hcm('2026-08-19', 8), 7).map((c) => c.id)).toEqual([
+      'gym',
+    ]);
+  });
+});
+
+describe('the day a declaration lands on', () => {
+  it('is the day before, for a morning answer', () => {
+    // The rule the whole product ran on before this story, and the one it must keep.
+    expect(dayDeclarationLandsOn(hcm('2026-08-19', 7, 30), false)).toBe('2026-08-18');
+  });
+
+  it('is the day of the tap, for a claim', () => {
+    expect(dayDeclarationLandsOn(hcm('2026-08-19', 20, 14), true)).toBe('2026-08-19');
+  });
+
+  it('reads the local day either way, not the device"s', () => {
+    // 00:30 local on the 19th is still the 18th in UTC. A claim then is a claim for the 19th.
+    const justAfterMidnight = hcm('2026-08-19', 0, 30);
+    expect(dayDeclarationLandsOn(justAfterMidnight, true)).toBe('2026-08-19');
+    expect(dayDeclarationLandsOn(justAfterMidnight, false)).toBe('2026-08-18');
   });
 });

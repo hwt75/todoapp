@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { CommitmentRow, type RowCommitment } from '@/components/commitment-row';
+import { submitDeclaration, type QueuedClaim } from '@/lib/declaration-write';
 import { stateToday } from '@/lib/commitment-state';
 import { createClient } from '@/lib/supabase/client';
 import { DebtBlock } from '@/components/debt-block';
@@ -43,7 +44,17 @@ type View =
 type GraceRowState =
   { kind: 'idle' } | { kind: 'spending' } | { kind: 'spent' } | { kind: 'failed'; reason: string };
 
-const SELECT = 'id,name,cadence,carries_penalty,weekly_target,daily_minutes_target';
+/** Story 6.2, per timed commitment. `queued` is a real outcome, not a failure: the claim is on
+ *  the device dated when it was tapped, and it goes when there is a connection. */
+type ClaimState =
+  | { kind: 'idle' }
+  | { kind: 'claiming' }
+  | { kind: 'claimed' }
+  | { kind: 'queued' }
+  | { kind: 'failed'; reason: string };
+
+const SELECT =
+  'id,name,cadence,carries_penalty,weekly_target,daily_minutes_target,due_time,late_window_minutes';
 
 /**
  * The screen the author opens, and the only one he opens under reluctance.
@@ -68,6 +79,10 @@ export function Today({
   const [view, setView] = useState<View>({ kind: 'loading' });
   // Story 5.1, keyed by `for_day` — mirrors `components/ledger.tsx`'s own identical state.
   const [graceState, setGraceState] = useState<Record<string, GraceRowState>>({});
+  // Story 6.2, keyed by commitment id — the same client-local shape `graceState` uses above,
+  // and for the same reason: a claim may be sitting in the offline queue, so there is nothing
+  // on the server to re-read that would tell this screen what happened.
+  const [claimState, setClaimState] = useState<Record<string, ClaimState>>({});
   // Guards `spendGraceDay`'s own state updates after the insert's await resolves — mirrors
   // `components/settings.tsx`'s identical `mounted` ref, needed for the same reason: a spend
   // fired from a click can still be in flight when this screen unmounts (opening the Ledger,
@@ -188,6 +203,50 @@ export function Today({
   /** Spends a Grace Day against one Failed, owed day. See `components/ledger.tsx`'s own
    *  identical function for the full reasoning — this is the same control, offered from the
    *  Day summary rather than a Ledger row (FR-17's own two current entry points). */
+  /**
+   * Claim a timed commitment for today.
+   *
+   * Every rule about what a claim is — which day it lands on, whether the window was open,
+   * that a retry lands once — belongs to `declaration_derive_day()` and to the shared write
+   * path. This asks and reports; it decides nothing, and in particular it does not check the
+   * window itself. A second copy of that rule in a component is a rule only a browser can
+   * exercise, and the server's refusal already names the window in its own words.
+   */
+  async function claim(commitmentId: string) {
+    setClaimState((current) => ({ ...current, [commitmentId]: { kind: 'claiming' } }));
+
+    try {
+      const outcome = await submitDeclaration(window.localStorage, {
+        idempotencyKey: crypto.randomUUID(),
+        ownerId,
+        commitmentId,
+        answer: 'held',
+        answeredAt: new Date().toISOString(),
+        // Lands on today, not yesterday — this is the read-side half of that, so a retry
+        // arriving twice is recognised as its own duplicate rather than as someone else's row.
+        timed: true,
+      } satisfies QueuedClaim);
+
+      if (!mounted.current) return;
+
+      setClaimState((current) => ({
+        ...current,
+        [commitmentId]:
+          outcome.kind === 'refused'
+            ? { kind: 'failed', reason: outcome.reason }
+            : outcome.kind === 'queued'
+              ? { kind: 'queued' }
+              : { kind: 'claimed' },
+      }));
+    } catch (error) {
+      if (!mounted.current) return;
+      setClaimState((current) => ({
+        ...current,
+        [commitmentId]: { kind: 'failed', reason: String(error) },
+      }));
+    }
+  }
+
   async function spendGraceDay(forDay: string) {
     setGraceState((s) => ({ ...s, [forDay]: { kind: 'spending' } }));
 
@@ -269,6 +328,60 @@ export function Today({
               />
             ))}
           </div>
+
+          {/* Story 6.2 — the claim, and only the claim.
+              Offered for every timed commitment, with no attempt to say whether its window is
+              ahead, open or already shut, and no attempt to say whether it has been claimed
+              earlier today. Both need reading state this screen deliberately cannot reach:
+              this file must never read raw `declaration` rows (AD-8 — one source for a
+              position, never a client-side tally), and there is no view yet that answers
+              "where does this window stand". Building one is Story 6.5.
+
+              Until then the control is offered a second time after a reload, and the second
+              tap is refused by `declaration_one_per_commitment_day` with a sentence saying the
+              day is already answered. Legible, and honest about what this screen knows. */}
+          {view.rows.some((row) => row.due_time) && (
+            <div className="card card-pad stack">
+              {view.rows
+                .filter((row) => row.due_time)
+                .map((row) => {
+                  const state: ClaimState = claimState[row.id] ?? { kind: 'idle' };
+
+                  return (
+                    <div key={row.id}>
+                      <div className="actions">
+                        <button
+                          type="button"
+                          disabled={
+                            state.kind === 'claiming' ||
+                            state.kind === 'claimed' ||
+                            state.kind === 'queued'
+                          }
+                          onClick={() => void claim(row.id)}
+                        >
+                          {`Claim ${row.name}`}
+                        </button>
+                      </div>
+
+                      {state.kind === 'claimed' && <p className="row-muted">Claimed for today.</p>}
+
+                      {state.kind === 'queued' && (
+                        <p className="row-muted">
+                          Saved on this device — there is no connection right now. It will go when
+                          there is one, dated when you tapped.
+                        </p>
+                      )}
+
+                      {state.kind === 'failed' && (
+                        <p>
+                          <strong>Not claimed.</strong> {state.reason}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
 
           <DebtBlock totalDong={view.owedDong} onOpen={onOpenLedger} />
 
