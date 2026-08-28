@@ -7,13 +7,18 @@ import {
   COMMITMENT_KINDS,
   EMPTY_DRAFT,
   KIND_LABELS,
+  LATE_WINDOW_MAX_MINUTES,
+  LATE_WINDOW_MIN_MINUTES,
+  TIMED_COMMITMENT_COPY,
   type CommitmentCadence,
   type CommitmentDraft,
   type CommitmentKind,
   autoChecksPossible,
+  canBeTimed,
   draftProblems,
   requiredTargets,
   withCadence,
+  withDueTime,
   withKind,
 } from '@/lib/commitment';
 
@@ -61,6 +66,7 @@ export function CommitmentForm({
   const targets = requiredTargets(draft.cadence);
   const checksPossible = autoChecksPossible(draft.kind, draft.cadence);
   const autoCheckActive = checksPossible && draft.autoCheckEnabled;
+  const timeable = canBeTimed(draft.kind, draft.cadence);
 
   function set<K extends keyof CommitmentDraft>(key: K, value: CommitmentDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -173,6 +179,51 @@ export function CommitmentForm({
                 )
               }
             />
+          </>
+        )}
+
+        {/* A time is optional and stays optional: leaving it blank is the behaviour every
+            commitment had before Story 6.1. It is offered only where there is a moment to
+            name — an abstention has none, and an Hours-per-day commitment is judged by banked
+            minutes rather than by an instant. */}
+        {timeable && (
+          <>
+            <label htmlFor="commitment-due-time">Time of day</label>
+            <input
+              id="commitment-due-time"
+              type="time"
+              value={draft.dueTime ?? ''}
+              // Switching a time on brings its window with it. Asking for the two separately
+              // would show a problem the author had not yet had a chance to cause.
+              onChange={(event) =>
+                setDraft((current) =>
+                  withDueTime(current, event.target.value === '' ? null : event.target.value),
+                )
+              }
+            />
+
+            {draft.dueTime !== null && (
+              <>
+                <label htmlFor="commitment-late-window">Late window, in minutes</label>
+                <input
+                  id="commitment-late-window"
+                  type="number"
+                  min={LATE_WINDOW_MIN_MINUTES}
+                  max={LATE_WINDOW_MAX_MINUTES}
+                  value={draft.lateWindowMinutes ?? ''}
+                  onChange={(event) =>
+                    set(
+                      'lateWindowMinutes',
+                      event.target.value === '' ? null : Number(event.target.value),
+                    )
+                  }
+                />
+
+                {/* The trade a time makes: three days to answer becomes a deadline at
+                    midnight. Said here, once, rather than discovered at the end of a month. */}
+                <p className="row-muted">{TIMED_COMMITMENT_COPY.warning}</p>
+              </>
+            )}
           </>
         )}
 

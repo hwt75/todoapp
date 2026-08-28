@@ -25,6 +25,9 @@ interface CommitmentRow {
   auto_check_kind: AutoCheckKind | null;
   auto_check_account_ref: string | null;
   auto_check_last_checked_at: string | null;
+  /** `HH:MM:SS` — Postgres renders a `time` with its seconds, which are always zero here. */
+  due_time: string | null;
+  late_window_minutes: number | null;
 }
 
 type View =
@@ -35,7 +38,7 @@ type View =
   | { kind: 'failed'; reason: string };
 
 const SELECT =
-  'id,name,kind,cadence,carries_penalty,weekly_target,week_start_day,daily_minutes_target,auto_check_kind,auto_check_account_ref,auto_check_last_checked_at';
+  'id,name,kind,cadence,carries_penalty,weekly_target,week_start_day,daily_minutes_target,auto_check_kind,auto_check_account_ref,auto_check_last_checked_at,due_time,late_window_minutes';
 
 /** The one query both the first load and every refresh use, so they cannot drift apart. */
 function fetchCommitments() {
@@ -57,6 +60,10 @@ function toDraft(row: CommitmentRow): CommitmentDraft {
     dailyMinutesTarget: row.daily_minutes_target,
     autoCheckEnabled: row.auto_check_kind !== null,
     autoCheckAccountRef: row.auto_check_account_ref ?? '',
+    // `20:00:00` back to `20:00`. The draft carries what `<input type="time">` both renders
+    // and produces, so an edit that never touches the field sends back exactly what it read.
+    dueTime: row.due_time === null ? null : row.due_time.slice(0, 5),
+    lateWindowMinutes: row.late_window_minutes,
   };
 }
 
@@ -65,6 +72,9 @@ function describe(row: CommitmentRow): string {
   const parts = [KIND_LABELS[row.kind], CADENCE_LABELS[row.cadence]];
   if (row.weekly_target !== null) parts.push(`${row.weekly_target}×`);
   if (row.daily_minutes_target !== null) parts.push(`${row.daily_minutes_target / 60}h`);
+  if (row.due_time !== null) {
+    parts.push(`${row.due_time.slice(0, 5)} +${row.late_window_minutes}m`);
+  }
   return parts.join(' · ');
 }
 

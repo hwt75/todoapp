@@ -57,6 +57,8 @@ const gym = {
   auto_check_kind: null,
   auto_check_account_ref: null,
   auto_check_last_checked_at: null,
+  due_time: null,
+  late_window_minutes: null,
 };
 
 beforeEach(() => {
@@ -147,6 +149,24 @@ describe('the commitment list', () => {
     expect(screen.getByLabelText('Account elsewhere')).toBeChecked();
     expect(screen.getByLabelText('Account')).toHaveValue('my-handle');
     expect(screen.getByText(/Last read/)).toBeInTheDocument();
+  });
+
+  it('carries a time into the form as HH:MM, not as the HH:MM:SS the database sends', async () => {
+    listResult = {
+      data: [{ ...gym, due_time: '20:00:00', late_window_minutes: 30 }],
+      error: null,
+    };
+    render(<CommitmentList ownerId="u1" />);
+
+    // The line says it before anything is opened.
+    expect(await screen.findByText(/20:00 \+30m/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    // `<input type="time">` renders and produces HH:MM. Handing it the seconds Postgres sends
+    // would make an edit that never touched the field send back something different.
+    expect(screen.getByLabelText('Time of day')).toHaveValue('20:00');
+    expect(screen.getByLabelText('Late window, in minutes')).toHaveValue(30);
   });
 
   it('says a linked commitment has not been read yet, before any pass has run', async () => {

@@ -79,6 +79,16 @@ development_status:
   5-3-the-friend-is-told-i-have-disappeared: done
   5-4-the-long-view-including-whether-this-still-works: done
   epic-5-retrospective: done
+
+  epic-6: in-progress
+  6-1-a-commitment-can-carry-a-time-and-a-late-window: done
+  6-2-a-same-day-claim-lands-on-the-day-it-was-made: done
+  6-3-evidence-detaches-from-an-appeal: review
+  6-4-midnight-decides-the-day: backlog
+  6-5-today-shows-where-the-window-stands: backlog
+  6-6-the-reminder-lands-inside-the-window: backlog
+  6-7-the-referee-may-object: backlog
+  epic-6-retrospective: optional
 action_items:
   - id: "epic-1-retro-item-1-record-whether-a-research-spike-may-skip"
     epic: 1

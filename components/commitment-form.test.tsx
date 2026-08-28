@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { CommitmentForm } from './commitment-form';
-import { EMPTY_DRAFT, type CommitmentDraft } from '@/lib/commitment';
+import { EMPTY_DRAFT, TIMED_COMMITMENT_COPY, type CommitmentDraft } from '@/lib/commitment';
 
 /**
  * Create or edit one commitment.
@@ -26,6 +26,13 @@ const weekly: CommitmentDraft = {
   cadence: 'weekly_quota',
   weeklyTarget: 3,
   weekStartDay: 1,
+};
+
+const timed: CommitmentDraft = {
+  ...EMPTY_DRAFT,
+  name: 'Pill',
+  dueTime: '20:00',
+  lateWindowMinutes: 30,
 };
 
 describe('the commitment form', () => {
@@ -241,5 +248,77 @@ describe('the commitment form', () => {
 
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  });
+});
+
+/**
+ * Story 6.1 — the time controls.
+ *
+ * `lib/commitment.test.ts` covers the rules. This covers the three things the form itself is
+ * responsible for: offering the controls only where a moment exists, not leaving a time behind
+ * on a commitment that can no longer carry one, and saying what a time costs before it is saved.
+ */
+describe('the time of day on a commitment form', () => {
+  it('is offered on a commitment with a moment, and not on one without', async () => {
+    render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByLabelText('Time of day')).toBeInTheDocument();
+
+    // Nothing happens at an instant when the commitment is a thing not done.
+    await userEvent.selectOptions(screen.getByLabelText('Kind'), 'abstain');
+    expect(screen.queryByLabelText('Time of day')).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText('Kind'), 'do');
+    expect(screen.getByLabelText('Time of day')).toBeInTheDocument();
+
+    // And an Hours-per-day commitment is judged by banked minutes, never by a moment.
+    await userEvent.selectOptions(screen.getByLabelText('Cadence'), 'daily_hours_quota');
+    expect(screen.queryByLabelText('Time of day')).not.toBeInTheDocument();
+  });
+
+  it('asks for a window only once a time is set, and fills in a default', async () => {
+    render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.queryByLabelText('Late window, in minutes')).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText('Time of day'), '20:00');
+
+    // The two are refused separately by the database, so offering them one at a time would
+    // show the author a problem he had not yet had a chance to cause.
+    expect(screen.getByLabelText('Late window, in minutes')).toHaveValue(30);
+  });
+
+  it('says what a time costs, in full, before it is saved', async () => {
+    render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.queryByText(TIMED_COMMITMENT_COPY.warning)).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText('Time of day'), '20:00');
+    expect(screen.getByText(TIMED_COMMITMENT_COPY.warning)).toBeInTheDocument();
+  });
+
+  it('drops a time when the kind that could carry it is switched away', async () => {
+    const onSave = vi.fn();
+    render(<CommitmentForm initial={timed} onSave={onSave} onCancel={vi.fn()} />);
+
+    await userEvent.selectOptions(screen.getByLabelText('Kind'), 'abstain');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    // A leftover time on an abstention is refused by a constraint naming a field the author
+    // can no longer see — the same failure mode a stale cadence target has.
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onSave.mock.calls[0][0]).toMatchObject({ dueTime: null, lateWindowMinutes: null });
+  });
+
+  it('will not save a window that runs past midnight, and says so', async () => {
+    const onSave = vi.fn();
+    render(
+      <CommitmentForm
+        initial={{ ...timed, dueTime: '23:30', lateWindowMinutes: 60 }}
+        onSave={onSave}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('The late window has to end before midnight.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(onSave).not.toHaveBeenCalled();
   });
 });

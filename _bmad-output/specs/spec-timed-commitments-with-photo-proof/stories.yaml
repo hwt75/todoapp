@@ -1,0 +1,136 @@
+- id: "6-1"
+  title: A commitment can carry a time and a late window
+  description: >-
+    Adds due_time and late_window_minutes to a commitment, refuses a window that
+    crosses midnight, and states on the setup surface what a missed photo costs.
+    Serves CAP-1 and CAP-8; nothing judges a timed commitment yet.
+  spec_checkpoint: true
+  done_checkpoint: false
+  invoke_dev_with: >-
+    The midnight rule is a check constraint on the commitment table, not a form
+    validation - lib/commitment.ts mirrors it so the form can refuse a bad draft
+    without a round trip, exactly as the existing cadence-target rules do. Copy
+    that pattern rather than inventing one. Never use the word "grace" for this
+    window in a column, function, identifier, or copy string: Grace Day already
+    means a countable forgiveness token in this product. Untimed commitments must
+    be untouched - a null due_time means today's behaviour, and no existing row
+    changes. CAP-8's warning is load-bearing, not decoration: it is the only place
+    the author learns that a forgotten photo costs a day.
+
+- id: "6-2"
+  title: A same-day claim lands on the day it was made
+  description: >-
+    Branches the declaration day-derivation so a claim filed against a timed
+    commitment resolves to the current local day instead of yesterday, routes the
+    claim through the existing offline queue, and stops the morning gate asking a
+    second time. Serves CAP-2 and CAP-4.
+  spec_checkpoint: true
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Highest-risk change in the epic and deliberately isolated - no photo work in
+    this story. declaration_derive_day() currently computes for_day as
+    (answered_at at time zone Asia/Ho_Chi_Minh)::date - 1 unconditionally; that
+    subtraction is what makes a morning answer mean yesterday and it must keep
+    meaning that for every untimed commitment. Get the branch wrong and a timed
+    claim files against the previous day and collides with
+    declaration_one_per_commitment_day. The offline queue is reused as-is: it is
+    already generic over item type, stores the instant of the tap, and dedupes on
+    an idempotency key generated at that tap. Do not modify it. A claim tapped
+    outside its window is refused at insert rather than accepted and judged late -
+    accepting it costs two days, not one. The morning-gate exclusion moved here
+    from 6-4: lib/declaration.ts decides what to ASK and changes now, while
+    public.commitments_owing() decides what is TRUE and stays in 6-4.
+
+- id: "6-3"
+  title: Evidence detaches from an appeal
+  description: >-
+    Lets a photo hang off an ordinary same-day claim rather than only off an
+    appeal, reusing the existing private bucket, ownership derivation, and
+    capture-date rule. Serves the upload half of CAP-3.
+  spec_checkpoint: false
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Detach, do not rebuild. The bucket, the object policies, the referee's viewer
+    and appeal_evidence_derive_owner() all stand; see brownfield.md for what each
+    one guarantees. Three properties must survive the change: owner is derived
+    server-side from the parent row and never trusted from the client;
+    captured_on must equal the day being proven; the bucket stays private with
+    read access derived from that ownership. captured_on continues to come from
+    file.lastModified - do not add an EXIF dependency. A day that is already
+    frozen refuses new evidence. This story uploads and stores; it does not decide
+    any day's verdict.
+
+- id: "6-4"
+  title: Midnight decides the day
+  description: >-
+    Moves the settlement deadline from one account-wide D+3 to per-commitment, so
+    a timed commitment without accepted proof fails at the end of its own day, and
+    excludes timed commitments from the morning question. Serves the verdict half
+    of CAP-3.
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    The only story in this epic that moves money. settle_day() currently holds a
+    day open while answered < total and not past_deadline, where the deadline is
+    declaration_deadline(day, morning_hour) = day + 3; a timed commitment's
+    deadline is midnight of its own day, so a day mixing both kinds must close
+    each on its own clock. Without this, a forgotten photo leaves the day open for
+    three days instead of failing at midnight, which contradicts the spec's
+    central rule. public.commitments_owing() and gate_reminder() join timed
+    commitments to the exclusion they already apply to daily_hours_quota - their
+    question died at midnight and must not be asked again. The client-side half of
+    that exclusion already shipped in 6-2; this is the server-side half, and it is
+    the one settlement, penalties, expiry and the day summary all read.
+    Settlement stays the single writer of derived state.
+    A failed day's only remedy remains a Grace Day, capped at two per calendar
+    month; this story does not change that cap.
+
+- id: "6-5"
+  title: Today shows where the window stands
+  description: >-
+    Distinguishes ahead, open now, shut, and proven for each timed commitment on
+    the Today surface, without opening or refreshing anything. Serves CAP-7.
+  spec_checkpoint: false
+  done_checkpoint: true
+  invoke_dev_with: >-
+    lifecycle.md carries the state machine this surface renders; the states shown
+    must be the ones named there, not a second vocabulary. A window that has shut
+    unproven has to read as distinct from one still waiting for its hour - that
+    distinction is the whole story. All boundaries resolve in Asia/Ho_Chi_Minh;
+    the client may compute what to display but never derives a date for storage.
+
+- id: "6-6"
+  title: The reminder lands inside the window
+  description: >-
+    Adds a schedule that enqueues a reminder at a timed commitment's own due time,
+    since the existing hourly enqueuer cannot reach a specific minute. Serves
+    CAP-6.
+  spec_checkpoint: false
+  done_checkpoint: true
+  invoke_dev_with: >-
+    This is a scheduling gap, not a column. gate_reminder is enqueued by cron
+    hourly at :05, so a commitment due at 20:30 would first be reminded at 21:05 -
+    after a 30-minute window has already shut. The new job must pick a minute that
+    collides with neither the settlement pass (hourly at :15) nor the outbox
+    worker (every minute), and the existing separation of those schedules is worth
+    preserving for the same reason it was made. The outbox worker itself does not
+    change: delivery latency was never the problem. Enqueue only; every outbound
+    effect stays behind the outbox.
+
+- id: "6-7"
+  title: The referee may object
+  description: >-
+    Gives the referee a way to contest one proven day, without ever obliging the
+    referee to act - silence means the day holds. Serves CAP-5.
+  spec_checkpoint: true
+  done_checkpoint: false
+  invoke_dev_with: >-
+    BLOCKED: all four open questions in SPEC.md must be answered before this story
+    can be specced - the objection window's length, what an objection produces,
+    whether it can reach a frozen day, and who carries the burden once it opens.
+    Do not start by guessing them. Build from the existing appeal skeleton pointed
+    the other way (appeal has a deadline, a ruling function, and an expiry pass);
+    do not invent a second dispute mechanism. The property that must not be lost:
+    the referee is never sent a queue, never obliged to act, and never notified in
+    a way that demands a decision. If a design makes a day depend on the referee
+    acting, it is the wrong design.

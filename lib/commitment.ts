@@ -48,7 +48,24 @@ export interface CommitmentDraft {
   autoCheckEnabled: boolean;
   /** What the author typed to identify the account elsewhere. Saved as-is, no validation. */
   autoCheckAccountRef: string;
+  /**
+   * `HH:MM`, a wall-clock time of day in Asia/Ho_Chi_Minh — never an instant (AD-6). Null on
+   * an untimed commitment, which behaves exactly as every commitment did before Story 6.1.
+   */
+  dueTime: string | null;
+  /** Minutes after `dueTime` during which the commitment still counts as met. */
+  lateWindowMinutes: number | null;
 }
+
+/** The window's bounds, mirroring `commitment_late_window_range`. */
+export const LATE_WINDOW_MIN_MINUTES = 5;
+export const LATE_WINDOW_MAX_MINUTES = 240;
+
+/** What a window is set to when a time is first switched on. */
+export const LATE_WINDOW_DEFAULT_MINUTES = 30;
+
+/** Mirrors `commitment_window_within_the_day`. Half-open: a window ending here is inside the day. */
+export const MINUTES_IN_A_DAY = 1440;
 
 /**
  * A blank commitment. `carriesPenalty` is false and that is the point: money is never a
@@ -64,6 +81,8 @@ export const EMPTY_DRAFT: CommitmentDraft = {
   dailyMinutesTarget: null,
   autoCheckEnabled: false,
   autoCheckAccountRef: '',
+  dueTime: null,
+  lateWindowMinutes: null,
 };
 
 export type TargetField = 'weeklyTarget' | 'weekStartDay' | 'dailyMinutesTarget';
@@ -102,6 +121,74 @@ export function autoChecksPossible(
 ): boolean {
   return kind !== 'abstain' && cadence !== 'daily_hours_quota';
 }
+
+/**
+ * Whether this commitment has a moment that could be named.
+ *
+ * **This is deliberately not `autoChecksPossible()`, and must not be merged with it.** The two
+ * exclude the same two cases today and the reasons are unrelated. `autoChecksPossible()` is
+ * about whether a *sensor* exists: nothing observes a thing not done, and an hours quota is
+ * measured in banked minutes rather than reported on. This is about whether a *moment* exists:
+ * an abstention has no instant of doing to photograph, and an hours quota is never settled by a
+ * declaration at all, so a due time would name a moment nothing would ever read.
+ *
+ * The match is a coincidence. Sharing one function would make two unrelated rules move
+ * together, and the next change to either would break the other in silence.
+ *
+ * Mirrors `commitment_time_needs_a_moment`; the constraint is what actually decides.
+ */
+export function canBeTimed(kind: CommitmentKind, cadence: CommitmentCadence): boolean {
+  return kind !== 'abstain' && cadence !== 'daily_hours_quota';
+}
+
+/** `HH:MM`, 24-hour, whole minutes — the shape `<input type="time">` produces and the database accepts. */
+const TIME_OF_DAY = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/**
+ * Minutes from midnight, or null if this is not a time of day.
+ *
+ * Whole minutes on purpose, matching `commitment_due_time_whole_minute`: with seconds allowed,
+ * 23:55:30 with a five-minute window compares as exactly 1440 and passes, while the window it
+ * describes ends half a minute into the next day.
+ */
+export function minutesIntoDay(dueTime: string): number | null {
+  const match = TIME_OF_DAY.exec(dueTime);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+/**
+ * Turn a time on or off, carrying the window with it.
+ *
+ * Switching a time on brings the default window rather than leaving it null, because the two
+ * are refused separately by `commitment_time_and_window_together` and a form that asked for
+ * them one at a time would show a problem the author had not yet had a chance to cause.
+ */
+export function withDueTime(draft: CommitmentDraft, dueTime: string | null): CommitmentDraft {
+  if (dueTime === null) {
+    return { ...draft, dueTime: null, lateWindowMinutes: null };
+  }
+  return {
+    ...draft,
+    dueTime,
+    lateWindowMinutes: draft.lateWindowMinutes ?? LATE_WINDOW_DEFAULT_MINUTES,
+  };
+}
+
+/**
+ * What the author is told before a time is saved, verbatim.
+ *
+ * Kept here for the reason `lib/appeal.ts`'s `APPEAL_COPY` gives: this is a copy rule, testable
+ * without a component, and the source `components/commitment-form.tsx` reads from rather than
+ * one it invents inline. It is load-bearing rather than decoration — a timed commitment trades
+ * the three-day declaration window for a deadline at midnight, and this sentence is the only
+ * place the author learns that before it costs him.
+ */
+export const TIMED_COMMITMENT_COPY = {
+  warning:
+    'A timed commitment is settled by a photo, not by the morning question. No photo before ' +
+    'midnight is a failed day — and you have only two Grace Days a month to undo one.',
+} as const;
 
 /**
  * Every reason a draft cannot be saved, in the order a reader would meet them.
@@ -160,6 +247,49 @@ export function draftProblems(draft: CommitmentDraft): string[] {
     }
   }
 
+  // A time and its window are refused separately by the database
+  // (`commitment_time_and_window_together`), so they are checked together here.
+  if ((draft.dueTime === null) !== (draft.lateWindowMinutes === null)) {
+    problems.push(
+      draft.dueTime === null
+        ? 'A late window needs a time to be late against.'
+        : 'A time needs a late window.',
+    );
+  }
+
+  if (draft.dueTime !== null) {
+    // Mirrors `canBeTimed()` and `commitment_time_needs_a_moment`. Kept as its own message
+    // rather than folded into the Auto-check one: the two rules exclude the same kinds for
+    // unrelated reasons, and a shared sentence would imply a shared cause.
+    if (draft.kind === 'abstain') {
+      problems.push('An Avoid-it commitment has no moment to put a time on.');
+    } else if (draft.cadence === 'daily_hours_quota') {
+      problems.push(
+        'An Hours-per-day commitment is judged by the time you bank, not by a time of day.',
+      );
+    }
+
+    const startsAt = minutesIntoDay(draft.dueTime);
+    if (startsAt === null) {
+      problems.push('A time of day looks like 20:00.');
+    } else if (draft.lateWindowMinutes !== null) {
+      if (
+        !Number.isInteger(draft.lateWindowMinutes) ||
+        draft.lateWindowMinutes < LATE_WINDOW_MIN_MINUTES ||
+        draft.lateWindowMinutes > LATE_WINDOW_MAX_MINUTES
+      ) {
+        problems.push(
+          `The late window must be a whole number of minutes from ${LATE_WINDOW_MIN_MINUTES} to ${LATE_WINDOW_MAX_MINUTES}.`,
+        );
+      } else if (startsAt + draft.lateWindowMinutes > MINUTES_IN_A_DAY) {
+        // Not arithmetic on a time value, on purpose. `time + interval` wraps in Postgres and
+        // in most date libraries, so 23:30 plus an hour reads as 00:30 and the check passes on
+        // exactly the case it exists to refuse.
+        problems.push('The late window has to end before midnight.');
+      }
+    }
+  }
+
   if (draft.autoCheckEnabled) {
     // Mirrors `autoChecksPossible()`: there is no sensor for a thing not done, so an
     // Auto-check can never attach to an abstention — refused here and by the database's
@@ -185,11 +315,16 @@ export function draftProblems(draft: CommitmentDraft): string[] {
  */
 export function withKind(draft: CommitmentDraft, kind: CommitmentKind): CommitmentDraft {
   const checksPossible = autoChecksPossible(kind, draft.cadence);
+  const timeable = canBeTimed(kind, draft.cadence);
   return {
     ...draft,
     kind,
     autoCheckEnabled: checksPossible ? draft.autoCheckEnabled : false,
     autoCheckAccountRef: checksPossible ? draft.autoCheckAccountRef : '',
+    // Cleared for the same reason a stale target is: a time left on a kind that cannot carry
+    // one is refused by a constraint about a field no longer on screen.
+    dueTime: timeable ? draft.dueTime : null,
+    lateWindowMinutes: timeable ? draft.lateWindowMinutes : null,
   };
 }
 
@@ -197,9 +332,12 @@ export function withKind(draft: CommitmentDraft, kind: CommitmentKind): Commitme
 export function withCadence(draft: CommitmentDraft, cadence: CommitmentCadence): CommitmentDraft {
   const required = requiredTargets(cadence);
   const checksPossible = autoChecksPossible(draft.kind, cadence);
+  const timeable = canBeTimed(draft.kind, cadence);
   return {
     ...draft,
     cadence,
+    dueTime: timeable ? draft.dueTime : null,
+    lateWindowMinutes: timeable ? draft.lateWindowMinutes : null,
     weeklyTarget: required.includes('weeklyTarget') ? draft.weeklyTarget : null,
     weekStartDay: required.includes('weekStartDay') ? draft.weekStartDay : null,
     dailyMinutesTarget: required.includes('dailyMinutesTarget') ? draft.dailyMinutesTarget : null,
@@ -220,6 +358,10 @@ export function toRow(draft: CommitmentDraft, ownerId: string, idempotencyKey: s
     weekly_target: draft.weeklyTarget,
     week_start_day: draft.weekStartDay,
     daily_minutes_target: draft.dailyMinutesTarget,
+    // `HH:MM` reaches a `time` column as written; no client ever derives a date or an instant
+    // from it (AD-6).
+    due_time: draft.dueTime,
+    late_window_minutes: draft.lateWindowMinutes,
     auto_check_kind: draft.autoCheckEnabled ? 'account_elsewhere' : null,
     auto_check_account_ref: draft.autoCheckEnabled ? draft.autoCheckAccountRef.trim() : null,
     // Untouched (stripped before the request) while still enabled — it is a value the
