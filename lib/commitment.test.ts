@@ -217,14 +217,22 @@ describe('switching cadence', () => {
   });
 
   it('clears a linked Auto-check when switching to Hours-per-day (Epic 4 retro, A7)', () => {
-    const linked = draft({ cadence: 'daily', autoCheckEnabled: true, autoCheckAccountRef: 'handle' });
+    const linked = draft({
+      cadence: 'daily',
+      autoCheckEnabled: true,
+      autoCheckAccountRef: 'handle',
+    });
     const switched = withCadence(linked, 'daily_hours_quota');
     expect(switched.autoCheckEnabled).toBe(false);
     expect(switched.autoCheckAccountRef).toBe('');
   });
 
   it('leaves a linked Auto-check alone when switching between cadences that both allow one', () => {
-    const linked = draft({ cadence: 'daily', autoCheckEnabled: true, autoCheckAccountRef: 'handle' });
+    const linked = draft({
+      cadence: 'daily',
+      autoCheckEnabled: true,
+      autoCheckAccountRef: 'handle',
+    });
     const switched = withCadence(linked, 'weekly_quota');
     expect(switched.autoCheckEnabled).toBe(true);
     expect(switched.autoCheckAccountRef).toBe('handle');

@@ -344,7 +344,11 @@ describe('a resolved Penalty on a day that closed expired (Epic 4 retro, 2026-08
   // resolve to held/dropped/voided/collected. Before this fix, `ledgerPillLabel` checked
   // `verdict === 'expired'` before any of these states, so a paid or resolved debt kept
   // reading "Expired" forever, hiding what actually happened to the money.
-  const expiredDay: SettlementRecord = { period: '2026-08-18', verdict: 'expired', missed_count: 1 };
+  const expiredDay: SettlementRecord = {
+    period: '2026-08-18',
+    verdict: 'expired',
+    missed_count: 1,
+  };
 
   it.each([
     ['held', 'Held'],
