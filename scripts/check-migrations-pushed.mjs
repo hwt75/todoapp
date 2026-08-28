@@ -44,10 +44,50 @@ if (result.status !== 0) {
   );
 }
 
-const rows = result.stdout
-  .split('\n')
-  .map((line) => line.split('|').map((cell) => cell.trim()))
-  .filter((cells) => cells.length >= 2 && /^\d{14}$/.test(cells[0]));
+// Reads the CLI's JSON line, and falls back to the pipe-separated table it used to print.
+//
+// Both, because this check once passed while reading neither: CLI 2.116 emits JSON, the table
+// parser matched no rows, and zero rows read as "nothing mismatched" — `All 0 migrations match`,
+// printed green over a project that was three migrations behind.
+function parseRows(stdout) {
+  for (const line of stdout.split('\n')) {
+    const text = line.trim();
+    if (!text.startsWith('{')) continue;
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed?.migrations)) {
+        return parsed.migrations.map((m) => [m.local ?? '', m.remote ?? '']);
+      }
+    } catch {
+      // Not the line we want. Keep looking rather than failing on unrelated output.
+    }
+  }
+
+  return stdout
+    .split('\n')
+    .map((line) => line.split('|').map((cell) => cell.trim()))
+    .filter((cells) => cells.length >= 2 && /^\d{14}$/.test(cells[0]));
+}
+
+const rows = parseRows(result.stdout);
+
+// Zero rows is never a pass. Either the project genuinely has no migrations — in which case this
+// is not the repo being checked — or the output changed shape again and nothing was read. The
+// second is what this check was blind to, and an empty read is indistinguishable from a clean
+// one right up until it matters.
+if (rows.length === 0) {
+  fail(
+    [
+      'Read no migrations at all from `supabase migration list`.',
+      '',
+      'This is a failure, not a clean result: an empty read looks identical to "nothing',
+      'mismatched", which is exactly how this check once passed over a project three',
+      'migrations behind. The CLI output shape has probably changed again.',
+      '',
+      (result.stdout || '').trim().slice(0, 2000),
+    ].join('\n'),
+  );
+}
 
 const localOnly = rows.filter(([, remote]) => !remote).map(([local]) => local);
 const remoteOnly = rows
