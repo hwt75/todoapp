@@ -874,3 +874,25 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
 - source_spec: `_bmad-output/implementation-artifacts/epic-4-retro-2026-08-27.md`
   summary: "The `appeal-evidence` Storage bucket's 10MiB/image-only constraints exist only in `supabase/config.toml`, which the Supabase CLI applies on local `db reset`/`start` — there is no migration that creates or re-asserts the bucket, unlike every other schema object in this repo."
   evidence: Raised by the diff-scope review (adversarial lens); the spec log records the production bucket was provisioned once, by hand, matching that config. A future environment rebuild or disaster-recovery restore that follows the repo's own migrations (its documented source of truth) would end up with an `appeal-evidence` bucket with no file-size or MIME-type limits at all, silently regressing a control nobody would notice missing until abused. Revisit by moving the bucket definition into a migration (`insert into storage.buckets (...) on conflict do update ...`).
+
+## Deferred from: Story 6.4 review (2026-08-29)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-4-midnight-decides-the-day.md`
+  summary: "`settle_day()` calls `commitments_owing()` four separate times inside one transaction — for the counts, for the AD-13 guard, for the deadline gate, and for the frozen outcomes. Under READ COMMITTED each call takes a fresh snapshot, so a declaration or (since Story 6.3) an evidence row committing between them can make the counts and the frozen outcomes disagree: a penalty written with `missed_count` 1 while the same commitment freezes as `held`."
+  evidence: Raised by the edge-case review of Story 6.4. The multi-read shape predates this story — it has been exposed to a mid-settlement declaration since Epic 2 — but a photo is a second, faster-arriving writer of the same fact, and the window is now the length of one settle_day call rather than notional. Revisit by materialising `commitments_owing(account, p_day)` once into a CTE or temp table per account iteration and reading every later count and insert from that one snapshot.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-4-midnight-decides-the-day.md`
+  summary: "\"An accepted photo\" is implemented as \"an evidence row exists for the declaration\". Deleting an evidence row would flip a day already settled `held` back to `slipped` on any later re-read — `supersede_expiries()` and `rule_appeal()` both re-derive outcomes from `commitments_owing()`."
+  evidence: Raised by the blind review of Story 6.4. Not reachable today: no surface deletes evidence, and `evidence` has no delete policy for `authenticated`. It becomes reachable the moment Story 6.7 gives the referee anything that touches a photo, which is exactly when the definition of "accepted" has to be settled deliberately rather than inherited. Revisit inside 6.7.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-4-midnight-decides-the-day.md`
+  summary: "`rule_appeal()` rebuilds a day's frozen outcomes from `commitments_owing()`, so a ruling on a day that also holds a timed commitment now reads that commitment's proof-derived answer — behaviour that changed in Story 6.4 and has no test."
+  evidence: Raised by the verification-gap review of Story 6.4. The path is reachable: a timed commitment can be settled `missed` and appealed like any other. `4-6-the-referee-rules.sql` covers the function thoroughly but only with untimed commitments. Revisit by adding a timed commitment to that file's fixture and asserting the correction's outcome rows.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-4-midnight-decides-the-day.md`
+  summary: "`commitment_answer_rate_for_month()` sums `count(*)/count(answer)` over every day of the month including today, and a timed claim reads `null` until its photo lands — so SM-6/SM-3 count the current day as unanswered for the minutes between the tap and the upload."
+  evidence: Raised by the verification-gap review of Story 6.4. Self-correcting once the photo lands and invisible in any closed month, but the monthly report can be generated mid-day. Revisit by having the measure stop at yesterday, which is also the only day range it can speak about honestly.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-4-midnight-decides-the-day.md`
+  summary: "`README.md` still says `supabase/tests/` holds nine files; it now holds 34, and `supabase/tests/README.md` has not been updated for any of Epic 6's four test files."
+  evidence: Raised by the blind review of Story 6.4. Pre-existing drift that this story extends. Revisit with a documentation pass rather than inside a feature story.

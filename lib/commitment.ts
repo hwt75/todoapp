@@ -303,6 +303,16 @@ export function draftProblems(draft: CommitmentDraft): string[] {
     if (draft.autoCheckAccountRef.trim() === '') {
       problems.push('Account elsewhere needs an account identifier to check.');
     }
+
+    // Mirrors `commitment_time_not_with_auto_check` (Story 6.4). A sensor and a photo are two
+    // answers to one question, and a timed commitment is settled by the photo: an Auto-check
+    // filing `held` the next morning would hold a day no photo ever proved, and one filing
+    // `slipped` would answer for a day already decided at midnight. Reported from this block
+    // rather than the time block above because it is the Auto-check that has to come off — the
+    // time is the thing the author just chose.
+    if (draft.dueTime !== null) {
+      problems.push('A timed commitment is proved by its photo, so nothing can check it for you.');
+    }
   }
 
   return problems;

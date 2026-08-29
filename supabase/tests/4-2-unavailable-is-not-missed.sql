@@ -263,6 +263,14 @@ begin
           'account_elsewhere', 'handle-block', v_today - 30)
   returning id into c_dblock;
 
+  -- Story 6.4: commitments_owing() no longer judges a commitment for a day before it existed.
+  -- This fixture creates its commitments moments before judging days that predate them, which is
+  -- a state no real account can reach — so it now says when they began. Order-preserving, so
+  -- every created_at comparison downstream reads the same way, and idempotent, so a second call
+  -- further down this file does not age them twice.
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(d_block, true);
   perform public.settle_day(d_block, true);
 
@@ -574,19 +582,28 @@ begin
 
   -- -------------------------------------------------------------------------------
   -- 5d. settle_day: a brand-new, Auto-check-linked commitment never blocks an OLDER day it
-  --     did not exist on. commitments_owing() has no created_at filter, so without
-  --     auto_check_pending's own created_at guard (added in this same migration), the
-  --     account's genuinely-late, unrelated commitment for that older day would get
-  --     dragged into a 96-hour block purely because a second, brand-new commitment
-  --     happened to be created after it -- proven with `c_dnewcheck_old` still unanswered
-  --     and past its own deadline, exactly Step 2b's shape, but blocked now only by
-  --     `c_dnewcheck_new`, created today, with nothing to do with that older day at all.
+  --     did not exist on. Without auto_check_pending's own created_at guard (20260824100000),
+  --     the account's genuinely-late, unrelated commitment for that older day would get
+  --     dragged into a 96-hour block purely because a second, brand-new commitment happened
+  --     to be created after it -- proven with `c_dnewcheck_old` still unanswered and past its
+  --     own deadline, exactly Step 2b's shape, but blocked now only by `c_dnewcheck_new`,
+  --     created today, with nothing to do with that older day at all.
+  --
+  --     Since Story 6.4 commitments_owing() carries that same created_at guard, so the
+  --     brand-new commitment is not even in the owed set for this day. Both guards are
+  --     asserted here rather than one being dropped as redundant: they answer different
+  --     questions (is a check still pending, versus is an answer owed at all), and the day
+  --     one of them is removed is the day the other has to be already proven.
   -- -------------------------------------------------------------------------------
   d_newcheck := v_today - 4;
+  -- `created_at` stated rather than defaulted: Story 6.4 gave commitments_owing() the same
+  -- created_at guard auto_check_pending already carried, so a commitment created moments ago is
+  -- not owed an answer for a day four days old and this step's "older, unrelated" commitment
+  -- would not be in the set it is meant to represent.
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
-                                 carries_penalty)
+                                 carries_penalty, created_at)
   values (v_d_newcheck, gen_random_uuid(), 'Older, unrelated, genuinely late', 'do', 'daily',
-          true)
+          true, v_today - 30)
   returning id into c_dnewcheck_old;
   update public.profile set morning_hour = 0 where id = v_d_newcheck;
 

@@ -477,6 +477,27 @@ describe('a timed draft the database would refuse', () => {
       'An Hours-per-day commitment is judged by the time you bank, not by a time of day.',
     );
   });
+
+  it('a time on a commitment that also carries an Auto-check (Story 6.4)', () => {
+    // Mirrors commitment_time_not_with_auto_check: a sensor and a photo are two answers to
+    // one question, and this epic named the photo.
+    expect(
+      draftProblems(
+        draft({
+          dueTime: '20:00',
+          lateWindowMinutes: 30,
+          autoCheckEnabled: true,
+          autoCheckAccountRef: 'my-handle',
+        }),
+      ),
+    ).toContain('A timed commitment is proved by its photo, so nothing can check it for you.');
+  });
+
+  it('an Auto-check on an untimed commitment, which is still allowed', () => {
+    expect(
+      draftProblems(draft({ autoCheckEnabled: true, autoCheckAccountRef: 'my-handle' })),
+    ).toEqual([]);
+  });
 });
 
 describe('switching a time on and off', () => {

@@ -152,6 +152,14 @@ begin
   -- -------------------------------------------------------------------------------
   -- 2. FR-13 — the worst possible day costs exactly one penalty.
   -- -------------------------------------------------------------------------------
+  -- Story 6.4: commitments_owing() no longer judges a commitment for a day before it existed.
+  -- This fixture creates its commitments moments before judging days that predate them, which is
+  -- a state no real account can reach — so it now says when they began. Order-preserving, so
+  -- every created_at comparison downstream reads the same way, and idempotent, so the repeats
+  -- below (each covering commitments created after the previous pass) age nothing twice.
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(d_failed, true);
 
   select id, verdict, missed_count into v_settlement, v_verdict, v_missed
@@ -233,7 +241,15 @@ begin
   -- inserted across every doer account in the database and this file cannot assume it is
   -- the only one.
   -- -------------------------------------------------------------------------------
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(d_failed, true);
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(d_failed, true);
 
   select count(*) into v_count
@@ -261,6 +277,10 @@ begin
   -- -------------------------------------------------------------------------------
   -- 4. A clean day, and a penalty-free miss that costs nothing.
   -- -------------------------------------------------------------------------------
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(d_clean, true);
 
   select verdict, missed_count into v_verdict, v_missed
@@ -272,6 +292,10 @@ begin
       'A day where everything held closes `clean` with 0 missed, not `%s` with %s.',
       v_verdict, v_missed);
   end if;
+
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
 
   perform public.settle_day(d_free_miss, true);
 
@@ -302,6 +326,10 @@ begin
   -- Two of three answered, deadline still ahead. Nothing may be decided, and nothing may
   -- be said: once he knows the day is already lost, the rest of it has no stakes.
   -- -------------------------------------------------------------------------------
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(d_open, true);
 
   select count(*) into v_count
@@ -329,6 +357,10 @@ begin
   -- 6. AD-16, first guard — settlement off its schedule refuses.
   -- -------------------------------------------------------------------------------
   begin
+    -- Fixture ageing again, for the commitments created since (see the note above).
+    update public.commitment set created_at = created_at - interval '90 days'
+     where created_at > now() - interval '30 days';
+
     perform public.settle_day(v_today - 5);
     v_raised := false;
   exception when others then
@@ -364,6 +396,10 @@ begin
   update public.profile set is_live_doer = true where id = v_live;
 
   begin
+    -- Fixture ageing again, for the commitments created since (see the note above).
+    update public.commitment set created_at = created_at - interval '90 days'
+     where created_at > now() - interval '30 days';
+
     perform public.settle_day(v_today - 6, true);
     v_raised := false;
   exception when others then
@@ -442,6 +478,10 @@ begin
   insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
   values (v_user2, v_weekly, gen_random_uuid(), 'slipped',
           ((d_weekly_slip + 1)::timestamp + interval '8 hours') at time zone 'Asia/Ho_Chi_Minh');
+
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
 
   perform public.settle_day(d_weekly_slip, true);
 

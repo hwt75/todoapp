@@ -106,6 +106,14 @@ begin
     values (v_user, v_b, gen_random_uuid(), 'held',
             ((d + 1)::timestamp + interval '8 hours') at time zone 'Asia/Ho_Chi_Minh');
 
+    -- Story 6.4: commitments_owing() no longer judges a commitment for a day before it existed.
+    -- This fixture creates its commitments moments before judging days that predate them, which is
+    -- a state no real account can reach — so it now says when they began. Order-preserving, so
+    -- every created_at comparison downstream reads the same way, and idempotent, so a second call
+    -- further down this file does not age them twice.
+    update public.commitment set created_at = created_at - interval '90 days'
+     where created_at > now() - interval '30 days';
+
     perform public.settle_day(d, true);
   end loop;
 

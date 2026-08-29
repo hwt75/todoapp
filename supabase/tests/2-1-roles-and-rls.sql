@@ -281,6 +281,14 @@ begin
     insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
     values (v_a, v_no_fap, gen_random_uuid(), 'held', now());
 
+    -- Story 6.4: commitments_owing() no longer judges a commitment for a day before it existed.
+    -- This fixture creates its commitments moments before judging days that predate them, which is
+    -- a state no real account can reach — so it now says when they began. Order-preserving, so
+    -- every created_at comparison downstream reads the same way, and idempotent, so a second call
+    -- further down this file does not age them twice.
+    update public.commitment set created_at = created_at - interval '90 days'
+     where created_at > now() - interval '30 days';
+
     perform public.settle_day(v_day, true);
 
     -- v_a: the owning account files the appeal on its own eligible miss.
@@ -449,6 +457,10 @@ begin
     'public.supersede_expiries()',
     'public.commitments_owing(uuid, date)',
     'public.declaration_deadline(date, integer)',
+    'public.commitment_deadline(date, integer, time)',
+    'public.day_begins_at(date)',
+    'public.day_ends_at(date)',
+    'public.commitment_log_due_time_change()',
     'public.penalty_amount_dong()',
     'public.handle_new_user()',
     'public.outbox_enqueue(uuid, text, jsonb, public.outbox_channel)',
@@ -486,7 +498,8 @@ begin
   end loop;
 
   raise notice using message =
-    'Step 6 ok: twenty deciding functions and the outbox are all out of reach of anon and authenticated.';
+    'Step 6 ok: twenty-four deciding functions and the outbox are all out of reach of anon '
+    'and authenticated.';
   raise notice using message =
     'PASS. A role is chosen server-side, cannot be raised from a session, and does not leak '
     'across accounts.';

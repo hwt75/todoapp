@@ -98,6 +98,14 @@ begin
   returning id into v_c1;
 
   perform public.file_auto_check_result(v_c1, v_user1, 'missed');
+  -- Story 6.4: commitments_owing() no longer judges a commitment for a day before it existed.
+  -- This fixture creates its commitments moments before judging days that predate them, which is
+  -- a state no real account can reach — so it now says when they began. Order-preserving, so
+  -- every created_at comparison downstream reads the same way, and idempotent, so the repeats
+  -- below (each covering commitments created after the previous pass) age nothing twice.
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day((now() at time zone 'Asia/Ho_Chi_Minh')::date - 1, true);
 
   select p.id into v_penalty1
@@ -145,6 +153,10 @@ begin
 
   insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
   values (v_user1b, v_c1b, gen_random_uuid(), 'slipped', now());
+
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
 
   perform public.settle_day((now() at time zone 'Asia/Ho_Chi_Minh')::date - 1, true);
 
@@ -198,6 +210,10 @@ begin
      'auto_check');
 
   -- v_c2b stays silent — the day closes `expired` on the clock.
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day2, true);
 
   select verdict into v_verdict
@@ -260,6 +276,10 @@ begin
   returning id into v_c3;
 
   perform public.file_auto_check_result(v_c3, v_user3, 'missed');
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day((now() at time zone 'Asia/Ho_Chi_Minh')::date - 1, true);
 
   select p.id into v_penalty3
@@ -328,10 +348,18 @@ begin
 
   perform public.file_auto_check_result(v_c4a, v_target, 'missed');
   v_day4 := (now() at time zone 'Asia/Ho_Chi_Minh')::date - 1;
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day4, true);
 
   insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
   values (v_target2, v_c4b, gen_random_uuid(), 'slipped', now());
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day4, true);
 
   select p.id into v_penalty4a
@@ -504,6 +532,10 @@ begin
 
   perform public.file_auto_check_result(v_c6, v_user6, 'missed');
   v_day6 := (now() at time zone 'Asia/Ho_Chi_Minh')::date - 1;
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day6, true);
 
   perform set_config('role', 'authenticated', true);

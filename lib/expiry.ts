@@ -7,6 +7,12 @@
  * Day applied afterwards, which is a recorded act with a count, rather than a clock that
  * stretches for whoever asks.
  *
+ * **This is the untimed rule, and since Story 6.4 it is no longer the only one.** A commitment
+ * carrying a `due_time` is decided at midnight of its own day instead — it cannot be claimed
+ * outside its window and cannot be proved after the day ends, so there is no 48 hours to wait
+ * through. `public.commitment_deadline` is where the two live together; everything below
+ * describes only the branch it falls back to.
+ *
  * **Not production code, and nothing holds it to the rule it copies.** The deadline that
  * decides anything is `public.declaration_deadline`
  * (`supabase/migrations/20260819241000_expiry_and_supersession.sql`). Nothing in `app/` or

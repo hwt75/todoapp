@@ -121,6 +121,14 @@ begin
   -- -------------------------------------------------------------------------------
   -- 2. He says nothing, and the clock closes the day against him.
   -- -------------------------------------------------------------------------------
+  -- Story 6.4: commitments_owing() no longer judges a commitment for a day before it existed.
+  -- This fixture creates its commitments moments before judging days that predate them, which is
+  -- a state no real account can reach — so it now says when they began. Order-preserving, so
+  -- every created_at comparison downstream reads the same way, and idempotent, so the repeats
+  -- below (each covering commitments created after the previous pass) age nothing twice.
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day, true);
 
   select id, verdict into v_original, v_verdict
@@ -296,6 +304,10 @@ begin
   v_deadline2 := public.declaration_deadline(v_day2, 7);
 
   -- He says nothing, and the day expires exactly as step 2 above.
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day2, true);
 
   -- The answer he gave in time finally arrives — an admitted slip, not a `held`.

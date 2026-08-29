@@ -167,6 +167,14 @@ begin
 
   -- Every account here has every one of its commitments answered for `v_day`, so this one
   -- call closes all four days regardless of the declaration deadline.
+  -- Story 6.4: commitments_owing() no longer judges a commitment for a day before it existed.
+  -- This fixture creates its commitments moments before judging days that predate them, which is
+  -- a state no real account can reach — so it now says when they began. Order-preserving, so
+  -- every created_at comparison downstream reads the same way, and idempotent, so the repeats
+  -- below (each covering commitments created after the previous pass) age nothing twice.
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day, true);
 
   select id into v_settlement from public.settlement
@@ -553,6 +561,10 @@ begin
 
   -- v_c8 stays silent. The day closes `expired` on the clock -- a different fact about him
   -- from v_c7's admitted (machine-filed) slip, and the two must not be merged.
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day5, true);
 
   select id, verdict into v_original5, v_verdict5

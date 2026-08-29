@@ -140,6 +140,14 @@ begin
 
   perform public.file_auto_check_result(v_commit_a1, v_doer_a, 'missed');
   v_day_a := (now() at time zone 'Asia/Ho_Chi_Minh')::date - 1;
+  -- Story 6.4: commitments_owing() no longer judges a commitment for a day before it existed.
+  -- This fixture creates its commitments moments before judging days that predate them, which is
+  -- a state no real account can reach — so it now says when they began. Order-preserving, so
+  -- every created_at comparison downstream reads the same way, and idempotent, so the repeats
+  -- below (each covering commitments created after the previous pass) age nothing twice.
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day_a, true);
 
   select id into v_settlement_a from public.settlement
@@ -177,6 +185,10 @@ begin
   values (v_doer_b, v_commit_b, gen_random_uuid(), 'slipped', now());
 
   v_day_b := (now() at time zone 'Asia/Ho_Chi_Minh')::date - 1;
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day_b, true);
 
   select p.id, p.state into v_penalty_b, v_state
@@ -396,6 +408,10 @@ begin
   returning id into v_commit_d;
 
   perform public.file_auto_check_result(v_commit_d, v_doer_d, 'missed');
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day_a, true); -- same "yesterday" as account A; a distinct
                                              -- subject keeps settlement_once satisfied
 

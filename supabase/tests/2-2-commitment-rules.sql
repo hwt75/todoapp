@@ -221,6 +221,12 @@ begin
   -- -------------------------------------------------------------------------------
   v_day := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
 
+  -- Story 6.4: commitments_owing() no longer judges a commitment for a day before it existed,
+  -- so this fixture has to say when its commitment began. Without it the assertion below would
+  -- pass or fail on the commitment's age rather than on whether archiving is retroactive.
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   select count(*) into v_count
     from public.commitments_owing(v_user, v_day - 1) o where o.commitment_id = v_daily;
   if v_count <> 1 then

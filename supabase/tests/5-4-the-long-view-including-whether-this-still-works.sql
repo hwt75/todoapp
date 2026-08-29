@@ -115,6 +115,14 @@ begin
   values (v_user1, v_c1, gen_random_uuid(), 'slipped', now());
 
   v_day := (now() at time zone 'Asia/Ho_Chi_Minh')::date - 1;
+  -- Story 6.4: commitments_owing() no longer judges a commitment for a day before it existed.
+  -- This fixture creates its commitments moments before judging days that predate them, which is
+  -- a state no real account can reach — so it now says when they began. Order-preserving, so
+  -- every created_at comparison downstream reads the same way, and idempotent, so the repeats
+  -- below (each covering commitments created after the previous pass) age nothing twice.
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day, true);
 
   select id into v_settlement1 from public.settlement
@@ -206,6 +214,10 @@ begin
   returning id into v_c2;
 
   perform public.file_auto_check_result(v_c2, v_user2, 'missed');
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day, true);
 
   select id into v_settlement2 from public.settlement
@@ -268,6 +280,10 @@ begin
   returning id into v_c3;
 
   perform public.file_auto_check_result(v_c3, v_user3, 'missed');
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day, true);
 
   select id into v_settlement3 from public.settlement
@@ -371,6 +387,12 @@ begin
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence, carries_penalty)
   values (v_user5, gen_random_uuid(), 'Reading', 'do', 'daily', true)
   returning id into v_c5;
+
+  -- Fixture ageing again, for account 4's and 5's commitments (see the note above). This step
+  -- counts a commitment as asked on every day of the month, which since Story 6.4 is only true
+  -- of a commitment that existed for every one of them.
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
 
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',

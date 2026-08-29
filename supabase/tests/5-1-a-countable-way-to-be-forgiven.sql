@@ -126,26 +126,50 @@ begin
   insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
   values (v_user, v_commitment, gen_random_uuid(), 'slipped',
     ((v_day1 + 1)::timestamp + interval '7 hours') at time zone 'Asia/Ho_Chi_Minh');
+  -- Story 6.4: commitments_owing() no longer judges a commitment for a day before it existed.
+  -- This fixture creates its commitments moments before judging days that predate them, which is
+  -- a state no real account can reach — so it now says when they began. Order-preserving, so
+  -- every created_at comparison downstream reads the same way, and idempotent, so the repeats
+  -- below (each covering commitments created after the previous pass) age nothing twice.
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day1, true);
 
   insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
   values (v_user, v_commitment, gen_random_uuid(), 'slipped',
     ((v_day3 + 1)::timestamp + interval '7 hours') at time zone 'Asia/Ho_Chi_Minh');
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day3, true);
 
   insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
   values (v_user, v_commitment, gen_random_uuid(), 'slipped',
     ((v_day4 + 1)::timestamp + interval '7 hours') at time zone 'Asia/Ho_Chi_Minh');
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day4, true);
 
   insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
   values (v_user, v_commitment, gen_random_uuid(), 'slipped',
     ((v_day5 + 1)::timestamp + interval '7 hours') at time zone 'Asia/Ho_Chi_Minh');
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day5, true);
 
   insert into public.declaration (owner_id, commitment_id, idempotency_key, answer, answered_at)
   values (v_user, v_commitment, gen_random_uuid(), 'slipped',
     ((v_day6 + 1)::timestamp + interval '7 hours') at time zone 'Asia/Ho_Chi_Minh');
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day6, true);
 
   select id into v_settlement1 from public.settlement
@@ -179,6 +203,10 @@ begin
 
   perform public.file_auto_check_result(v_c3, v_user3, 'missed');
   v_day14 := (now() at time zone 'Asia/Ho_Chi_Minh')::date - 1;
+  -- Fixture ageing again, for the commitments created since (see the note above).
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.settle_day(v_day14, true);
 
   if not exists (
