@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Today } from './today';
 
 /**
@@ -564,7 +564,23 @@ const pill = {
   late_window_minutes: 30,
 };
 
+/**
+ * Story 6.5 made the claim control conditional on the window actually being open, so every test
+ * below has to say when it is. 20:10 local sits inside `pill`'s own 20:00 + 30 window.
+ *
+ * `shouldAdvanceTime` keeps `await` working normally under fake timers; the frozen instant is
+ * what the screen's own clock reads, and `advanceTimersByTime` is what moves it.
+ */
+function atLocalTime(hhmm: string): void {
+  const [h, m] = hhmm.split(':').map(Number);
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(new Date(Date.UTC(2026, 7, 30, h - 7, m, 0)));
+}
+
 describe('claiming a timed commitment', () => {
+  beforeEach(() => atLocalTime('20:10'));
+  afterEach(() => vi.useRealTimers());
+
   it('offers no claim at all when nothing carries a time', async () => {
     render(
       <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
@@ -599,7 +615,7 @@ describe('claiming a timed commitment', () => {
     expect(claim).toBeDefined();
     expect(claim?.payload).toMatchObject({ commitment_id: 'c2', answer: 'held' });
     expect(claim?.payload).not.toHaveProperty('for_day');
-    expect(await screen.findByText('Claimed for today.')).toBeInTheDocument();
+    expect(await screen.findByText(/claimed for today/)).toBeInTheDocument();
   });
 
   it('reports a refusal rather than reporting a claim that did not happen', async () => {
@@ -620,7 +636,7 @@ describe('claiming a timed commitment', () => {
 
     expect(await screen.findByText(/Not claimed/)).toBeInTheDocument();
     expect(screen.getByText(/could be claimed from 20:00 for 30 minutes/)).toBeInTheDocument();
-    expect(screen.queryByText('Claimed for today.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/claimed for today/)).not.toBeInTheDocument();
   });
 
   it('says the claim is on the device, dated when it was tapped, with no connection', async () => {
@@ -655,6 +671,9 @@ function todayLocal(): string {
 }
 
 describe('proving a claim with a photo', () => {
+  beforeEach(() => atLocalTime('20:10'));
+  afterEach(() => vi.useRealTimers());
+
   it('offers nothing to upload before the claim is made', async () => {
     rows.commitment = { data: [pill], error: null };
 
@@ -731,5 +750,174 @@ describe('proving a claim with a photo', () => {
     expect(await screen.findByText(/not taken today/)).toBeInTheDocument();
     // An evidently wrong file never becomes an object nobody will ever read.
     expect(uploaded).toHaveLength(0);
+  });
+});
+
+/**
+ * Story 6.5 — where the window stands, on the surface itself.
+ *
+ * The state machine is `lib/timed-window.ts` and is driven to the second by its own tests; the
+ * view underneath is driven by `supabase/tests/6-5-today-shows-where-the-window-stands.sql`.
+ * What this screen owns is the join: the pill and the control beneath it read the same fold, a
+ * claim already made is never offered a second time, and the row changes on its own clock.
+ */
+describe('where the window stands', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('says when the window opens, and offers nothing to tap before it does', async () => {
+    atLocalTime('08:00');
+    rows.commitment = { data: [pill], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+
+    expect(
+      await screen.findByRole('button', { name: /window opens at 20:00/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('20:00')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Claim Pill' })).not.toBeInTheDocument();
+  });
+
+  // CAP-7's own success condition, in one test: shut and ahead must not read the same, and the
+  // difference must not be carried by colour alone — so it is asserted on the spoken sentence.
+  it('reads a shut window differently from one still ahead', async () => {
+    atLocalTime('22:00');
+    rows.commitment = { data: [pill], error: null };
+
+    const { container } = render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+
+    expect(
+      await screen.findByRole('button', { name: /window shut, nothing claimed/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Shut')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Claim Pill' })).not.toBeInTheDocument();
+    // Not an empty bordered card either. A frame around nothing is the screen saying something
+    // it has nothing to say — the pill above already carries the whole state.
+    expect(container.querySelector('.card-pad')).toBeNull();
+  });
+
+  it('shuts the window while the screen sits open, with nothing tapped', async () => {
+    atLocalTime('20:29');
+    rows.commitment = { data: [pill], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    expect(await screen.findByText('Open now')).toBeInTheDocument();
+
+    // Past 20:30, and one tick of the screen's own clock later. No re-render is requested, no
+    // read is repeated, and nothing is tapped.
+    await act(async () => {
+      vi.advanceTimersByTime(90_000);
+    });
+
+    expect(screen.getByText('Shut')).toBeInTheDocument();
+    expect(screen.queryByText('Open now')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Claim Pill' })).not.toBeInTheDocument();
+  });
+
+  // The defect this story exists to close on the client side: before it, the claim control was
+  // offered again after a reload and the second tap was refused, while the photo the day
+  // actually needed had become unreachable.
+  it('picks a claim back up after a reload, with the photo still to attach', async () => {
+    atLocalTime('20:40');
+    rows.commitment = { data: [pill], error: null };
+    rows.timed_claim_today = {
+      data: [{ commitment_id: 'c2', declaration_id: 'decl-9', proven: false }],
+      error: null,
+    };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+
+    expect(await screen.findByLabelText('Proof')).toBeInTheDocument();
+    expect(screen.getByText('Photo due')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Claim Pill' })).not.toBeInTheDocument();
+  });
+
+  it('is the only state that reads as finished, and asks for nothing more', async () => {
+    atLocalTime('20:40');
+    rows.commitment = { data: [pill], error: null };
+    rows.timed_claim_today = {
+      data: [{ commitment_id: 'c2', declaration_id: 'decl-9', proven: true }],
+      error: null,
+    };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+
+    expect(await screen.findByRole('button', { name: /claimed and proven/ })).toBeInTheDocument();
+    expect(screen.getByText('Proven')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Proof')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Claim Pill' })).not.toBeInTheDocument();
+  });
+
+  it('reads today through the view and never the declaration table', async () => {
+    atLocalTime('20:10');
+    rows.commitment = { data: [pill], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByRole('button', { name: 'Claim Pill' });
+
+    expect(seen).toContain('timed_claim_today');
+    expect(seen).not.toContain('declaration');
+    expect(seen).not.toContain('evidence');
+  });
+
+  it('fails the whole screen when that read fails, rather than showing a window it guessed', async () => {
+    atLocalTime('20:10');
+    rows.commitment = { data: [pill], error: null };
+    rows.timed_claim_today = { data: null, error: { message: 'nope' } };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+
+    expect(await screen.findByText('nope')).toBeInTheDocument();
+  });
+
+  it('re-reads itself when the local day turns over, rather than ticking on stale answers', async () => {
+    atLocalTime('23:59');
+    rows.commitment = { data: [pill], error: null };
+    rows.timed_claim_today = {
+      data: [{ commitment_id: 'c2', declaration_id: 'decl-9', proven: true }],
+      error: null,
+    };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    expect(await screen.findByText('Proven')).toBeInTheDocument();
+
+    // Midnight. Yesterday's claim is not today's, and the server says so — but only if the
+    // screen asks again.
+    rows.timed_claim_today = { data: [], error: null };
+    await act(async () => {
+      vi.advanceTimersByTime(120_000);
+    });
+
+    expect(await screen.findByText('20:00')).toBeInTheDocument();
+    expect(screen.queryByText('Proven')).not.toBeInTheDocument();
+  });
+
+  it('leaves an untimed commitment exactly as it was', async () => {
+    atLocalTime('22:00');
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+
+    expect(
+      await screen.findByRole('button', { name: /Gym, not yet done today/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Not yet')).toBeInTheDocument();
+    expect(screen.queryByText('Shut')).not.toBeInTheDocument();
   });
 });

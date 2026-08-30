@@ -6,6 +6,11 @@ import { submitDeclaration, type QueuedClaim } from '@/lib/declaration-write';
 import { calendarMoment } from '@/lib/declaration';
 import { EVIDENCE_COPY, evidenceObjectPath, fileCapturedOn, isEvidenceDated } from '@/lib/evidence';
 import { stateToday } from '@/lib/commitment-state';
+import {
+  timedWindowState,
+  type TimedWindowPosition,
+  type TimedWindowState,
+} from '@/lib/timed-window';
 import { createClient } from '@/lib/supabase/client';
 import { DebtBlock } from '@/components/debt-block';
 import { totalOwed } from '@/lib/money';
@@ -36,6 +41,9 @@ type View =
       // gets, so a real doer session always has a real number by the time this variant is
       // reached (Story 5.1 review finding: never coerce "unknown" to "0 remaining").
       graceRemaining: number;
+      /** Story 6.5, from `timed_claim_today` — keyed by commitment id, and present only for a
+       *  timed commitment that has been claimed today. The two facts a clock cannot supply. */
+      windows: Record<string, { declarationId: string | null; proven: boolean }>;
     }
   | { kind: 'failed'; reason: string };
 
@@ -63,6 +71,71 @@ type EvidenceState =
 
 const SELECT =
   'id,name,cadence,carries_penalty,weekly_target,daily_minutes_target,due_time,late_window_minutes';
+
+/** How often the screen re-reads its own clock. See `now`'s own comment below. */
+const TICK_MS = 15_000;
+
+/** One timed commitment's row on this screen: where its window stands, and what to offer for it. */
+interface TimedRow {
+  row: RowCommitment;
+  position: TimedWindowPosition;
+  state: TimedWindowState;
+  claim: ClaimState;
+  /** What a photo attaches to — from this session's own claim, or from the view after a reload. */
+  declarationId: string | null;
+}
+
+/**
+ * Whether this row has anything to offer beneath the pill.
+ *
+ * A window still ahead and one already shut both offer nothing: there is nothing to tap, and the
+ * pill above has already said so in a word. Without this the block drew an empty bordered card
+ * for a shut window — a frame around nothing, on the screen whose whole rule is that it says
+ * nothing it cannot support.
+ */
+function offersSomething(timed: TimedRow): boolean {
+  return timed.state !== 'ahead' && timed.state !== 'shut' ? true : timed.claim.kind !== 'idle';
+}
+
+/**
+ * Fold the three sources into one state per timed commitment.
+ *
+ * The server knows what was claimed and proven, the clock knows where the window is, and the
+ * device knows about a claim still sitting in the offline queue that the server has never seen.
+ * Only the last of those can be missing from a reload, which is why it is the one kept in
+ * component state rather than re-read.
+ */
+function timedRowsToday(
+  rows: RowCommitment[],
+  windows: Record<string, { declarationId: string | null; proven: boolean }>,
+  claimState: Record<string, ClaimState>,
+  now: Date,
+): TimedRow[] {
+  return rows
+    .filter((row) => row.due_time)
+    .map((row) => {
+      const server = windows[row.id];
+      const claim: ClaimState = claimState[row.id] ?? { kind: 'idle' };
+      const position: TimedWindowPosition = {
+        dueTime: row.due_time as string,
+        // `commitment_time_needs_a_moment` makes the two columns null together
+        // (20260828130000), so a row with a `due_time` always has this one. The fallback is
+        // for a caller that selected one column and not the other, never for real data.
+        lateWindowMinutes: row.late_window_minutes ?? 30,
+        claimed: server?.declarationId != null || claim.kind === 'claimed',
+        proven: server?.proven ?? false,
+      };
+
+      return {
+        row,
+        position,
+        state: timedWindowState(position, now),
+        claim,
+        declarationId:
+          (claim.kind === 'claimed' ? claim.declarationId : null) ?? server?.declarationId ?? null,
+      };
+    });
+}
 
 /**
  * The screen the author opens, and the only one he opens under reluctance.
@@ -92,6 +165,30 @@ export function Today({
   // on the server to re-read that would tell this screen what happened.
   const [claimState, setClaimState] = useState<Record<string, ClaimState>>({});
   const [evidenceState, setEvidenceState] = useState<Record<string, EvidenceState>>({});
+  /**
+   * The instant every window state on this screen is read against (Story 6.5).
+   *
+   * CAP-7 asks for a shut window to become distinct from one still ahead "without opening
+   * anything or refreshing", and no server read can do that: a state fetched at 20:29 is wrong
+   * at 20:31. So the clock is local and it ticks. Fifteen seconds rather than one — nothing here
+   * counts down, so the only thing a tick can change is which of five states the row is in, and
+   * a boundary crossed up to fifteen seconds late is still a screen that changed on its own
+   * while the author was looking at it.
+   */
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const tick = setInterval(() => setNow(new Date()), TICK_MS);
+    return () => clearInterval(tick);
+  }, []);
+  /**
+   * The local day the reads below belong to.
+   *
+   * Every one of them — the claims, the debt, the graceable days — was true for the day the
+   * screen loaded on, and a phone left open overnight would otherwise keep showing yesterday's
+   * answers under today's ticking clock, with yesterday's claim reading as today's `Photo due`.
+   * A string, so the effect re-runs exactly once a day rather than on every tick.
+   */
+  const localDay = calendarMoment(now).day;
   // Guards `spendGraceDay`'s own state updates after the insert's await resolves — mirrors
   // `components/settings.tsx`'s identical `mounted` ref, needed for the same reason: a spend
   // fired from a click can still be in flight when this screen unmounts (opening the Ledger,
@@ -117,6 +214,7 @@ export function Today({
         { data: graceSettlements, error: graceSettlementsError },
         { data: gracePenalties, error: gracePenaltiesError },
         { data: grace, error: graceError },
+        { data: windows, error: windowsError },
       ] = await Promise.all([
         supabase.from('commitment').select(SELECT).is('archived_at', null).order('created_at'),
         // `penalty_current`, not `penalty`. A penalty attached to a superseded verdict is
@@ -151,6 +249,11 @@ export function Today({
           .eq('kind', 'day')
           .eq('state', 'owed'),
         supabase.from('grace_allowance_remaining').select('remaining').maybeSingle(),
+        // Story 6.5: the two facts about today a clock cannot supply — was it claimed, did a
+        // photo land. A view rather than the `declaration` and `evidence` tables themselves,
+        // for the same reason `chain_current` and `weekly_quota_progress` are views: this
+        // screen never tallies raw rows into a position (AD-8).
+        supabase.from('timed_claim_today').select('commitment_id,declaration_id,proven'),
       ]);
 
       if (cancelled) return;
@@ -165,7 +268,8 @@ export function Today({
         quotasError ??
         graceSettlementsError ??
         gracePenaltiesError ??
-        graceError;
+        graceError ??
+        windowsError;
       if (failed) {
         setView({ kind: 'failed', reason: failed.message });
         return;
@@ -200,6 +304,12 @@ export function Today({
           (r) => r.graceable,
         ),
         graceRemaining: grace.remaining as number,
+        windows: Object.fromEntries(
+          (windows ?? []).map((w) => [
+            w.commitment_id as string,
+            { declarationId: w.declaration_id as string | null, proven: w.proven as boolean },
+          ]),
+        ),
       });
     }
 
@@ -207,7 +317,8 @@ export function Today({
     return () => {
       cancelled = true;
     };
-  }, []);
+    // `localDay` and nothing else: the reads are re-run when the day turns over, never on a tick.
+  }, [localDay]);
 
   /** Spends a Grace Day against one Failed, owed day. See `components/ledger.tsx`'s own
    *  identical function for the full reasoning — this is the same control, offered from the
@@ -349,6 +460,12 @@ export function Today({
     }
   }
 
+  // Story 6.5: one fold, read by the rows above and the controls below alike, so a pill and the
+  // control beneath it can never disagree about where the same window stands.
+  const timed =
+    view.kind === 'ready' ? timedRowsToday(view.rows, view.windows, claimState, now) : [];
+  const timedByCommitment = Object.fromEntries(timed.map((t) => [t.row.id, t]));
+
   return (
     /* The debt block is drawn first and read last, and that is not a styling accident.
        EXPERIENCE.md requires the commitment rows to be announced before it: a sighted
@@ -392,6 +509,8 @@ export function Today({
                 state={stateToday(row)}
                 chainDays={view.chains[row.id] ?? 0}
                 quotaPosition={view.quotas[row.id]}
+                windowPosition={timedByCommitment[row.id]?.position}
+                now={now}
                 /* An hours-quota row opens the Focus Session, and every other row opens the
                    Chains detail as before. Not a preference: `commitments_owing()` excludes
                    that cadence, so it never reaches `settlement_commitment`, so `chain_current`
@@ -404,108 +523,107 @@ export function Today({
             ))}
           </div>
 
-          {/* Story 6.2 — the claim, and only the claim.
-              Offered for every timed commitment, with no attempt to say whether its window is
-              ahead, open or already shut, and no attempt to say whether it has been claimed
-              earlier today. Both need reading state this screen deliberately cannot reach:
-              this file must never read raw `declaration` rows (AD-8 — one source for a
-              position, never a client-side tally), and there is no view yet that answers
-              "where does this window stand". Building one is Story 6.5.
+          {/* Stories 6.2, 6.3 and 6.5 — the claim, the photo, and only what today can still
+              be acted on.
 
-              Until then the control is offered a second time after a reload, and the second
-              tap is refused by `declaration_one_per_commitment_day` with a sentence saying the
-              day is already answered. Legible, and honest about what this screen knows. */}
-          {view.rows.some((row) => row.due_time) && (
+              Every row's *state* is on its pill above; this block is the controls, and it
+              offers exactly one at a time. A window still ahead and one already shut both show
+              nothing here: there is nothing to tap, and a disabled button is a worse way of
+              saying so than the pill that already says it in a word.
+
+              The window is not re-checked here. `declaration_derive_day()` refuses a tap
+              outside it in the author's own words and remains the only judge (AD-1); this
+              decides what to *offer*, which is why a device with a wrong clock loses a control
+              and never a day. */}
+          {timed.some(offersSomething) && (
             <div className="card card-pad stack">
-              {view.rows
-                .filter((row) => row.due_time)
-                .map((row) => {
-                  const state: ClaimState = claimState[row.id] ?? { kind: 'idle' };
+              {timed
+                .filter(offersSomething)
+                .map(({ row, state, claim: claimStatus, declarationId }) => (
+                  <div key={row.id}>
+                    {/* Queued first, before anything the clock decides: the claim is on the
+                        device dated when it was tapped, but the server has never seen it, so
+                        every server-derived state below would still read unclaimed and offer
+                        the button a second time. */}
+                    {claimStatus.kind === 'queued' ? (
+                      <p className="row-muted">
+                        Saved on this device — there is no connection right now. It will go when
+                        there is one, dated when you tapped.
+                      </p>
+                    ) : state === 'proven' ? (
+                      <p className="row-muted">{`${row.name} — claimed and proven for today.`}</p>
+                    ) : state === 'claimed' ? (
+                      <>
+                        <p className="row-muted">{`${row.name} — claimed for today.`}</p>
 
-                  return (
-                    <div key={row.id}>
+                        {/* Story 6.3 — the photo, and only once the claim has actually landed.
+                            Evidence references the declaration row by id, and a claim sitting
+                            in the offline queue has no row and no id. That is the honest shape
+                            of the split: the claim survives having no signal, the photo does
+                            not.
+
+                            Story 6.5 seeds the id from `timed_claim_today` as well as from this
+                            session's own claim, which is what makes the control survive a
+                            reload: before, an author who claimed at 20:31 and closed the app
+                            had no way back to it, and the day failed at midnight for a photo he
+                            was never offered a second chance to attach. */}
+                        {declarationId !== null &&
+                          (() => {
+                            const proof: EvidenceState = evidenceState[row.id] ?? { kind: 'idle' };
+                            const inputId = `proof-${row.id}`;
+
+                            return (
+                              <>
+                                <label htmlFor={inputId}>{EVIDENCE_COPY.label}</label>
+                                <input
+                                  id={inputId}
+                                  type="file"
+                                  accept="image/png,image/jpeg,image/heic"
+                                  // `capture` opens the camera rather than the library where
+                                  // the device offers one — a photo taken now is the point.
+                                  capture="environment"
+                                  disabled={proof.kind === 'uploading'}
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    if (file) void attachProof(row.id, declarationId, file);
+                                  }}
+                                />
+                                <p className="row-muted">{EVIDENCE_COPY.hint}</p>
+
+                                {proof.kind === 'uploading' && (
+                                  <p role="status">{EVIDENCE_COPY.uploading}</p>
+                                )}
+                                {proof.kind === 'saved' && (
+                                  <p role="status">{EVIDENCE_COPY.saved}</p>
+                                )}
+                                {proof.kind === 'failed' && (
+                                  <p>
+                                    <strong>{EVIDENCE_COPY.failed}</strong> {proof.reason}
+                                  </p>
+                                )}
+                              </>
+                            );
+                          })()}
+                      </>
+                    ) : state === 'open' ? (
                       <div className="actions">
                         <button
                           type="button"
-                          disabled={
-                            state.kind === 'claiming' ||
-                            state.kind === 'claimed' ||
-                            state.kind === 'queued'
-                          }
+                          disabled={claimStatus.kind === 'claiming'}
                           onClick={() => void claim(row.id)}
                         >
                           {`Claim ${row.name}`}
                         </button>
                       </div>
+                    ) : null}
 
-                      {state.kind === 'claimed' && (
-                        <>
-                          <p className="row-muted">Claimed for today.</p>
-
-                          {/* Story 6.3 — the photo, and only once the claim has actually
-                              landed. Evidence references the declaration row by id, and a
-                              claim sitting in the offline queue has no row and no id. That is
-                              the honest shape of the split: the claim survives having no
-                              signal, the photo does not. */}
-                          {state.declarationId !== null &&
-                            (() => {
-                              const proof: EvidenceState = evidenceState[row.id] ?? {
-                                kind: 'idle',
-                              };
-                              const inputId = `proof-${row.id}`;
-
-                              return (
-                                <>
-                                  <label htmlFor={inputId}>{EVIDENCE_COPY.label}</label>
-                                  <input
-                                    id={inputId}
-                                    type="file"
-                                    accept="image/png,image/jpeg,image/heic"
-                                    // `capture` opens the camera rather than the library where
-                                    // the device offers one — a photo taken now is the point.
-                                    capture="environment"
-                                    disabled={proof.kind === 'uploading'}
-                                    onChange={(event) => {
-                                      const file = event.target.files?.[0];
-                                      if (file) {
-                                        void attachProof(row.id, state.declarationId!, file);
-                                      }
-                                    }}
-                                  />
-                                  <p className="row-muted">{EVIDENCE_COPY.hint}</p>
-
-                                  {proof.kind === 'uploading' && (
-                                    <p role="status">{EVIDENCE_COPY.uploading}</p>
-                                  )}
-                                  {proof.kind === 'saved' && (
-                                    <p role="status">{EVIDENCE_COPY.saved}</p>
-                                  )}
-                                  {proof.kind === 'failed' && (
-                                    <p>
-                                      <strong>{EVIDENCE_COPY.failed}</strong> {proof.reason}
-                                    </p>
-                                  )}
-                                </>
-                              );
-                            })()}
-                        </>
-                      )}
-
-                      {state.kind === 'queued' && (
-                        <p className="row-muted">
-                          Saved on this device — there is no connection right now. It will go when
-                          there is one, dated when you tapped.
-                        </p>
-                      )}
-
-                      {state.kind === 'failed' && (
-                        <p>
-                          <strong>Not claimed.</strong> {state.reason}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
+                    {claimStatus.kind === 'failed' && (
+                      <p>
+                        <strong>Not claimed.</strong> {claimStatus.reason}
+                      </p>
+                    )}
+                  </div>
+                ))}
             </div>
           )}
 

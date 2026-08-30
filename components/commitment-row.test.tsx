@@ -135,3 +135,95 @@ describe('a commitment row', () => {
     expect(onOpen).toHaveBeenCalledExactlyOnceWith(gym);
   });
 });
+
+/**
+ * Story 6.5 — the window state, through the same two seams the Weekly Quota position uses.
+ *
+ * The clock arithmetic itself belongs to `lib/timed-window.ts` and is driven to the second
+ * there. What the row owns is which of two positions takes the pill when a commitment carries
+ * both, and that the sentence a screen reader hears never disagrees with what the pill shows.
+ */
+const pill: RowCommitment = {
+  ...gym,
+  name: 'Pill',
+  due_time: '20:00:00',
+  late_window_minutes: 30,
+};
+
+/** 20:10 in Ho Chi Minh City, written as the UTC instant so no machine's own zone decides. */
+const at = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return new Date(Date.UTC(2026, 7, 30, h - 7, m, 0));
+};
+
+const unclaimed = { dueTime: '20:00:00', lateWindowMinutes: 30, claimed: false, proven: false };
+
+describe('a timed commitment row', () => {
+  it('shows the hour it opens, and says so aloud', () => {
+    render(
+      <CommitmentRow
+        commitment={pill}
+        state="not_yet"
+        windowPosition={unclaimed}
+        now={at('08:00')}
+      />,
+    );
+
+    expect(screen.getByText('20:00')).toHaveClass('pill-neutral');
+    expect(screen.getByRole('group')).toHaveAccessibleName('Pill, window opens at 20:00');
+  });
+
+  it('reads shut as failed, and never as a verdict for a day still running', () => {
+    render(
+      <CommitmentRow
+        commitment={pill}
+        state="not_yet"
+        windowPosition={unclaimed}
+        now={at('22:00')}
+      />,
+    );
+
+    expect(screen.getByText('Shut')).toHaveClass('pill-failed');
+    // "nothing claimed", never "missed": settlement is the only thing that files a verdict.
+    expect(screen.getByRole('group')).toHaveAccessibleName('Pill, window shut, nothing claimed');
+  });
+
+  it('keeps the state it was given underneath — a window is not a verdict', () => {
+    render(
+      <CommitmentRow
+        commitment={pill}
+        state="not_yet"
+        windowPosition={{ ...unclaimed, claimed: true, proven: true }}
+        now={at('20:40')}
+      />,
+    );
+
+    expect(screen.getByText('Proven')).toHaveClass('pill-held');
+  });
+
+  // A timed Weekly Quota commitment carries both positions at once (Story 6.4, decision 6).
+  it('gives the pill to the window and keeps the week in the sentence', () => {
+    render(
+      <CommitmentRow
+        commitment={{ ...pill, cadence: 'weekly_quota', weekly_target: 3 }}
+        state="not_yet"
+        windowPosition={unclaimed}
+        quotaPosition={{ held: 1, target: 3, daysRemaining: 3 }}
+        now={at('20:10')}
+      />,
+    );
+
+    expect(screen.getByText('Open now')).toHaveClass('pill-urgent');
+    expect(screen.queryByText('1/3 · 3 days')).not.toBeInTheDocument();
+    expect(screen.getByRole('group')).toHaveAccessibleName(
+      'Pill, window open now, until 20:30, 1 of 3 this week, 3 days left',
+    );
+  });
+
+  it('is untouched without an instant to read the window against', () => {
+    render(<CommitmentRow commitment={pill} state="not_yet" windowPosition={unclaimed} />);
+
+    expect(screen.getByText('Not yet')).toHaveClass('pill-neutral');
+    expect(screen.getByRole('group')).toHaveAccessibleName('Pill, not yet done today');
+  });
+});

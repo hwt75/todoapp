@@ -3,6 +3,12 @@ import { chainLabel } from '@/lib/chain';
 import { CADENCE_LABELS, type CommitmentCadence } from '@/lib/commitment';
 import { rowLabel, type CommitmentState } from '@/lib/commitment-state';
 import {
+  timedWindowOverride,
+  timedWindowSpoken,
+  timedWindowState,
+  type TimedWindowPosition,
+} from '@/lib/timed-window';
+import {
   weeklyQuotaOverride,
   weeklyQuotaSpoken,
   type WeeklyQuotaPosition,
@@ -51,6 +57,8 @@ export function CommitmentRow({
   chainDays = 0,
   onOpen,
   quotaPosition,
+  windowPosition,
+  now,
 }: {
   commitment: RowCommitment;
   state: CommitmentState;
@@ -66,15 +74,49 @@ export function CommitmentRow({
    * keeps its AD-8 guard exactly as before: a target, never a progress it cannot know.
    */
   quotaPosition?: WeeklyQuotaPosition;
+  /**
+   * Where this commitment's window stands today (Story 6.5), for a timed one. Rendered through
+   * the same two seams `quotaPosition` uses — the pill's `override` and `rowLabel`'s
+   * `spokenOverride` — because a window state is no more a settled verdict than a live quota
+   * position is, and `stateToday()` still honestly returns `not_yet` underneath both.
+   */
+  windowPosition?: TimedWindowPosition;
+  /**
+   * The instant the window state is read against. Owned by the caller rather than read here, so
+   * one clock ticks for the whole screen and a test can name the moment it is asserting.
+   */
+  now?: Date;
 }) {
-  const override = quotaPosition ? weeklyQuotaOverride(quotaPosition) : undefined;
-  const spokenOverride = quotaPosition ? weeklyQuotaSpoken(quotaPosition) : undefined;
+  // Never named `window`: shadowing the global one inside a component is how a later edit
+  // reaching for `window.localStorage` silently reads a string union instead.
+  const windowState = windowPosition && now ? timedWindowState(windowPosition, now) : undefined;
+
+  // A timed Weekly Quota commitment carries both positions at once (Story 6.4, decision 6). The
+  // window takes the pill because it is the half that can still be acted on today and the half
+  // that shuts; the week's position keeps its place in the spoken sentence, which is the one
+  // surface with room for both.
+  const override =
+    windowPosition && windowState
+      ? timedWindowOverride(windowPosition, windowState)
+      : quotaPosition
+        ? weeklyQuotaOverride(quotaPosition)
+        : undefined;
+
+  const spokenOverride = [
+    windowPosition && windowState ? timedWindowSpoken(windowPosition, windowState) : undefined,
+    quotaPosition ? weeklyQuotaSpoken(quotaPosition) : undefined,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
   const label = rowLabel(
     commitment.name,
     state,
     commitment.carries_penalty,
     chainDays,
-    spokenOverride,
+    // Empty when the row carries neither position — `rowLabel` must fall back to the state
+    // table's own wording then, not to a blank sentence.
+    spokenOverride || undefined,
   );
   const chain = chainLabel(chainDays);
 
