@@ -201,7 +201,9 @@ the function every settlement path reads, in the one story that must move no mon
 cross-referenced from both sides, and it is the second caller that should move with the first when
 a story touches that function anyway.
 
-**Still true:** this migration is applied locally only.
+**No longer true:** this migration was local-only until 2026-09-01, when it was pushed to the live
+project. `npm run migrations:check` reads 59/59 matched, and the security advisor was re-run after
+the push: no new finding.
 
 ## Done checkpoint
 

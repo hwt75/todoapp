@@ -211,8 +211,9 @@ was left exactly as it was, covering appeal-parented objects only. A referee who
 ordinary days but cannot act on it is surveillance nobody asked for; Story 6.7 gives him the
 objection and the access together, or neither.
 
-**Still true:** all three of this epic's migrations are applied locally only. The author's own
-project has received none of them.
+**No longer true:** all of this epic's migrations were local-only when this was written. As of
+2026-09-01 the live project has received every one of them, and `npm run migrations:check` reads
+59/59 matched.
 
 ## Done checkpoint — what hwt75 has to check on a real device
 

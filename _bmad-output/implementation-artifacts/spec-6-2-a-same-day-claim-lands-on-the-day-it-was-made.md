@@ -253,6 +253,5 @@ second tap is refused by `declaration_one_per_commitment_day` with a sentence sa
 already answered. Legible, but not what the screen should say. Story 6.5 is where a window's real
 state — ahead, open, shut, claimed — gets a source it can read.
 
-**Still true:** the migration is applied locally only. `npm run migrations:check` fails with
-`LegacyProjectNotLinkedError` and the author's own project has not received either of this epic's
-migrations.
+**No longer true:** the migration was applied local-only when this was written. As of 2026-09-01
+every Epic 6 migration is on the live project and `npm run migrations:check` reads 59/59 matched.

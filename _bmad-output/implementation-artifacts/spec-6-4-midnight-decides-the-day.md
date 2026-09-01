@@ -322,7 +322,9 @@ photo, and cannot contest a proven day. Story 6.7 gives him the objection and th
 or neither. Nothing in `components/` changed beyond the draft rule: Today still shows no window
 state, which is Story 6.5.
 
-**Still true:** this migration is applied locally only.
+**No longer true:** this migration was local-only until 2026-09-01, when it was pushed to the live
+project. `npm run migrations:check` reads 59/59 matched, and the security advisor was re-run after
+the push: no new finding.
 
 ## Done checkpoint
 
