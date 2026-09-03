@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FocusSession } from './focus-session';
 import { FOCUS_COPY, FOCUS_QUEUE_KEY, RUNNING_KEY } from '@/lib/focus-session';
 import { QUEUE_KEY } from '@/lib/offline-queue';
+import { EVIDENCE_COPY } from '@/lib/evidence';
 
 /**
  * The surface that answers the one cadence Epic 2 could create and never measure.
@@ -40,6 +41,10 @@ let commitmentResult: { data: unknown; error: { message: string } | null } = {
   data: { daily_minutes_target: 180 },
   error: null,
 };
+/** Story 6.9: what the `evidence` read comes back with, and what each path signs to. */
+let evidenceResult: unknown = { data: [], error: null };
+let signedByPath: Record<string, unknown> = {};
+const signCalls: Array<{ paths: string[]; ttl: number }> = [];
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
@@ -53,6 +58,22 @@ vi.mock('@/lib/supabase/client', () => ({
           filters.push([table, column, String(value)]);
           return query;
         },
+        // Story 6.9's evidence read filters `for_day` with `.in`, and it is recorded for the
+        // same reason `.eq` is: a dropped day filter would show yesterday's record under
+        // today's figure and no assertion here would notice.
+        in: (column: string, value: unknown) => {
+          filters.push([table, column, String(value)]);
+          return query;
+        },
+        // Scoped to `evidence` on purpose. An unscoped `then` hands evidence rows to whatever
+        // else is ever awaited without `.maybeSingle()`, which would make a read of the wrong
+        // table look like it worked.
+        then: (resolve: (value: unknown) => unknown) =>
+          Promise.resolve(
+            table === 'evidence'
+              ? evidenceResult
+              : { data: null, error: { message: `focus-session.test.tsx: unawaitable ${table}` } },
+          ).then(resolve),
         maybeSingle: () =>
           Promise.resolve(
             table === 'commitment'
@@ -71,6 +92,24 @@ vi.mock('@/lib/supabase/client', () => ({
         },
       };
       return query;
+    },
+    storage: {
+      from: () => ({
+        createSignedUrls: (paths: string[], ttl: number) => {
+          signCalls.push({ paths, ttl });
+          return Promise.resolve({
+            data: paths.map(
+              (path) =>
+                signedByPath[path] ?? {
+                  path,
+                  error: null,
+                  signedUrl: `https://signed.test/${path}`,
+                },
+            ),
+            error: null,
+          });
+        },
+      }),
     },
   }),
 }));
@@ -109,6 +148,9 @@ beforeEach(() => {
   bankedSeconds = null;
   bankedError = null;
   commitmentResult = { data: { daily_minutes_target: 180 }, error: null };
+  evidenceResult = { data: [], error: null };
+  signedByPath = {};
+  signCalls.length = 0;
   window.localStorage.clear();
 });
 
@@ -566,5 +608,102 @@ describe('leaving', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Back to today' }));
     expect(onClose).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * Story 6.9 — the photo, on the only screen this cadence opens.
+ *
+ * `commitments_owing()` excludes `daily_hours_quota`, so `chain_current` has nothing for one and
+ * its Chains detail is empty by construction — Today routes the tap here instead. If the photo
+ * were not here it would be nowhere at all for this kind of commitment.
+ */
+describe('the photo kept for the day on screen', () => {
+  function filed(id: string, day: string, path: string) {
+    return { id, commitment_id: 'c1', for_day: day, storage_path: path };
+  }
+
+  it('shows it, read for the day the screen reports on', async () => {
+    evidenceResult = { data: [filed('e1', TODAY, 'c1/e1-proof.jpg')], error: null };
+    render(view());
+
+    const image = await screen.findByAltText(EVIDENCE_COPY.photoAlt(1, 1));
+    expect(image).toHaveAttribute('src', 'https://signed.test/c1/e1-proof.jpg');
+    expect(signCalls).toEqual([{ paths: ['c1/e1-proof.jpg'], ttl: 3600 }]);
+
+    // This screen's own `day`, and no second clock: the same instant the figure is drawn from.
+    expect(filters).toContainEqual(['evidence', 'commitment_id', String(['c1'])]);
+    expect(filters).toContainEqual(['evidence', 'for_day', String([TODAY])]);
+  });
+
+  it('says nothing about photos when there are none', async () => {
+    render(view());
+    await settle();
+
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.queryByText(/could not be loaded/)).not.toBeInTheDocument();
+  });
+
+  it('counts a photo it could not sign rather than showing a shorter list', async () => {
+    evidenceResult = {
+      data: [filed('e1', TODAY, 'c1/e1-one.jpg'), filed('e2', TODAY, 'c1/e2-two.jpg')],
+      error: null,
+    };
+    signedByPath = {
+      'c1/e2-two.jpg': { path: 'c1/e2-two.jpg', error: 'Object not found', signedUrl: null },
+    };
+
+    render(view());
+
+    expect(await screen.findByAltText(EVIDENCE_COPY.photoAlt(1, 1))).toBeInTheDocument();
+    expect(screen.getAllByRole('img')).toHaveLength(1);
+    expect(screen.getByText(EVIDENCE_COPY.photosFailed(1))).toBeInTheDocument();
+  });
+
+  it('counts a photo whose signed URL will not load', async () => {
+    evidenceResult = { data: [filed('e1', TODAY, 'c1/e1-one.jpg')], error: null };
+    render(view());
+
+    const image = await screen.findByAltText(EVIDENCE_COPY.photoAlt(1, 1));
+    // The screen this matters most on: a signed URL is good for an hour, and a session against
+    // a three-hour target sits open far longer than that.
+    await act(async () => {
+      image.dispatchEvent(new Event('error'));
+    });
+
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByText(EVIDENCE_COPY.photosFailed(1))).toBeInTheDocument();
+  });
+
+  it('takes yesterday’s note off the screen when the day turns over', async () => {
+    // A running session, because that is what makes this screen's own clock tick and therefore
+    // what moves `day` across local midnight — the same instant the figure is drawn from.
+    alreadyRunning();
+    evidenceResult = { data: null, error: { message: 'permission denied' } };
+    render(view());
+    expect(await screen.findByText(EVIDENCE_COPY.photosUnreadable)).toBeInTheDocument();
+
+    // Midnight. The images are day-filtered and would have gone on their own, but a count and a
+    // failure sentence carry no day of their own — left alone, yesterday's note sits over the
+    // new day's figure.
+    evidenceResult = { data: [], error: null };
+    await act(async () => {
+      vi.setSystemTime(new Date('2026-08-20T17:30:00.000Z'));
+      vi.advanceTimersByTime(1000);
+    });
+    await settle();
+
+    expect(screen.queryByText(EVIDENCE_COPY.photosUnreadable)).not.toBeInTheDocument();
+  });
+
+  it('keeps the clock when the photo read fails, and says why', async () => {
+    evidenceResult = { data: null, error: { message: 'permission denied' } };
+    render(view());
+
+    // The clock outranks the screen here as everywhere else on it: a photo that cannot be read
+    // costs him a record, and must never cost him the control that banks his work.
+    expect(await screen.findByText(EVIDENCE_COPY.photosUnreadable)).toBeInTheDocument();
+    expect(screen.getByText(/permission denied/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: FOCUS_COPY.start })).toBeInTheDocument();
   });
 });

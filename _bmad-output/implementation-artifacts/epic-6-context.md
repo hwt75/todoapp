@@ -29,7 +29,8 @@ lifecycle.md + stories.yaml), not `planning-artifacts/epics.md`, which stops at 
 - Story 6.5: Today shows where the window stands — done
 - Story 6.6: The reminder lands inside the window — review
 - Story 6.7: The referee may object — backlog, blocked on open questions
-- Story 6.8: A photo I can keep against any commitment — backlog
+- Story 6.8: A photo I can keep against any commitment — done
+- Story 6.9: A photo I can open again — backlog
 
 ## Requirements & Constraints
 
@@ -65,6 +66,11 @@ lifecycle.md + stories.yaml), not `planning-artifacts/epics.md`, which stops at 
   restriction — unlike a `due_time`, which cannot be set on an `abstain` or `daily_hours_quota`
   commitment. Because nothing is at stake, the flag carries no failed-day warning copy. When a
   commitment carries both a `due_time` and the photo flag, only the timed proof control is shown.
+- **Story 6.9 — the photo must be openable by the one person it is for.** Evidence has been
+  write-only to the author since 6.3: the only signed-URL read in the product belongs to the
+  referee's appeal viewer. A kept record he cannot open is worth less than a proof that merely has
+  to exist, and the upload copy already promises "only you can open it". Reading is a read: no
+  schema change, and the referee narrowing 6.8 established must not be weakened to achieve it.
 - Non-goals (unchanged by 6.8): monthly cadence, a referee approval queue, more than one time per
   commitment per day, timing an `abstain` or an hours-quota commitment, editing a filed claim or its
   photo, and migrating existing commitments. Story 6.8 gives those kinds a photo, never a time.

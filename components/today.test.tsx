@@ -1,7 +1,8 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Today } from './today';
+import { EVIDENCE_COPY } from '@/lib/evidence';
 
 /**
  * The screen the author opens under reluctance — and the one rule on it that no unit test and no
@@ -28,7 +29,15 @@ const seen: string[] = [];
 // `select` carries the column *string* alongside them (Story 6.8). Without it, deleting a
 // column from a SELECT is invisible here: the mock ignores the string and every fixture supplies
 // the field anyway, so the feature switches off in production with the suite still green.
-const fromCalls: Array<{ table: string; columns: string[]; select?: string }> = [];
+// `filters` carries the VALUE each of those columns was filtered by, not only its name
+// (Story 6.9): without it, a read scoped to the wrong commitment or the wrong day is invisible
+// here, because the fixture answers every read the same way regardless of what was asked.
+const fromCalls: Array<{
+  table: string;
+  columns: string[];
+  filters: Array<[string, unknown]>;
+  select?: string;
+}> = [];
 const inserted: Array<{ table: string; payload: unknown }> = [];
 // What a `grace_day` insert comes back with (Story 5.1). Set per test; the default is a
 // clean success — most tests here have nothing to do with spending one at all.
@@ -36,6 +45,10 @@ let graceInsertResult: unknown = { error: null };
 // Story 6.3: what `supabase.storage.from(...).upload(...)` comes back with. Default clean.
 let uploadResult: unknown = { error: null };
 const uploaded: Array<{ bucket: string; path: string }> = [];
+// Story 6.9: what `createSignedUrls` comes back with, per storage path. Anything absent signs
+// cleanly, so a test that has nothing to say about signing says nothing about it.
+let signedByPath: Record<string, unknown> = {};
+const signCalls: Array<{ paths: string[]; ttl: number }> = [];
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
@@ -45,12 +58,26 @@ vi.mock('@/lib/supabase/client', () => ({
           uploaded.push({ bucket, path });
           return Promise.resolve(uploadResult);
         },
+        createSignedUrls: (paths: string[], ttl: number) => {
+          signCalls.push({ paths, ttl });
+          return Promise.resolve({
+            data: paths.map(
+              (path) =>
+                signedByPath[path] ?? {
+                  path,
+                  error: null,
+                  signedUrl: `https://signed.test/${path}`,
+                },
+            ),
+            error: null,
+          });
+        },
       }),
     },
     from: (table: string) => {
       seen.push(table);
       let key = table;
-      const call: (typeof fromCalls)[number] = { table, columns: [] };
+      const call: (typeof fromCalls)[number] = { table, columns: [], filters: [] };
       fromCalls.push(call);
       const result = () => rows[key] ?? { data: [], error: null };
       const query = {
@@ -61,7 +88,15 @@ vi.mock('@/lib/supabase/client', () => ({
         is: () => query,
         eq: (column: string, value: string) => {
           call.columns.push(column);
+          call.filters.push([column, value]);
           if (column === 'kind') key = `${table}:${value}`;
+          return query;
+        },
+        // Story 6.9's evidence read filters two columns, so the query object has to stay
+        // chainable past the first one.
+        in: (column: string, value: unknown) => {
+          call.columns.push(column);
+          call.filters.push([column, value]);
           return query;
         },
         order: () => Promise.resolve(result()),
@@ -93,7 +128,11 @@ beforeEach(() => {
   graceInsertResult = { error: null };
   uploadResult = { error: null };
   uploaded.length = 0;
+  signedByPath = {};
+  signCalls.length = 0;
   for (const key of Object.keys(rows)) delete rows[key];
+  // Story 6.9: nothing filed, which is what most of this suite is about.
+  rows.evidence = { data: [], error: null };
   rows.commitment = { data: [gym], error: null };
   rows.penalty_current = { data: [], error: null };
   rows.chain_current = { data: [], error: null };
@@ -1160,5 +1199,197 @@ describe('keeping a photo against a commitment', () => {
     // The flag does not reopen a timed commitment's own window. Epic 6 owns that row entirely.
     expect(screen.queryByLabelText('Proof')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Proof — Pill')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Story 6.9 — the photo the author can open again.
+ *
+ * Evidence had been write-only to him since Story 6.3: the referee could open a photo and he
+ * could not, while the control above told him only he can. What this screen owns is the day it
+ * is drawn against — today's photo on today's row — and the promise that a photo he just
+ * attached appears without him reloading anything.
+ *
+ * The signing rules themselves are `lib/evidence.test.ts`'s; this is placement.
+ */
+describe('opening a photo kept for today', () => {
+  afterEach(() => vi.useRealTimers());
+
+  function filedToday(id = 'e1', path = 'c3/e1-proof.jpg', commitmentId = 'c3') {
+    return { id, commitment_id: commitmentId, for_day: todayLocal(), storage_path: path };
+  }
+
+  /** A second flagged row, so the read that answers for both is exercised at more than one. */
+  const journal = { ...sketchbook, id: 'c4', name: 'Journal' };
+
+  it('shows the photo filed today on that row’s own block', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+    rows.evidence = { data: [filedToday()], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+
+    const image = await screen.findByAltText(EVIDENCE_COPY.photoAlt(1, 1));
+    expect(image).toHaveAttribute('src', 'https://signed.test/c3/e1-proof.jpg');
+    // Signed from the ordinary authenticated client, for an hour — never a shorter window that
+    // fails while he is still looking at it.
+    expect(signCalls).toEqual([{ paths: ['c3/e1-proof.jpg'], ttl: 3600 }]);
+  });
+
+  it('asks only for the flagged commitments and only for the day on screen', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook, journal, gym], error: null };
+    rows.evidence = { data: [filedToday()], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByAltText(EVIDENCE_COPY.photoAlt(1, 1));
+
+    // Asserted on the VALUES, not only the column names. The fixture answers every read the
+    // same way, so a read scoped to the wrong commitment or to yesterday renders identically —
+    // this is the only place that difference is visible at all.
+    const read = fromCalls.find((c) => c.table === 'evidence');
+    expect(read?.select).toBe('id,commitment_id,for_day,storage_path');
+    expect(read?.filters).toEqual([
+      // `gym` is not flagged, so it is not asked about.
+      ['commitment_id', ['c3', 'c4']],
+      ['for_day', [todayLocal()]],
+    ]);
+  });
+
+  it('answers for several flagged rows in one read, each row getting only its own', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook, journal], error: null };
+    rows.evidence = {
+      data: [
+        filedToday('e1', 'c3/e1-sketch.jpg', 'c3'),
+        filedToday('e2', 'c4/e2-journal.jpg', 'c4'),
+      ],
+      error: null,
+    };
+
+    const { container } = render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    // Waited for on the images themselves, not on the controls: the controls render from the
+    // commitment read, which lands before the photo read has even been issued.
+    await waitFor(() => expect(screen.getAllByRole('img')).toHaveLength(2));
+
+    // One query for the screen, not one per row.
+    expect(fromCalls.filter((c) => c.table === 'evidence')).toHaveLength(1);
+
+    // And each photo lands under the row it belongs to. A single-row test cannot see this: the
+    // id-zip and the per-row lookup are only ever wrong at length two or more.
+    const blocks = [...container.querySelectorAll('.card-pad > div')];
+    const sketchBlock = blocks.find((b) => b.textContent?.includes('Sketchbook'));
+    const journalBlock = blocks.find((b) => b.textContent?.includes('Journal'));
+    expect(sketchBlock?.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://signed.test/c3/e1-sketch.jpg',
+    );
+    expect(journalBlock?.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://signed.test/c4/e2-journal.jpg',
+    );
+  });
+
+  it('says nothing at all about photos on a day with none', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByLabelText('Proof — Sketchbook');
+
+    // No placeholder and no empty frame. A day that never needed a photo is not missing one.
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.queryByText(/could not be loaded/)).not.toBeInTheDocument();
+  });
+
+  it('shows a photo just attached without a reload', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    const input = await screen.findByLabelText('Proof — Sketchbook');
+
+    // The server is the only thing that says what exists — `attachProof` inserts with no
+    // `.select()`, so nothing about the upload itself could have been echoed onto the screen.
+    rows.evidence = { data: [filedToday()], error: null };
+    await userEvent.upload(input, photoTakenOn(todayLocal()));
+
+    expect(await screen.findByText('Proof saved.')).toBeInTheDocument();
+    expect(await screen.findByAltText(EVIDENCE_COPY.photoAlt(1, 1))).toBeInTheDocument();
+  });
+
+  it('leaves the save standing when the re-read after it fails, and says why', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    const input = await screen.findByLabelText('Proof — Sketchbook');
+
+    rows.evidence = { data: null, error: { message: 'permission denied' } };
+    await userEvent.upload(input, photoTakenOn(todayLocal()));
+
+    // The photo was saved. A failed read of it afterwards is a different fact, and taking the
+    // save off the screen would tell him the opposite of what happened.
+    expect(await screen.findByText('Proof saved.')).toBeInTheDocument();
+    expect(await screen.findByText(EVIDENCE_COPY.photosUnreadable)).toBeInTheDocument();
+    // The server's own words, not only that something went wrong.
+    expect(screen.getByText(/permission denied/)).toBeInTheDocument();
+  });
+
+  it('renders the photo it could sign and counts the one it could not, once', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook, journal], error: null };
+    rows.evidence = {
+      data: [filedToday('e1', 'c3/e1-one.jpg'), filedToday('e2', 'c3/e2-two.jpg')],
+      error: null,
+    };
+    signedByPath = {
+      'c3/e2-two.jpg': { path: 'c3/e2-two.jpg', error: 'Object not found', signedUrl: null },
+    };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+
+    // One photo, and a note saying one is missing — never a list that just came back shorter,
+    // which is indistinguishable from never having kept the record.
+    expect(await screen.findByAltText(EVIDENCE_COPY.photoAlt(1, 1))).toBeInTheDocument();
+    expect(screen.getAllByRole('img')).toHaveLength(1);
+    // Once for the block behind it, not once per flagged row: two rows share one read, and the
+    // same count said twice would read as two different failures.
+    expect(screen.getAllByText(EVIDENCE_COPY.photosFailed(1))).toHaveLength(1);
+  });
+
+  it('counts a photo whose signed URL will not load rather than leaving a broken frame', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+    rows.evidence = { data: [filedToday()], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    const image = await screen.findByAltText(EVIDENCE_COPY.photoAlt(1, 1));
+
+    // A signed URL is good for an hour and this screen re-reads only at midnight or after an
+    // upload, so an expired one is a real outcome. A broken frame says nothing; the count says
+    // what every other missing photo says.
+    await act(async () => {
+      image.dispatchEvent(new Event('error'));
+    });
+
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByText(EVIDENCE_COPY.photosFailed(1))).toBeInTheDocument();
   });
 });

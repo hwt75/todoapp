@@ -22,6 +22,8 @@ import {
 } from '@/lib/focus-session';
 import { enqueue, flush, removeFromQueue } from '@/lib/offline-queue';
 import { createClient } from '@/lib/supabase/client';
+import { readKeptPhotos, type KeptPhotoRead } from '@/lib/evidence';
+import { KeptPhotoNote, KeptPhotos, useKeptPhotos } from '@/components/kept-photos';
 
 type View =
   | { kind: 'loading' }
@@ -137,6 +139,10 @@ export function FocusSession({
   const [sending, setSending] = useState<Sending>({ kind: 'idle' });
   const [now, setNow] = useState(() => new Date());
   const [reloads, setReloads] = useState(0);
+  /** Story 6.9: whatever the author filed against this commitment for the day this screen
+   *  reports on, tagged with the commitment and day it answers for. Null until the read comes
+   *  back, which renders as nothing at all. */
+  const [filed, setFiled] = useState<{ of: string; read: KeptPhotoRead } | null>(null);
   // Checked by `stop()`, which — unlike `load()` and `drain()` — has no effect of its own to
   // hang a `cancelled` flag on; it runs from a click and can still be in flight when `onClose`
   // unmounts this screen.
@@ -213,6 +219,41 @@ export function FocusSession({
       cancelled = true;
     };
   }, [commitmentId, day, reloads]);
+
+  /**
+   * The photo for the day this screen reports on (Story 6.9).
+   *
+   * `day` and no second clock: it is already derived from the same instant the figure is drawn
+   * from and already moves across local midnight, so the photo follows the total onto the new
+   * day rather than going on showing yesterday's record under today's figure.
+   *
+   * Its own effect rather than a fourth read inside `load()` above, because that one returns
+   * early on both of its failures — a target that cannot be read and a row that is not an
+   * hours quota — and a photo he filed is not the target read's to withhold. This is the only
+   * route a `daily_hours_quota` commitment has to its own record: `commitments_owing()`
+   * excludes that cadence, so its Chains detail is empty by construction and Today routes the
+   * tap here instead.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    async function read() {
+      const photos = await readKeptPhotos([commitmentId], [day], { cancelled: () => cancelled });
+      if (cancelled) return;
+      // Tagged with what it answers. `photosOn` already filters the images by day, but a count
+      // and a failure sentence carry no day of their own — so an answer about yesterday, or
+      // about the commitment last looked at, is discarded here rather than sitting over this
+      // day's figure until a fresh one arrives.
+      setFiled({ of: `${commitmentId}\n${day}`, read: photos });
+    }
+
+    void read();
+    return () => {
+      cancelled = true;
+    };
+  }, [commitmentId, day]);
+
+  const keptPhotos = useKeptPhotos(filed?.of === `${commitmentId}\n${day}` ? filed.read : null);
 
   // Opening the screen, and the network coming back, both drain whatever is waiting. Neither is
   // a heartbeat and neither watches the author: `online` is a fact about the radio.
@@ -430,6 +471,19 @@ export function FocusSession({
           )}
         </>
       )}
+
+      {/* Story 6.9 — the record he kept for this day, on the only screen this cadence opens.
+          Nothing renders when there is none: no placeholder, no empty frame, and no sentence
+          about a photo that was never owed. */}
+      {keptPhotos.photosOn(commitmentId, day).length > 0 && (
+        <div className="card card-pad stack">
+          <KeptPhotos photos={keptPhotos.photosOn(commitmentId, day)} view={keptPhotos} />
+        </div>
+      )}
+
+      {/* Counted rather than dropped, the same rule every surface keeps: a photo that failed to
+          sign or to load is one he did keep, and a shorter list would say he never did. */}
+      <KeptPhotoNote view={keptPhotos} />
 
       {sending.kind === 'queued' && (
         <p className="row-muted" role="status">

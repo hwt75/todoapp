@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { formatDeadline } from '@/lib/appeal';
+import { EVIDENCE_BUCKET, EVIDENCE_URL_TTL_SECONDS } from '@/lib/evidence';
 import { formatDong, PENALTY_DONG } from '@/lib/money';
 import type { PenaltyState } from '@/lib/ledger';
 import {
@@ -171,10 +172,12 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
         // One hour, not one minute — long enough for an actual review to happen without
         // the image simply failing partway through with no explanation. Evidence review is
         // exactly the slow, unhurried case this screen exists for (FR-15's own point: the
-        // referee is never rushed by a clock only the author feels).
+        // referee is never rushed by a clock only the author feels). The bucket and the hour
+        // are `lib/evidence.ts`'s constants (Story 6.9) so this screen and the author's own
+        // three cannot drift onto two buckets or two expiries.
         const { data: signed, error: signError } = await supabase.storage
-          .from('appeal-evidence')
-          .createSignedUrl(row.storage_path as string, 3600);
+          .from(EVIDENCE_BUCKET)
+          .createSignedUrl(row.storage_path as string, EVIDENCE_URL_TTL_SECONDS);
         if (cancelled) return;
 
         if (signError || !signed?.signedUrl) {

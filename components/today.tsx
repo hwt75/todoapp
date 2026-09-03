@@ -4,7 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import { CommitmentRow, type RowCommitment } from '@/components/commitment-row';
 import { submitDeclaration, type QueuedClaim } from '@/lib/declaration-write';
 import { calendarMoment } from '@/lib/declaration';
-import { EVIDENCE_COPY, evidenceObjectPath, fileCapturedOn, isEvidenceDated } from '@/lib/evidence';
+import {
+  EVIDENCE_BUCKET,
+  EVIDENCE_COPY,
+  evidenceObjectPath,
+  fileCapturedOn,
+  isEvidenceDated,
+  readKeptPhotos,
+  type KeptPhotoRead,
+} from '@/lib/evidence';
+import { KeptPhotoNote, KeptPhotos, useKeptPhotos } from '@/components/kept-photos';
 import { stateToday } from '@/lib/commitment-state';
 import {
   timedWindowState,
@@ -177,6 +186,14 @@ export function Today({
   // on the server to re-read that would tell this screen what happened.
   const [claimState, setClaimState] = useState<Record<string, ClaimState>>({});
   const [evidenceState, setEvidenceState] = useState<Record<string, EvidenceState>>({});
+  /** Story 6.9: what the server says is already filed for today, across every flagged row in one
+   *  answer. Read back, never assembled from `evidenceState` — an upload's own report says a row
+   *  was written, not what exists. */
+  const [filed, setFiled] = useState<KeptPhotoRead | null>(null);
+  /** Bumped by a successful upload, so a photo just attached appears without a manual reload.
+   *  Deliberately not a dependency of the main read below: re-running that one would clear
+   *  `evidenceState`, taking "Proof saved." off the screen the moment it was earned. */
+  const [filedReload, setFiledReload] = useState(0);
   /**
    * The instant every window state on this screen is read against (Story 6.5).
    *
@@ -220,6 +237,9 @@ export function Today({
     // stands above this morning's empty control, which is the screen claiming something for a
     // day it is no longer showing — and the comment on the block below promises the opposite.
     setEvidenceState({});
+    // And Story 6.9's half of the same rule: yesterday's photo must not sit under today's
+    // control for the one round trip it takes the new day's read to come back.
+    setFiled(null);
 
     async function load() {
       const supabase = createClient();
@@ -337,6 +357,44 @@ export function Today({
     // `localDay` and nothing else: the reads are re-run when the day turns over, never on a tick.
   }, [localDay]);
 
+  /**
+   * The rows carrying an all-day photo control (Story 6.8), and therefore the rows that can have
+   * a photo to show (Story 6.9). `!row.due_time` for the reason the block below gives: a timed
+   * commitment's photo is Epic 6's own, and this is not its surface.
+   */
+  const kept =
+    view.kind === 'ready' ? view.rows.filter((row) => row.requires_photo && !row.due_time) : [];
+  // A string, so this effect re-runs when the *set* of flagged rows changes and not on every
+  // render that rebuilds the array above.
+  const keptKey = kept.map((row) => row.id).join(',');
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = keptKey === '' ? [] : keptKey.split(',');
+
+    if (ids.length === 0) {
+      setFiled((current) => (current === null ? current : null));
+      return;
+    }
+
+    async function read() {
+      // One read for every flagged row at once, scoped to today. Separate from the eight above
+      // because which rows to ask about is itself an answer of the first of them — but one
+      // query all the same, not one per row.
+      const photos = await readKeptPhotos(ids, [localDay], { cancelled: () => cancelled });
+      if (cancelled) return;
+      setFiled(photos);
+    }
+
+    void read();
+    return () => {
+      cancelled = true;
+    };
+  }, [keptKey, localDay, filedReload]);
+
+  // Story 6.9: the read, plus whatever this browser has since failed to load out of it.
+  const keptPhotos = useKeptPhotos(filed);
+
   /** Spends a Grace Day against one Failed, owed day. See `components/ledger.tsx`'s own
    *  identical function for the full reasoning — this is the same control, offered from the
    *  Day summary rather than a Ledger row (FR-17's own two current entry points). */
@@ -426,7 +484,7 @@ export function Today({
       const path = evidenceObjectPath(parent.id, crypto.randomUUID(), file.name);
 
       const { error: uploadError } = await supabase.storage
-        .from('appeal-evidence')
+        .from(EVIDENCE_BUCKET)
         .upload(path, file, { contentType: file.type || undefined });
 
       if (!mounted.current) return;
@@ -457,6 +515,13 @@ export function Today({
           ? { kind: 'failed', reason: insertError.message }
           : { kind: 'saved' },
       }));
+
+      // Story 6.9: ask the server what exists now, rather than pushing the file just sent onto
+      // the list. `attachProof` inserts with no `.select()`, so no row id ever reaches this
+      // client, and adding one would make a save's own reported success depend on a second round
+      // trip that can fail by itself. If this re-read fails, the save still stands and the photo
+      // section says it could not load — which is the truth.
+      if (!insertError) setFiledReload((token) => token + 1);
     } catch (error) {
       if (!mounted.current) return;
       setEvidenceState((c) => ({
@@ -682,7 +747,6 @@ export function Today({
               retried later the same day, which is why there is no offline queue for it and no
               warning anywhere near it. */}
           {(() => {
-            const kept = view.rows.filter((row) => row.requires_photo && !row.due_time);
             if (kept.length === 0) return null;
 
             return (
@@ -728,9 +792,23 @@ export function Today({
                           <strong>{EVIDENCE_COPY.failed}</strong> {proof.reason}
                         </p>
                       )}
+
+                      {/* Story 6.9 — what is actually filed for today, read back from the
+                          server. Nothing renders for a day with no photo: no placeholder and no
+                          empty frame, because a day that never needed one is not missing
+                          anything. */}
+                      <KeptPhotos
+                        photos={keptPhotos.photosOn(row.id, localDay)}
+                        view={keptPhotos}
+                      />
                     </div>
                   );
                 })}
+
+                {/* Once for the block, not once per row: there is one read behind every row
+                    here, so a per-row copy of its failure count would say the same number
+                    several times and mean a different thing each time. */}
+                <KeptPhotoNote view={keptPhotos} />
               </div>
             );
           })()}

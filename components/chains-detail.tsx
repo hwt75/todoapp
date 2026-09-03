@@ -8,6 +8,8 @@ import {
   type CommitmentOutcome,
 } from '@/lib/chain';
 import { createClient } from '@/lib/supabase/client';
+import { readKeptPhotos, type KeptPhotoRead } from '@/lib/evidence';
+import { KeptPhotoNote, KeptPhotos, useKeptPhotos } from '@/components/kept-photos';
 
 interface Day {
   day: string;
@@ -94,6 +96,47 @@ export function ChainsDetail({
     };
   }, [commitmentId]);
 
+  /**
+   * The photos, in their own pass (Story 6.9).
+   *
+   * After the history rather than before it: the chain and the calendar are what this screen is
+   * for, and they must not wait on a signing round trip to appear. A history that cannot show
+   * its photos is still the history — the failure path already said so, and now the slow path
+   * says it too.
+   *
+   * The days come from the calendar above because a photo is only ever drawn against a day
+   * already on screen; this creates no route to attach one to a past day, and a day with none
+   * renders exactly as it did before. Every `period` here is a *day*: `settle_week` deliberately
+   * writes no `settlement_commitment` row (`20260820150000_the_week_closes_and_settles.sql:20`)
+   * and never writes an `expired` verdict for `supersede_expiries()` to correct, so no
+   * week-start period can reach this list and no photo can be drawn against one.
+   */
+  const [photos, setPhotos] = useState<{ of: string; read: KeptPhotoRead } | null>(null);
+  const dayKey = view.kind === 'ready' ? view.days.map((d) => d.day).join(',') : '';
+  // What an answer would have to be an answer *to*. Carried with the answer rather than cleared
+  // by a second write, so there is no render at all in which one commitment's photos — or one
+  // day's failure count — sits over another's.
+  const askedFor = `${commitmentId}\n${dayKey}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    const days = dayKey === '' ? [] : dayKey.split(',');
+    if (days.length === 0) return;
+
+    async function read() {
+      const answer = await readKeptPhotos([commitmentId], days, { cancelled: () => cancelled });
+      if (cancelled) return;
+      setPhotos({ of: `${commitmentId}\n${dayKey}`, read: answer });
+    }
+
+    void read();
+    return () => {
+      cancelled = true;
+    };
+  }, [commitmentId, dayKey]);
+
+  const keptPhotos = useKeptPhotos(photos?.of === askedFor ? photos.read : null);
+
   return (
     <section className="screen">
       <header className="screen-head">
@@ -140,6 +183,13 @@ export function ChainsDetail({
                 >
                   <div className="row-main">
                     <div className="row-name">{d.day}</div>
+                    {/* Story 6.9 — the photo he kept that day, where the day itself is. A day
+                        with none renders exactly as it always has: no placeholder, no empty
+                        frame, nothing said about a photo that was never owed. */}
+                    <KeptPhotos
+                      photos={keptPhotos.photosOn(commitmentId, d.day)}
+                      view={keptPhotos}
+                    />
                   </div>
                   {/* Colour lives in the pill and nowhere else, the same rule the Ledger keeps —
                       this list is structurally a history of failures and must not become a wall
@@ -154,6 +204,10 @@ export function ChainsDetail({
               ))}
             </div>
           )}
+
+          {/* Counted, never dropped. A photo that failed to sign or to load is one he did keep,
+              and a list that simply came back shorter would tell him he never kept it. */}
+          <KeptPhotoNote view={keptPhotos} />
         </>
       )}
     </section>

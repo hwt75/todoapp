@@ -3,7 +3,12 @@
 import { useRef, useState } from 'react';
 import { classifyConflict, classifyWriteError } from '@/lib/declaration-submit';
 import { APPEAL_COPY, holdStateCopy, toRow, type AppealDraft } from '@/lib/appeal';
-import { evidenceObjectPath, fileCapturedOn, isEvidenceDated } from '@/lib/evidence';
+import {
+  EVIDENCE_BUCKET,
+  evidenceObjectPath,
+  fileCapturedOn,
+  isEvidenceDated,
+} from '@/lib/evidence';
 import { formatDong } from '@/lib/money';
 import { createClient } from '@/lib/supabase/client';
 
@@ -153,7 +158,7 @@ export function AppealForm({
       const path = evidenceObjectPath(submission.appealId, crypto.randomUUID(), file.name);
 
       const { error: uploadError } = await supabase.storage
-        .from('appeal-evidence')
+        .from(EVIDENCE_BUCKET)
         .upload(path, file, { contentType: file.type || undefined });
 
       if (uploadError) {

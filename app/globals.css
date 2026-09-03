@@ -661,6 +661,14 @@ img {
   border-radius: var(--radius-default);
 }
 
+/* A photo the author kept, on Today, in a commitment's history, or on a Focus Session (Story
+   6.9). Bounded in height where the referee's evidence is not, and for the opposite reason:
+   he is looking at one photo and deciding on it, while these sit inside a list of days that
+   has to stay scannable. `height: auto` above keeps the aspect ratio under either bound. */
+.kept-photo {
+  max-height: 40vh;
+}
+
 textarea {
   width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

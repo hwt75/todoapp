@@ -1,8 +1,5 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(npx supabase db push)",
-      "Bash(npx supabase db push *)"
-    ]
+    "allow": ["Bash(npx supabase db push)", "Bash(npx supabase db push *)"]
   }
 }
