@@ -88,6 +88,7 @@ development_status:
   6-5-today-shows-where-the-window-stands: done
   6-6-the-reminder-lands-inside-the-window: review
   6-7-the-referee-may-object: backlog
+  6-8-a-photo-i-can-keep-against-any-commitment: backlog
   epic-6-retrospective: optional
 action_items:
   - id: "epic-1-retro-item-1-record-whether-a-research-spike-may-skip"

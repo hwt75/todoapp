@@ -281,7 +281,9 @@ prompts the author to start a Focus Session. Realizes UJ-2.
 is optional and per-Commitment; a Commitment with none simply asks the author each morning.
 
 Four are offered. Photographs are deliberately not among them: an old photo taken anywhere proves
-nothing, so evidence belongs to the Appeal path and never to verification.
+nothing, so a photograph never files a Declaration and never decides a day. Photographs are held
+elsewhere in the product — as Appeal evidence, as a timed Commitment's proof, and as the optional
+record an author may keep against any Commitment — but in none of those does one act as a check.
 
 | Auto-check | What it observes | Fits |
 |---|---|---|
@@ -653,8 +655,9 @@ weeks at quota for Weekly Quota Commitments.
   no Penalty possible. `[NOTE FOR PM: now that the author can create Commitments himself and attach a
   Timer Auto-check, these cost nothing to add. Left out of the starting set rather than out of the
   product. Revisit at the first monthly report.]`
-- Photographs as an Auto-check — an old photo taken anywhere proves nothing, so evidence belongs to
-  the Appeal path only
+- Photographs as an Auto-check — an old photo taken anywhere proves nothing. A photograph is never a
+  check method and never files a Declaration; where photographs are held, they are records and
+  evidence, never verdicts.
 - **A native iOS client, and with it the location and movement Auto-checks (FR-6, FR-7) and an
   alarm-grade morning gate.** Blocked on an Apple Developer account: a free Apple ID cannot sign the
   push entitlement, and a web app cannot run in the background on iOS. Both FRs stay specified rather

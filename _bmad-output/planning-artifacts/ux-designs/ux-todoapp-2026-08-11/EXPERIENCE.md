@@ -154,7 +154,7 @@ feel like something happened.
 | Declaration control pair | Two identical neutral buttons. No default, no pre-selection, no confirmation step on either answer. |
 | Optional check row | Toggles a machine check on a commitment. Disabled with an explanation when the commitment's kind makes it meaningless. |
 | Focus timer | Starts on tap, survives backgrounding and lock, banks on stop. Never pauses itself, never asks whether the user is still working. |
-| Evidence attachment | Camera or library, restricted to items dated the claimed day. Appears only in Appeal, never as a check method — an old photo proves nothing. |
+| Evidence attachment | Camera or library, restricted to items dated the day it belongs to. Appears in three places — an Appeal, a timed Commitment's proof control, and the all-day control on a Commitment marked as keeping a photo — and is never a check method in any of them: an old photo proves nothing, and a missing photo only costs a day where Epic 6 says so. |
 | Account-elsewhere link | Sub-state of its Auto-check row in Task setup. Unlinked shows the service and a link control; linked shows the account identifier and when it was last read. `[ASSUMPTION: v1 takes a public profile URL and needs no authentication. If a service requires OAuth, this row becomes a flow rather than a field.]` |
 | Grace day control | Offered wherever a Failed Day is visible and still open: the Day summary, an owed row in the Ledger, and the silence intervention. Always states how many remain. Never applied automatically. |
 | Collection card | Pre-written message with a copy control and a Mark collected control. No compose field. |

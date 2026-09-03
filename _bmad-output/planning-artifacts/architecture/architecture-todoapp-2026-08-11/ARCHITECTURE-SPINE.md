@@ -225,7 +225,7 @@ graph TD
 | Copy | Every user-facing string comes from EXPERIENCE.md § Voice and Tone. New copy is added there first, not invented in a component. |
 | Visual tokens | Every color, radius, and type role resolves to a DESIGN.md token. No literal hex in a component. |
 | Config & secrets | VAPID keys and service credentials live only in the worker's environment. The client holds the VAPID public key and nothing else. |
-| Evidence storage | Appeal evidence goes to a private Storage bucket whose access policy derives from the same rule as the `appeal` row it belongs to (AD-7): the doer who submitted it and the referee ruling on it, nobody else. An object outlives its appeal only as long as the appeal is retained. |
+| Evidence storage | Evidence goes to a private Storage bucket whose access policy derives from the row it belongs to (AD-7): the doer who submitted it and, for an Appeal, the referee ruling on it, nobody else. An evidence row has exactly one parent — an `appeal`, a `declaration`, or a `(commitment, day)` — and its object path leads with that parent's id, which is what the bucket's policies read to derive access. An object outlives its parent only as long as the parent is retained; commitment-day evidence has no automatic expiry in v1. |
 | Migrations | Every schema and function change is a numbered migration under `supabase/migrations/`. Nothing is edited in the dashboard. |
 | Testing | Vitest, run by `npm test`. Behaviour that depends on device or browser context — install state, permission state, platform capability — is extracted into a pure function and tested there, never left inside a component where only a real device can exercise it. Test files sit beside the code they cover. |
 
