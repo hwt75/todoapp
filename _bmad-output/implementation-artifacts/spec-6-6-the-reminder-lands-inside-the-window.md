@@ -481,7 +481,8 @@ has.
 - `npx tsc --noEmit`, `npm run lint`, `npm run format:check` — expected: clean.
 - `select jobname, schedule from cron.job order by jobname;` — expected: ten jobs, the new
   `due-time-reminders` at `50 * * * *`, no existing schedule altered.
-- `npm run migrations:check` — expected: the new migration reported as not yet pushed.
+- `npm run migrations:check` — expected before the push: the new migration reported as not yet
+  pushed. After it: all 60 matched.
 
 ## Suggested Review Order
 
@@ -570,5 +571,7 @@ worker, and never puts anything on a lock screen. What needs a phone:
 5. Claim the day before its window opens. No push for it should arrive at all.
 
 Worth knowing before testing: delivery is the outbox worker's minute, so a reminder lands at its
-instant or up to a minute later. `npx supabase db push` has not been run — none of this works
-against the live project until it has.
+instant or up to a minute later. The migration is on the live project as of 2026-09-03:
+`migrations:check` reads 60/60 matched, `cron.job` holds `due-time-reminders` at `50 * * * *`,
+`active`, and the security advisor reports no finding this migration introduced — none of the seven
+new functions is reachable by `anon` or `authenticated`, and each carries `search_path=""`.
