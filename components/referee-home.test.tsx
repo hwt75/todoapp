@@ -642,9 +642,14 @@ describe('the gone-quiet state (Story 5.3, FR-18)', () => {
     const message = await screen.findByText(/hasn't opened this/);
     expect(message).toHaveTextContent('4 days');
     expect(message.textContent).not.toMatch(/₫/);
-    // Only the pre-existing "Sign out" control exists on this screen when nothing else is
-    // pending or owed — the gone-quiet state itself renders no button of its own.
-    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Sign out']);
+    // Only the screen's two standing controls exist when nothing else is pending or owed — the
+    // gone-quiet state itself renders no button of its own. "Look up a day" (Story 6.7) is a
+    // door the referee may take, not a queue item: it is here whatever the state of anything
+    // else, names no day and carries no count.
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Look up a day',
+      'Sign out',
+    ]);
   });
 
   it('clears once the episode is satisfied — the RLS read simply returns nothing', async () => {
@@ -656,5 +661,57 @@ describe('the gone-quiet state (Story 5.3, FR-18)', () => {
     await screen.findByText(/Nothing for you right now/);
 
     expect(screen.queryByText(/hasn't opened this/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Story 6.7 — the referee's home gains a door, and must never gain a list.
+ *
+ * The whole arrangement rests on his never being sent a queue: with no action from him at all,
+ * every proven day settles held. A browsable list of the author's proven days is a queue in
+ * everything but name, so what is asserted here is an absence — this screen reads nothing about
+ * settled days, renders no count of them, and offers only a way in that he takes himself.
+ */
+describe('the way in to a day, and the list that must not appear (Story 6.7)', () => {
+  it('offers a door that names no day and carries no number', async () => {
+    render(<RefereeHome />);
+
+    const look = await screen.findByRole('button', { name: 'Look up a day' });
+    expect(look.textContent).not.toMatch(/[0-9]/);
+
+    fireEvent.click(look);
+    expect(push).toHaveBeenCalledWith('/referee/day');
+  });
+
+  it('is there whether or not anything is pending or owed — it is not a queue item', async () => {
+    penaltyResult = {
+      data: [
+        {
+          id: 'p1',
+          state: 'owed',
+          amount_dong: 500000,
+          kind: 'day',
+          period: '2026-08-18',
+          settlement_id: 's1',
+          created_at: '2026-08-19T00:00:00Z',
+        },
+      ],
+      error: null,
+    };
+    render(<RefereeHome />);
+
+    expect(await screen.findByRole('button', { name: 'Look up a day' })).toBeInTheDocument();
+  });
+
+  it('reads nothing about settled days and shows no count of them', async () => {
+    render(<RefereeHome />);
+    await screen.findByText(/Nothing for you right now/);
+
+    // The two RPCs this screen may call are the collection-list one and Mark Collected. A read
+    // of `settlement_current`, or a `referee_day_lookup` from here, would be the beginning of
+    // the list this story exists not to build.
+    expect(rpc).not.toHaveBeenCalledWith('referee_day_lookup', expect.anything());
+    expect(screen.queryByText(/day(s)? (to review|awaiting|pending)/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/proven day/i)).not.toBeInTheDocument();
   });
 });

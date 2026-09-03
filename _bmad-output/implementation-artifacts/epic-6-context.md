@@ -28,9 +28,9 @@ lifecycle.md + stories.yaml), not `planning-artifacts/epics.md`, which stops at 
 - Story 6.4: Midnight decides the day — done
 - Story 6.5: Today shows where the window stands — done
 - Story 6.6: The reminder lands inside the window — review
-- Story 6.7: The referee may object — backlog, blocked on open questions
+- Story 6.7: The referee may object — backlog, unblocked 2026-09-03 (all four questions answered)
 - Story 6.8: A photo I can keep against any commitment — done
-- Story 6.9: A photo I can open again — backlog
+- Story 6.9: A photo I can open again — review
 
 ## Requirements & Constraints
 

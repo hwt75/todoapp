@@ -434,6 +434,19 @@ button:disabled {
   font-size: var(--type-label);
 }
 
+/* Story 6.7 — the referee's own words against a day the author thought held.
+
+   Untinted, like every other row on this screen: the Ledger is structurally a list of failures
+   and a wall of red is the artifact this product exists to avoid. Secondary text, not an alert.
+   `overflow-wrap: anywhere` for the same reason `.row-name` carries it — a sentence somebody
+   else typed is not disposable, and truncating the one thing the author is owed here would be
+   the worst possible place to run out of room. */
+.row-objection {
+  color: var(--text-secondary);
+  font-size: var(--type-label);
+  overflow-wrap: anywhere;
+}
+
 /* The chain, beside the pill and never inside it, and never coloured.
 
    DESIGN.md rations the `held` family deliberately — it is the only one that reads as good

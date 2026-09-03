@@ -8,6 +8,7 @@
  * what the client actually owns, the shape of what it sends, and the copy.
  */
 
+import type { CommitmentOutcome } from './chain';
 import type { PenaltyState } from './ledger';
 import { formatDong } from './money';
 import { ZONE, dayInQuestion } from './declaration';
@@ -210,6 +211,10 @@ export const REFEREE_HOME_COPY = {
     `${count} penalt${count === 1 ? 'y' : 'ies'} owed, ${totalLabel} total.`,
   appealsHeading: 'Pending appeals',
   openAppeal: 'Open',
+  /** Story 6.7. A door, not a queue item: it names no day, carries no count and states no
+   *  number of anything, because the moment this screen could say "3 days you might question"
+   *  it would be the list this story exists not to build. */
+  lookUpDay: 'Look up a day',
   /**
    * Story 5.3, FR-18 — verbatim from `epic-5-context.md`'s UX & Interaction Patterns and
    * `EXPERIENCE.md:128` (Referee escalation), with `${days}` filling the day count where
@@ -452,3 +457,120 @@ export const OWED_PENALTIES_COPY = {
   marking: 'Marking…',
   markFailed: 'Failed.',
 } as const;
+
+/**
+ * One row of `referee_day_lookup()` (Story 6.7) — one commitment on one settled day the referee
+ * named himself, what that day recorded for it, when the 48-hour objection window closes, and
+ * whether the day has already been objected to.
+ *
+ * The function returns facts rather than an `objectable` verdict on purpose: `object_to_day()` is
+ * the sole judge (AD-1) and refuses each case in its own words. `objectionIsOffered` below mirrors
+ * those facts only to decide whether the control renders at all, exactly as `lib/ledger.ts`'s own
+ * `graceable` mirrors `grace_day_validate()`.
+ */
+export interface RefereeDayRow {
+  settlementId: string;
+  commitmentId: string;
+  commitmentName: string;
+  outcome: CommitmentOutcome;
+  /** ISO instant. `objection_deadline()`'s own value, computed server-side from the settlement's
+   *  `settled_at` — never re-derived here, so the screen and the function cannot disagree about
+   *  when the window shuts. */
+  objectionDeadline: string;
+  alreadyObjected: boolean;
+}
+
+/**
+ * Whether this row may still be objected to — the three conditions `object_to_day()` checks that
+ * a client can honestly see: the day recorded `held` for this commitment, nobody has objected to
+ * the day yet, and the window is still open.
+ *
+ * Deliberately NOT a full mirror. It does not know whether the day's penalty has been collected,
+ * and it must not try to: a `collected` penalty is terminal and this feature never reads one. That
+ * case comes back as the server's own refusal, shown verbatim, the same way
+ * `components/referee-appeal-detail.tsx` shows a lost race rather than pre-computing it.
+ *
+ * `now` is a parameter, never the system clock, so the window boundary is exercised
+ * deterministically the way every other date rule in this file is.
+ */
+export function objectionIsOffered(row: RefereeDayRow, now: Date): boolean {
+  return (
+    row.outcome === 'held' &&
+    !row.alreadyObjected &&
+    new Date(row.objectionDeadline).getTime() > now.getTime()
+  );
+}
+
+/**
+ * Every string `components/referee-day-lookup.tsx` says (Story 6.7, the referee's half).
+ *
+ * **There is no list here, and none of this copy implies one.** No count, no badge, no "days
+ * awaiting you", no empty state that reads as a queue drained. He arrives at a day by typing its
+ * date, because he already has a reason to — he was there, or the author told him. A page of the
+ * author's days to work through is a queue in everything but name, and the whole design rests on
+ * his never being sent one.
+ */
+export const REFEREE_DAY_COPY = {
+  title: 'Look up a day',
+  back: 'Back',
+  /** States the pull, so the absence of a list reads as the design it is rather than as a screen
+   *  that failed to load something. */
+  intro:
+    'Type the date of a day you have a reason to question. Nothing is queued for you and ' +
+    'nothing is waiting — a day nobody objects to holds.',
+  dateLabel: 'Date',
+  look: 'Look up',
+  looking: 'Working…',
+  failed: 'Failed.',
+  /** Not "no days found" — that phrasing implies there is a set of days to be found in. */
+  nothing: 'Nothing has been settled for that date.',
+  outcome: (outcome: CommitmentOutcome): string =>
+    outcome === 'held' ? 'Held' : outcome === 'missed' ? 'Missed' : 'Unanswered',
+  /** The window, in his own terms. He is never asked to act before it closes; it simply says
+   *  when the day stops being his to question. */
+  window: (deadline: string): string => `You can object until ${formatWindowClose(deadline)}.`,
+  windowClosed: 'The window on this day has closed. It stands.',
+  alreadyObjected: 'You have already objected to this day.',
+  notHeld: 'This day did not hold anyway. There is nothing to object to.',
+  reasonLabel: 'Why does that day not hold?',
+  reasonPlaceholder: 'I was with him all morning. He never took it.',
+  object: 'Object to this day',
+  objecting: 'Objecting…',
+  /**
+   * Final when he makes it, and said so plainly: there is no ruling step after this, and the
+   * author's recourse is his own Grace Day, not a reply to the referee.
+   *
+   * **Neither sentence claims a new charge**, because often there is not one. `object_to_day()`
+   * carries an already-owed penalty forward rather than minting a second (FR-13), so a day that
+   * had already failed costs exactly what it cost before — and `objection_body()`, the sentence
+   * the *author* receives, is careful to distinguish the two. Copy on this side that said "he is
+   * charged for it" would tell the referee he had just taken 500.000₫ off somebody on the days he
+   * had not. What is true in both cases is that the day becomes a failed day whose penalty stands
+   * against him, and that a Grace Day is the only thing that answers it.
+   */
+  objected: 'Objected. That day is now a failed day, and he has been told, in your words.',
+  finalWarning:
+    'This is final. That day becomes a failed day and its penalty stands against him — his ' +
+    'only remedy is a Grace Day of his own.',
+} as const;
+
+/** The bound `objection_reason_is_said` enforces, mirrored client-side so the `<textarea>` can
+ *  stop him at the limit rather than let the server refuse a sentence he has already written.
+ *  `object_to_day()` refuses an over-long reason in words of its own regardless — this is the
+ *  courtesy, that is the guarantee. */
+export const OBJECTION_REASON_MAX = 2000;
+
+/** The objection window's own closing instant, as a sentence a person reads — date and clock
+ *  time, in the product's fixed zone (AD-6). `formatOwedDay` above states a day and never a time;
+ *  a window that closes at a particular hour needs the hour, or "until Sep 3" is ambiguous by
+ *  twenty-four hours in exactly the direction that matters. */
+export function formatWindowClose(deadline: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: ZONE,
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(deadline));
+}

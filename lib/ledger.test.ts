@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   type MissRecord,
+  type ObjectionRecord,
   type PenaltyRecord,
   type SettlementRecord,
+  OBJECTION_COPY,
   buildLedger,
   ledgerPillFamily,
   ledgerPillLabel,
@@ -526,5 +528,71 @@ describe('which misses can still be contested (Story 4.4)', () => {
   it('a pre-4.4 caller that never selected commitment_id/filed_by still compiles and offers nothing', () => {
     const row = buildLedger([failedDay], [penalty], misses)[0];
     expect(row.appealable).toEqual([]);
+  });
+});
+
+/**
+ * Story 6.7 — the referee's objection, folded onto the day it names.
+ *
+ * The author is owed one thing here and it is the reason, verbatim: the push he received
+ * deliberately could not carry it (a free-text sentence containing "currently" would have failed
+ * `push_body_is_sendable` and aborted the objection itself), so the Ledger is where he reads it.
+ */
+const objection: ObjectionRecord = {
+  for_day: '2026-08-18',
+  reason: 'That photo is of your kitchen, not the gym.',
+};
+
+describe('an objection is shown against the day it names', () => {
+  it('carries the referee own words onto that day row, verbatim', () => {
+    const rows = buildLedger([failedDay], [penalty], misses, [], [], [objection]);
+    expect(rows[0].objection).toBe('That photo is of your kitchen, not the gym.');
+  });
+
+  it('leaves every other day alone', () => {
+    const rows = buildLedger([failedDay, cleanDay], [penalty], misses, [], [], [objection]);
+    expect(rows.find((r) => r.day === '2026-08-17')!.objection).toBeNull();
+  });
+
+  it('is null on every row when nobody has objected — which is every day', () => {
+    const rows = buildLedger([failedDay, cleanDay], [penalty], misses);
+    expect(rows.every((r) => r.objection === null)).toBe(true);
+  });
+
+  it('never lands on a week row: an objection names one commitment on one settled day', () => {
+    // A week's period is an ordinary calendar date and can coincide with a day's, which is the
+    // same collision `penaltyByKey` is keyed by kind to avoid.
+    const rows = buildLedger(
+      [],
+      [],
+      [],
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [],
+      [objection],
+    );
+    expect(rows[0].kind).toBe('week');
+    expect(rows[0].objection).toBeNull();
+  });
+
+  it('survives the Grace Day that answers it — forgiving the money does not unsay it', () => {
+    // apply_grace_days() corrects the day to `clean` with a `waived` penalty. The referee's
+    // words still stand: `objection` is deliberately independent of verdict and penalty state.
+    const rows = buildLedger(
+      [{ period: '2026-08-18', verdict: 'clean', missed_count: 0 }],
+      [{ period: '2026-08-18', amount_dong: PENALTY_DONG, state: 'waived' }],
+      [],
+      [],
+      [],
+      [objection],
+    );
+    expect(ledgerPillLabel(rows[0])).toBe('Waived');
+    expect(rows[0].objection).toBe(objection.reason);
+  });
+});
+
+describe('OBJECTION_COPY', () => {
+  it('attributes the sentence to the referee and quotes it rather than paraphrasing', () => {
+    expect(OBJECTION_COPY.heading).toBe('The referee objected');
+    expect(OBJECTION_COPY.reason('He never took it.')).toContain('He never took it.');
   });
 });

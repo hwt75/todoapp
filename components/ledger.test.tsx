@@ -69,6 +69,13 @@ function withDays(settlements: unknown[], penalties: unknown[] = [], misses: unk
   rows.declaration = { data: misses, error: null };
 }
 
+/** Story 6.7 — the referee's objection rows, read under `objection: read own`. Its own helper
+ *  rather than a sixth parameter on `withDays`, so the dozens of tests that predate this story
+ *  keep reading exactly as they did and an objection is always an explicit act of a test. */
+function withObjections(objections: unknown[]) {
+  rows.objection = { data: objections, error: null };
+}
+
 function withWeeks(settlements: unknown[], penalties: unknown[] = []) {
   rows['settlement_current:week'] = { data: settlements, error: null };
   rows['penalty_current:week'] = { data: penalties, error: null };
@@ -687,5 +694,123 @@ describe('a week row (3.4)', () => {
     expect(
       screen.getByRole('group', { name: 'Week of 2026-08-17, owed 500.000₫' }),
     ).toBeInTheDocument();
+  });
+});
+
+/**
+ * Story 6.7 — the referee objected, and the author reads why here.
+ *
+ * The push he received deliberately could not carry the reason: `push_body_is_sendable` refuses a
+ * body containing "currently" or "right now", so a free-text sentence the referee typed could have
+ * aborted the objection itself. The Ledger is therefore where the reason lives, verbatim, on the
+ * day it names.
+ */
+describe('the referee objected (Story 6.7)', () => {
+  it('shows his own words against that day, unparaphrased', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+      [],
+    );
+    withObjections([
+      { for_day: '2026-08-18', reason: 'That photo is of your kitchen, not the gym.' },
+    ]);
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    expect(await screen.findByText(/The referee objected/)).toBeInTheDocument();
+    expect(screen.getByText(/That photo is of your kitchen, not the gym\./)).toBeInTheDocument();
+  });
+
+  it('is heard, not only seen — the row says so in its own accessible name', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+      [{ for_day: '2026-08-18', commitment: { name: 'Pill', carries_penalty: true } }],
+    );
+    withObjections([{ for_day: '2026-08-18', reason: 'He never took it.' }]);
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+    await screen.findByText(/The referee objected/);
+
+    expect(screen.getByRole('group')).toHaveAccessibleName(
+      '2026-08-18, owed 500.000₫, for Pill. The referee objected: He never took it.',
+    );
+  });
+
+  it('offers no control of its own — an objection is final and the remedy is the Grace Day', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+      [],
+    );
+    withObjections([{ for_day: '2026-08-18', reason: 'He never took it.' }]);
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+    await screen.findByText(/The referee objected/);
+
+    // No reply, no contest, no appeal against an objection: the only control on the row is the
+    // one every failed, owed day already carries.
+    expect(screen.queryByRole('button', { name: /reply|contest|appeal|dispute/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /Spend a Grace Day for 2026-08-18/ })).toBeEnabled();
+  });
+
+  it('says nothing on a day nobody objected to, which is every day', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+      [],
+    );
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+    await screen.findByText('2026-08-18');
+
+    expect(screen.queryByText(/The referee objected/)).not.toBeInTheDocument();
+  });
+
+  it('survives the Grace Day that answers it — forgiving the money does not unsay it', async () => {
+    // apply_grace_days() corrects the day to clean with a waived penalty. The row reads Waived
+    // again and the referee's words still stand beside it.
+    withDays(
+      [{ period: '2026-08-18', verdict: 'clean', missed_count: 0 }],
+      [{ amount_dong: 500000, state: 'waived', period: '2026-08-18' }],
+      [],
+    );
+    withObjections([{ for_day: '2026-08-18', reason: 'He never took it.' }]);
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Waived')).toBeInTheDocument();
+    expect(screen.getByText(/He never took it\./)).toBeInTheDocument();
+  });
+
+  it('fails the whole screen rather than rendering a ledger missing an objection', async () => {
+    withDays([{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }], [], []);
+    rows.objection = { data: null, error: { message: 'objection read failed' } };
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    expect(await screen.findByText(/objection read failed/)).toBeInTheDocument();
+  });
+});
+
+describe('the objection is announced once, not twice (Story 6.7)', () => {
+  it('hides the visible sentence from the accessibility tree, like the muted summary above it', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+      [],
+    );
+    withObjections([{ for_day: '2026-08-18', reason: 'He never took it.' }]);
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    // The row's own aria-label already ends with this sentence. Leaving the paragraph exposed
+    // as well would read it out twice.
+    const sentence = await screen.findByText(/He never took it\./);
+    expect(sentence.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(screen.getByRole('group')).toHaveAccessibleName(
+      /The referee objected: He never took it\./,
+    );
   });
 });

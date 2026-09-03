@@ -492,6 +492,23 @@ export function RefereeHome() {
           </section>
         )}
 
+        {/* Story 6.7 — a door, deliberately not a list.
+
+            This screen gains no count of the author's days, no badge, and nothing that arrives
+            unasked: a browsable list of proven days is a queue in everything but name, and the
+            whole design rests on the referee never being sent one. With no action from him at
+            all, every proven day settles held. So the only thing here is a way in, taken when he
+            already has a reason — because he was there, or because the author told him — and the
+            day is named on the next screen by him rather than offered to him by this one.
+
+            Rendered unconditionally, above Sign out and below everything that is genuinely
+            pending: it is not a pending item and must not read as one. */}
+        <div className="actions">
+          <button type="button" onClick={() => router.push('/referee/day')}>
+            {REFEREE_HOME_COPY.lookUpDay}
+          </button>
+        </div>
+
         <div className="actions">
           <button type="button" onClick={() => void signOut()}>
             {REFEREE_HOME_COPY.signOut}

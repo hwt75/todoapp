@@ -490,7 +490,18 @@ begin
     'public.enqueue_due_time_reminders(timestamptz)',
     'public.cancel_due_time_reminders(uuid, date)',
     'public.commitment_due_time_written()',
-    'public.declaration_cancels_due_time_reminder()'
+    'public.declaration_cancels_due_time_reminder()',
+    -- Story 6.7. `object_to_day()` and `referee_day_lookup()` are deliberately NOT here: they are
+    -- the referee's own two doors, granted to `authenticated` exactly as `rule_appeal()` and
+    -- `mark_penalty_collected()` are, with the function itself as the privilege boundary. These
+    -- two are the internals behind them -- the window rule, and a notification body a client that
+    -- could call it could use to compose text about somebody else's day.
+    'public.objection_deadline(timestamptz)',
+    'public.objection_body(date, bigint)',
+    -- Reads referee_invite and every profile's is_live_doer to answer whose money the caller may
+    -- reach. Nothing client-side has a reason to ask it, and a client that could would learn the
+    -- live doer's id from any session.
+    'public.paired_doer_id()'
   ]
   loop
     foreach r in array array['anon', 'authenticated'] loop

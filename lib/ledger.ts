@@ -73,6 +73,28 @@ export interface AppealableMiss {
   commitmentName: string;
 }
 
+/**
+ * Story 6.7. The referee's objection to one of the author's days, as `public.objection` stores it
+ * — his own words, against the day they name. There is at most one per day (`objection_once_per_
+ * day`), so this folds onto a row rather than into a list.
+ *
+ * Read straight off the table under `objection: read own`, never derived: the reason is the one
+ * thing the author is owed here, it is shown verbatim, and the notification he already received
+ * deliberately did not carry it (a free-text sentence containing "currently" would have failed
+ * `push_body_is_sendable` and aborted the objection itself).
+ */
+export interface ObjectionRecord {
+  for_day: string;
+  reason: string;
+}
+
+/** What the Ledger says above the referee's own words. Kept here for the reason every `*_COPY`
+ *  object in this codebase is: copy rules, testable independent of a component. */
+export const OBJECTION_COPY = {
+  heading: 'The referee objected',
+  reason: (reason: string): string => `“${reason}”`,
+} as const;
+
 export interface LedgerRow {
   day: string;
   kind: LedgerKind;
@@ -100,6 +122,12 @@ export interface LedgerRow {
    *  (Story 4.4) — and once the Penalty has moved off `owed` (held, dropped, voided,
    *  collected, or already waived). */
   graceable: boolean;
+  /** Story 6.7: the referee's own reason, verbatim, when he objected to this day — null
+   *  otherwise, which is every day. Always null on a week row: an objection names one commitment
+   *  on one settled *day*, and `object_to_day()` refuses any settlement whose kind is not `day`.
+   *  Shown rather than acted on — an objection is final when he makes it, and the author's
+   *  recourse is the Grace Day control already on the row. */
+  objection: string | null;
 }
 
 /**
@@ -120,6 +148,9 @@ export function buildLedger(
   misses: readonly MissRecord[],
   weekSettlements: readonly SettlementRecord[] = [],
   weekPenalties: readonly PenaltyRecord[] = [],
+  // Story 6.7, appended last with a default for the reason every parameter before it was: every
+  // existing caller and fixture keeps compiling and simply carries no objection.
+  objections: readonly ObjectionRecord[] = [],
 ): LedgerRow[] {
   // Keyed by kind as well as period: a week's period and a day's period both come from the
   // same date domain and commonly coincide (a week starts on some ordinary calendar day),
@@ -139,6 +170,12 @@ export function buildLedger(
       ]);
     }
   }
+
+  // At most one objection per day server-side (`objection_once_per_day`), so a Map rather than a
+  // list per day. A second row for the same day could only come from a schema this fold does not
+  // describe; last-in-wins is the same shape `penaltyByKey` above already uses.
+  const objectionByDay = new Map<string, string>();
+  for (const o of objections) objectionByDay.set(o.for_day, o.reason);
 
   const toRow = (kind: LedgerKind, settlement: SettlementRecord): LedgerRow => {
     const penalty = penaltyByKey.get(`${kind}:${settlement.period}`) ?? null;
@@ -162,6 +199,10 @@ export function buildLedger(
               .sort((a, b) => a.commitmentName.localeCompare(b.commitmentName))
           : [],
       graceable: kind === 'day' && settlement.verdict === 'failed' && penalty?.state === 'owed',
+      // Story 6.7. Day rows only: a week is never objected to. Deliberately independent of
+      // verdict and penalty state — a day the author has since spent a Grace Day on reads
+      // `clean`/`waived` again, and the referee's words about it still stand.
+      objection: kind === 'day' ? (objectionByDay.get(settlement.period) ?? null) : null,
     };
   };
 

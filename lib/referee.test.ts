@@ -8,6 +8,11 @@ import {
   isPairedReferee,
   refereeFunctionErrorMessage,
   summarizeReferee,
+  OBJECTION_REASON_MAX,
+  REFEREE_DAY_COPY,
+  formatWindowClose,
+  objectionIsOffered,
+  type RefereeDayRow,
 } from './referee';
 
 describe('isPairableEmail', () => {
@@ -209,5 +214,123 @@ describe('REFEREE_HOME_COPY.goneQuiet (Story 5.3, FR-18)', () => {
     const message = REFEREE_HOME_COPY.goneQuiet(4);
     expect(message).not.toMatch(/₫/);
     expect(message).not.toMatch(/mark|collect|rule|approve|reject/i);
+  });
+});
+
+/**
+ * Story 6.7 — the referee's own half.
+ *
+ * `objectionIsOffered` is a mirror, never a judge: `object_to_day()` checks the role, the window,
+ * a day corrected since he read it, an outcome that is not held and a penalty already collected,
+ * each in its own words. What is asserted here is that the mirror is narrower than the server on
+ * purpose (it never reasons about a collected penalty, which is terminal and which this feature
+ * never reads) and that the copy carries no list, no count and no badge — the property the whole
+ * design rests on.
+ */
+const heldRow: RefereeDayRow = {
+  settlementId: 's1',
+  commitmentId: 'c1',
+  commitmentName: 'Pill',
+  outcome: 'held',
+  objectionDeadline: '2026-09-05T03:00:00Z',
+  alreadyObjected: false,
+};
+
+describe('objectionIsOffered (Story 6.7)', () => {
+  it('offers the control on a day that held, inside the window, nobody has objected to', () => {
+    expect(objectionIsOffered(heldRow, new Date('2026-09-04T00:00:00Z'))).toBe(true);
+  });
+
+  it('withdraws it once the window has closed, to the instant', () => {
+    // Half-open, matching objection_deadline()'s own `now() >= deadline` comparison: the last
+    // instant inside is offered, the deadline itself is not.
+    expect(objectionIsOffered(heldRow, new Date('2026-09-05T02:59:59Z'))).toBe(true);
+    expect(objectionIsOffered(heldRow, new Date('2026-09-05T03:00:00Z'))).toBe(false);
+  });
+
+  it('withdraws it once the day has been objected to — one objection per day', () => {
+    expect(
+      objectionIsOffered({ ...heldRow, alreadyObjected: true }, new Date('2026-09-04T00:00:00Z')),
+    ).toBe(false);
+  });
+
+  it('never offers it against a day that did not hold — there is nothing to overturn', () => {
+    for (const outcome of ['missed', 'unanswered'] as const) {
+      expect(objectionIsOffered({ ...heldRow, outcome }, new Date('2026-09-04T00:00:00Z'))).toBe(
+        false,
+      );
+    }
+  });
+});
+
+describe('formatWindowClose', () => {
+  it('names the hour as well as the day, in the fixed zone the product uses', () => {
+    // 03:00 UTC is 10:00 in Ho Chi Minh City. A window that closes at a particular hour needs
+    // the hour, or "until Sep 5" is ambiguous by a day in exactly the direction that matters.
+    expect(formatWindowClose('2026-09-05T03:00:00Z')).toBe('Sep 5, 10:00');
+  });
+});
+
+describe('REFEREE_DAY_COPY (Story 6.7)', () => {
+  it('says the referee is not being queued, in the copy itself', () => {
+    expect(REFEREE_DAY_COPY.intro).toMatch(/nothing is waiting/i);
+    expect(REFEREE_DAY_COPY.intro).toMatch(/a day nobody objects to holds/i);
+  });
+
+  it('carries no count and no badge anywhere', () => {
+    // A page of the author's days to work through is a queue in everything but name, and copy
+    // that says "3 days pending" is that page whether or not one is rendered. The intro's own
+    // "nothing is queued for you" is the denial, not the thing -- so what is banned here is a
+    // number, and any word that asserts something is waiting on him.
+    //
+    // Only the fixed sentences: the two functions here fill in a commitment's own outcome and
+    // the instant one window shuts, both of which are facts about a day he already named rather
+    // than a tally of days he has not.
+    for (const value of Object.values(REFEREE_DAY_COPY)) {
+      if (typeof value !== 'string') continue;
+      expect(value).not.toMatch(/[0-9]/);
+      expect(value).not.toMatch(/(pending|awaiting|outstanding|unreviewed)/i);
+    }
+  });
+
+  it('says an objection is final before it is made, and that the remedy is his own', () => {
+    expect(REFEREE_DAY_COPY.finalWarning).toMatch(/final/i);
+    expect(REFEREE_DAY_COPY.finalWarning).toMatch(/grace day/i);
+  });
+
+  it('tells him the author was told in his own words, not the app copy', () => {
+    expect(REFEREE_DAY_COPY.objected).toMatch(/in your words/i);
+  });
+});
+
+describe('REFEREE_HOME_COPY.lookUpDay (Story 6.7)', () => {
+  it('is a door and never a count — the home surface gains no list', () => {
+    expect(REFEREE_HOME_COPY.lookUpDay).toBe('Look up a day');
+    expect(REFEREE_HOME_COPY.lookUpDay).not.toMatch(/[0-9]/);
+  });
+});
+
+describe('REFEREE_DAY_COPY does not promise a charge that often is not made', () => {
+  // object_to_day() carries an already-owed penalty forward rather than minting a second
+  // (FR-13), so an objection on a day that had already failed costs exactly what it cost
+  // before. objection_body() -- the sentence the author receives -- distinguishes the two
+  // cases carefully; copy on the referee's side that said "he is charged for it" would tell
+  // him he had just taken 500.000 dong off somebody on the days he had not.
+  it('never claims money changed hands, on either sentence', () => {
+    for (const text of [REFEREE_DAY_COPY.finalWarning, REFEREE_DAY_COPY.objected]) {
+      expect(text).not.toMatch(/charged|costs what|now costs|500/i);
+    }
+  });
+
+  it('still says what is true in both cases: a failed day, answerable only by a Grace Day', () => {
+    expect(REFEREE_DAY_COPY.finalWarning).toMatch(/failed day/i);
+    expect(REFEREE_DAY_COPY.finalWarning).toMatch(/grace day/i);
+    expect(REFEREE_DAY_COPY.objected).toMatch(/failed day/i);
+  });
+});
+
+describe('OBJECTION_REASON_MAX', () => {
+  it('mirrors the bound objection_reason_is_said enforces', () => {
+    expect(OBJECTION_REASON_MAX).toBe(2000);
   });
 });

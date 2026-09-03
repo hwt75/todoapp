@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { buildLedger, ledgerPillFamily, ledgerPillLabel, type LedgerRow } from '@/lib/ledger';
+import {
+  OBJECTION_COPY,
+  buildLedger,
+  ledgerPillFamily,
+  ledgerPillLabel,
+  type LedgerRow,
+} from '@/lib/ledger';
 import { formatDong } from '@/lib/money';
 import {
   GRACE_DAY_COPY,
@@ -86,6 +92,7 @@ export function Ledger({
         { data: weekSettlements, error: weekSettlementsError },
         { data: weekPenalties, error: weekPenaltiesError },
         { data: grace, error: graceError },
+        { data: objections, error: objectionsError },
       ] = await Promise.all([
         supabase.from('settlement_current').select('period,verdict,missed_count').eq('kind', 'day'),
         supabase.from('penalty_current').select('amount_dong,state,period').eq('kind', 'day'),
@@ -101,6 +108,10 @@ export function Ledger({
         // Story 5.1: the one source for how many Grace Days remain this calendar month
         // (AD-8) — never a client-side tally of raw grace_day rows.
         supabase.from('grace_allowance_remaining').select('remaining').maybeSingle(),
+        // Story 6.7: the referee's own words about a day, read under `objection: read own`.
+        // Unfiltered by verdict or penalty state on purpose — a day since forgiven by a Grace
+        // Day reads clean again, and what he said about it still stands.
+        supabase.from('objection').select('for_day,reason'),
       ]);
 
       if (cancelled) return;
@@ -113,7 +124,8 @@ export function Ledger({
         missesError ??
         weekSettlementsError ??
         weekPenaltiesError ??
-        graceError;
+        graceError ??
+        objectionsError;
       if (failed) {
         setView({ kind: 'failed', reason: failed.message });
         return;
@@ -151,6 +163,10 @@ export function Ledger({
             })),
           weekSettlements ?? [],
           (weekPenalties ?? []).map(toPenaltyRecord),
+          (objections ?? []).map((o) => ({
+            for_day: o.for_day as string,
+            reason: o.reason as string,
+          })),
         ),
       });
     }
@@ -239,7 +255,11 @@ export function Ledger({
                 className={row.kind === 'week' ? 'row row-week' : 'row'}
                 key={`${row.kind}-${row.day}`}
                 role="group"
-                aria-label={
+                // Story 6.7: the referee's own sentence is appended rather than folded into the
+                // ternary below, so a row with no objection — which is every row — reads exactly
+                // as it did before, and the objection is heard by a screen-reader user rather
+                // than only seen. Empty when there is none, so nothing is appended at all.
+                aria-label={`${
                   row.kind === 'week'
                     ? row.verdict === 'clean'
                       ? `Week of ${row.day}, clean`
@@ -265,7 +285,7 @@ export function Ledger({
                                 : row.verdict === 'expired'
                                   ? `${row.day}, expired unanswered, owed ${formatDong(row.amountDong ?? 0)}`
                                   : `${row.day}, owed ${formatDong(row.amountDong ?? 0)}, for ${row.missed.join(' and ')}`
-                }
+                }${row.objection ? `. ${OBJECTION_COPY.heading}: ${row.objection}` : ''}`}
               >
                 <div className="row-main">
                   <div className="row-name">
@@ -282,6 +302,22 @@ export function Ledger({
                           ? 'Everything held'
                           : `${row.missed.join(' · ')}${row.amountDong ? ` · ${formatDong(row.amountDong)}` : ''}`}
                   </div>
+
+                  {/* Story 6.7: the referee's own words, verbatim, on the day they name. No
+                      control of any kind — an objection is final when the referee makes it, and
+                      the author's recourse is the Grace Day control below, which needs no special
+                      case.
+
+                      `aria-hidden`, exactly like the muted summary above it and for the identical
+                      reason: the row's own `aria-label` already ends with this sentence, so
+                      leaving it exposed would read it out twice to a screen-reader user. The
+                      label is where it is heard; this is where it is seen. */}
+                  {row.objection && (
+                    <p className="row-objection" aria-hidden="true">
+                      <strong>{OBJECTION_COPY.heading}</strong>{' '}
+                      {OBJECTION_COPY.reason(row.objection)}
+                    </p>
+                  )}
 
                   {/* Contest: only on an eligible owed failed-day row (a machine-filed miss whose
                   Penalty has not already moved to held/dropped/anything else). One control
