@@ -20,6 +20,7 @@ const gym: RowCommitment = {
   carries_penalty: false,
   weekly_target: null,
   daily_minutes_target: null,
+  requires_photo: false,
 };
 
 describe('a commitment row', () => {

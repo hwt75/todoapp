@@ -14,17 +14,6 @@
 import { ZONE } from './declaration';
 
 /**
- * Where one evidence file lands inside the private `appeal-evidence` bucket.
- *
- * Leads with the parent row's own id — an appeal's or a declaration's — because that is exactly
- * what the bucket's `storage.objects` policies read via `storage.foldername(name)` to derive
- * access from that parent's `owner_id` (NFR4). A path that did not lead with it would be
- * unreadable by those policies regardless of who owns the parent.
- *
- * The bucket is still called `appeal-evidence` and now holds both kinds. Renaming a bucket means
- * moving every object in it, so the name stayed and this comment carries the mismatch.
- */
-/**
  * The calendar date (Asia/Ho_Chi_Minh) a file's own `lastModified` timestamp falls on.
  *
  * Not EXIF `DateTimeOriginal` — parsing binary EXIF client-side has no existing dependency in
@@ -45,6 +34,17 @@ export function isEvidenceDated(file: File, forDay: string): boolean {
   return fileCapturedOn(file) === forDay;
 }
 
+/**
+ * Where one evidence file lands inside the private `appeal-evidence` bucket.
+ *
+ * Leads with the parent row's own id — an appeal's, a declaration's, or a commitment's — because
+ * that is exactly what the bucket's `storage.objects` policies read via
+ * `storage.foldername(name)` to derive access from that parent's `owner_id` (NFR4). A path that
+ * did not lead with it would be unreadable by those policies regardless of who owns the parent.
+ *
+ * The bucket is still called `appeal-evidence` and now holds all three kinds. Renaming a bucket
+ * means moving every object in it, so the name stayed and this comment carries the mismatch.
+ */
 export function evidenceObjectPath(parentId: string, evidenceId: string, filename: string): string {
   // No dot survives, on purpose: allowing `.` and rejecting only `/` would still let
   // `../../etc/passwd` through as `.._.._etc_passwd`, which still reads as a traversal

@@ -25,7 +25,10 @@ const seen: string[] = [];
 // twice for two different purposes (the aggregate figure, unfiltered by kind; a day-only,
 // state=owed read for Grace Day eligibility), and only a per-call record can still tell
 // "the unfiltered one" apart from "the filtered one" sharing the same table name.
-const fromCalls: Array<{ table: string; columns: string[] }> = [];
+// `select` carries the column *string* alongside them (Story 6.8). Without it, deleting a
+// column from a SELECT is invisible here: the mock ignores the string and every fixture supplies
+// the field anyway, so the feature switches off in production with the suite still green.
+const fromCalls: Array<{ table: string; columns: string[]; select?: string }> = [];
 const inserted: Array<{ table: string; payload: unknown }> = [];
 // What a `grace_day` insert comes back with (Story 5.1). Set per test; the default is a
 // clean success — most tests here have nothing to do with spending one at all.
@@ -47,11 +50,14 @@ vi.mock('@/lib/supabase/client', () => ({
     from: (table: string) => {
       seen.push(table);
       let key = table;
-      const call = { table, columns: [] as string[] };
+      const call: (typeof fromCalls)[number] = { table, columns: [] };
       fromCalls.push(call);
       const result = () => rows[key] ?? { data: [], error: null };
       const query = {
-        select: () => query,
+        select: (columns?: string) => {
+          if (typeof columns === 'string') call.select = columns;
+          return query;
+        },
         is: () => query,
         eq: (column: string, value: string) => {
           call.columns.push(column);
@@ -919,5 +925,240 @@ describe('where the window stands', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Not yet')).toBeInTheDocument();
     expect(screen.queryByText('Shut')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Story 6.8 — a photo kept against a commitment and a day, deciding nothing.
+ *
+ * The database side is driven by `supabase/tests/6-8-a-photo-i-can-keep-against-any-commitment.sql`.
+ * What this screen owns is the offer: a control that needs no claim, no due time and no open
+ * window, that belongs to the local day it is looked at on, and that never appears twice on one
+ * row beside Epic 6's own timed proof control.
+ */
+const sketchbook = {
+  id: 'c3',
+  name: 'Sketchbook',
+  cadence: 'daily',
+  carries_penalty: false,
+  weekly_target: null,
+  daily_minutes_target: null,
+  due_time: null,
+  late_window_minutes: null,
+  requires_photo: true,
+};
+
+describe('keeping a photo against a commitment', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it.each(['00:05', '11:30', '23:50'])('offers the control at %s, with no claim', async (hhmm) => {
+    atLocalTime(hhmm);
+    rows.commitment = { data: [sketchbook], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+
+    // No Claim button anywhere: there is no window to be inside of, which is the whole point.
+    expect(await screen.findByLabelText('Proof — Sketchbook')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Claim/ })).not.toBeInTheDocument();
+  });
+
+  it('selects the column, so the whole feature cannot be switched off by a query edit', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByLabelText('Proof — Sketchbook');
+
+    // Asserted on the query rather than on the render, because the render cannot see it: the
+    // fixture above supplies `requires_photo` whether or not the SELECT asked for it, so every
+    // other test here would stay green with the column dropped and no control would ever appear
+    // for a real account.
+    const read = fromCalls.find((c) => c.table === 'commitment');
+    expect(read?.select).toContain('requires_photo');
+  });
+
+  it('offers nothing for a commitment that is not marked', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [{ ...sketchbook, requires_photo: false }], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByRole('button', { name: /Sketchbook/ });
+
+    expect(screen.queryByLabelText('Proof — Sketchbook')).not.toBeInTheDocument();
+  });
+
+  it('stores the photo under the commitment and the day, with no claim in sight', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await userEvent.upload(
+      await screen.findByLabelText('Proof — Sketchbook'),
+      photoTakenOn(todayLocal()),
+    );
+
+    // The path leads with the commitment's own id — that is what the bucket's policy reads via
+    // storage.foldername(name) to derive access from its owner.
+    expect(uploaded).toHaveLength(1);
+    expect(uploaded[0].bucket).toBe('appeal-evidence');
+    expect(uploaded[0].path.startsWith('c3/')).toBe(true);
+
+    const evidence = inserted.find((i) => i.table === 'evidence');
+    expect(evidence?.payload).toMatchObject({ commitment_id: 'c3', for_day: todayLocal() });
+    // Exactly one parent, and never the owner: the trigger derives it (NFR4), and a second
+    // parent would be refused by `evidence_exactly_one_parent`.
+    expect(evidence?.payload).not.toHaveProperty('declaration_id');
+    expect(evidence?.payload).not.toHaveProperty('owner_id');
+    expect(await screen.findByText('Proof saved.')).toBeInTheDocument();
+  });
+
+  it('refuses a photo from another day before it reaches Storage', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await userEvent.upload(
+      await screen.findByLabelText('Proof — Sketchbook'),
+      photoTakenOn('2020-01-01'),
+    );
+
+    expect(await screen.findByText(/not taken today/)).toBeInTheDocument();
+    expect(uploaded).toHaveLength(0);
+  });
+
+  it('files against the new day once midnight has passed, never the day before', async () => {
+    atLocalTime('23:59');
+    rows.commitment = { data: [sketchbook], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByLabelText('Proof — Sketchbook');
+
+    await act(async () => {
+      vi.advanceTimersByTime(120_000);
+    });
+
+    await userEvent.upload(
+      await screen.findByLabelText('Proof — Sketchbook'),
+      photoTakenOn('2026-08-31'),
+    );
+
+    // No back-filling. Yesterday's control is gone with yesterday, and the trigger refuses a
+    // `for_day` that has already ended anyway — this is the half that never asks it to.
+    const evidence = inserted.find((i) => i.table === 'evidence');
+    expect(evidence?.payload).toMatchObject({ commitment_id: 'c3', for_day: '2026-08-31' });
+  });
+
+  it('clears yesterday’s outcome when the local day turns over', async () => {
+    atLocalTime('23:59');
+    rows.commitment = { data: [sketchbook], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await userEvent.upload(
+      await screen.findByLabelText('Proof — Sketchbook'),
+      photoTakenOn('2026-08-30'),
+    );
+    expect(await screen.findByText('Proof saved.')).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(120_000);
+    });
+
+    // The control goes at midnight with the day it belonged to, and so does what it reported.
+    // A "Proof saved." left standing over this morning's empty control is the screen claiming
+    // something for a day it is no longer showing.
+    expect(screen.queryByText('Proof saved.')).not.toBeInTheDocument();
+    expect(await screen.findByLabelText('Proof — Sketchbook')).toBeInTheDocument();
+  });
+
+  it('lets the same file be chosen again after the upload failed', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+    uploadResult = { error: { message: 'Failed to fetch' } };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    const input = await screen.findByLabelText('Proof — Sketchbook');
+    const photo = photoTakenOn(todayLocal());
+
+    await userEvent.upload(input, photo);
+    // `findAllBy`: an upload failure reports `EVIDENCE_COPY.failed` as both the heading and the
+    // reason, so the sentence is legitimately on screen twice.
+    expect(await screen.findAllByText(/Proof not saved/)).not.toHaveLength(0);
+    expect(uploaded).toHaveLength(1);
+
+    // The retry an author would actually make is picking the same photo again. A file input
+    // fires no change event when the selection has not changed, so unless the value is cleared
+    // this second attempt does nothing at all under a message still saying the save failed.
+    uploadResult = { error: null };
+    await userEvent.upload(input, photo);
+
+    expect(uploaded).toHaveLength(2);
+    expect(await screen.findByText('Proof saved.')).toBeInTheDocument();
+  });
+
+  it('announces a failure as loudly as a save', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+    uploadResult = { error: { message: 'Failed to fetch' } };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await userEvent.upload(
+      await screen.findByLabelText('Proof — Sketchbook'),
+      photoTakenOn(todayLocal()),
+    );
+
+    // Both outcomes are a `role="status"` live region. Announcing only the success is how a
+    // screen-reader user ends the day believing a photo landed that never did.
+    const statuses = await screen.findAllByRole('status');
+    expect(statuses.some((el) => el.textContent?.includes('Proof not saved.'))).toBe(true);
+  });
+
+  it('shows only the timed control when a commitment carries both', async () => {
+    atLocalTime('20:40');
+    rows.commitment = { data: [{ ...pill, requires_photo: true }], error: null };
+    rows.timed_claim_today = {
+      data: [{ commitment_id: 'c2', declaration_id: 'decl-9', proven: false }],
+      error: null,
+    };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+
+    // One control, one meaning: a timed commitment's photo *is* Epic 6's proof, and two upload
+    // controls on one row would be two answers to one question.
+    expect(await screen.findByLabelText('Proof')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Proof — Pill')).not.toBeInTheDocument();
+  });
+
+  it('offers no control at all for a timed commitment outside its window', async () => {
+    atLocalTime('08:00');
+    rows.commitment = { data: [{ ...pill, requires_photo: true }], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByText('20:00');
+
+    // The flag does not reopen a timed commitment's own window. Epic 6 owns that row entirely.
+    expect(screen.queryByLabelText('Proof')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Proof — Pill')).not.toBeInTheDocument();
   });
 });

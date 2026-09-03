@@ -237,6 +237,38 @@ export function CommitmentForm({
             Missing this costs money
           </label>
         </p>
+
+        {/* Story 6.8. Offered on every Kind and every Cadence, unlike the time above: a photo
+            that decides nothing is meaningless for none of them, and an Avoid-it commitment —
+            the one kind that can never carry a time — is exactly the case this exists for.
+
+            It carries no warning sentence, deliberately. `TIMED_COMMITMENT_COPY.warning` exists
+            because a missing photo on a timed commitment costs 500,000₫; here nothing is at
+            stake, and a warning would be a lie about the stakes. The line below says what is
+            true instead.
+
+            Two sentences rather than one, because no single one is true of both cases. With a
+            time set, `TIMED_COMMITMENT_COPY.warning` is on screen saying the photo settles the
+            day, and a line beside it saying the photo decides nothing would contradict it — and
+            Today suppresses this control for a timed row anyway, so the honest thing to say is
+            that marking it changes nothing. The untimed sentence deliberately does not name what
+            *does* settle the day: the morning answer does for a Do-it daily, but an Hours-per-day
+            commitment is judged by banked Focus minutes and never by a declaration at all. */}
+        <p>
+          <label>
+            <input
+              type="checkbox"
+              checked={draft.requiresPhoto}
+              onChange={(event) => set('requiresPhoto', event.target.checked)}
+            />{' '}
+            Keep a photo against this
+          </label>
+        </p>
+        <p className="row-muted">
+          {draft.dueTime === null
+            ? 'Your own record, for any day you want one. Nothing reads it: it never decides a day, and a day with no photo ends exactly as it would have ended anyway.'
+            : 'This one already keeps a photo — the timed proof above, which does decide its day. Marking it here adds nothing while it has a time.'}
+        </p>
       </div>
 
       {/* Its own frame: what can watch this commitment is a separate question from what the

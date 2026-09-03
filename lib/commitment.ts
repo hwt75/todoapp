@@ -55,6 +55,19 @@ export interface CommitmentDraft {
   dueTime: string | null;
   /** Minutes after `dueTime` during which the commitment still counts as met. */
   lateWindowMinutes: number | null;
+  /**
+   * Whether the author keeps a photo against this commitment (Story 6.8).
+   *
+   * Deliberately gated by neither `autoChecksPossible()` nor `canBeTimed()`. Both of those
+   * exclude an abstention and an hours quota — one because no sensor exists, the other because
+   * no moment exists — and neither reason reaches this. A photo that decides nothing is
+   * meaningless for no kind and no cadence, which is why an abstention, the one kind that could
+   * never carry a time, can carry this.
+   *
+   * Settlement never reads it. Nothing about a verdict, a penalty, a chain or a grace allowance
+   * changes when it is on, and a day with no photo settles exactly as it would with it off.
+   */
+  requiresPhoto: boolean;
 }
 
 /** The window's bounds, mirroring `commitment_late_window_range`. */
@@ -83,6 +96,9 @@ export const EMPTY_DRAFT: CommitmentDraft = {
   autoCheckAccountRef: '',
   dueTime: null,
   lateWindowMinutes: null,
+  // Off, like `carriesPenalty` and for a milder version of the same reason: keeping a record is
+  // a thing the author chooses to do, never something the product starts asking him for.
+  requiresPhoto: false,
 };
 
 export type TargetField = 'weeklyTarget' | 'weekStartDay' | 'dailyMinutesTarget';
@@ -335,6 +351,10 @@ export function withKind(draft: CommitmentDraft, kind: CommitmentKind): Commitme
     // one is refused by a constraint about a field no longer on screen.
     dueTime: timeable ? draft.dueTime : null,
     lateWindowMinutes: timeable ? draft.lateWindowMinutes : null,
+    // `requiresPhoto` is carried by the spread above and cleared by neither this nor
+    // `withCadence`, on purpose. A time is cleared because a constraint would refuse it on a
+    // kind that cannot carry one; there is no such constraint here, and every kind can keep a
+    // photo. Switching an Avoid-it commitment to a Do-it one and back must not quietly lose it.
   };
 }
 
@@ -372,6 +392,9 @@ export function toRow(draft: CommitmentDraft, ownerId: string, idempotencyKey: s
     // from it (AD-6).
     due_time: draft.dueTime,
     late_window_minutes: draft.lateWindowMinutes,
+    // Story 6.8. Configuration, like every other column here — no settlement function reads it,
+    // so it has no as-of change log and needs none (see the migration's own comment).
+    requires_photo: draft.requiresPhoto,
     auto_check_kind: draft.autoCheckEnabled ? 'account_elsewhere' : null,
     auto_check_account_ref: draft.autoCheckEnabled ? draft.autoCheckAccountRef.trim() : null,
     // Untouched (stripped before the request) while still enabled — it is a value the

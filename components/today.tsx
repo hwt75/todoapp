@@ -70,7 +70,19 @@ type EvidenceState =
   { kind: 'idle' } | { kind: 'uploading' } | { kind: 'saved' } | { kind: 'failed'; reason: string };
 
 const SELECT =
-  'id,name,cadence,carries_penalty,weekly_target,daily_minutes_target,due_time,late_window_minutes';
+  'id,name,cadence,carries_penalty,weekly_target,daily_minutes_target,due_time,late_window_minutes,requires_photo';
+
+/**
+ * What one photo hangs off (Story 6.8).
+ *
+ * `evidence` carries exactly one parent, and until now this screen only ever had one to offer:
+ * the declaration a timed claim produced. A commitment-day parent is the second.
+ *
+ * It deliberately carries no day of its own. The day comes from `localDay` inside `attachProof`,
+ * the single value this whole screen is drawn against, so the day a file is *checked* against
+ * and the day it is *filed* under cannot be two different answers.
+ */
+type EvidenceParent = { kind: 'declaration'; id: string } | { kind: 'commitment'; id: string };
 
 /** How often the screen re-reads its own clock. See `now`'s own comment below. */
 const TICK_MS = 15_000;
@@ -203,6 +215,11 @@ export function Today({
 
   useEffect(() => {
     let cancelled = false;
+
+    // Yesterday's outcome is not today's. Without this, a "Proof saved." from last night still
+    // stands above this morning's empty control, which is the screen claiming something for a
+    // day it is no longer showing — and the comment on the block below promises the opposite.
+    setEvidenceState({});
 
     async function load() {
       const supabase = createClient();
@@ -368,18 +385,28 @@ export function Today({
   }
 
   /**
-   * Attach one photo to a claim that has landed.
+   * Attach one photo to whichever parent this row offers — a landed claim, or the commitment
+   * and the day itself (Story 6.8).
    *
    * Mirrors `components/appeal-form.tsx`'s own upload, deliberately: object first, metadata
    * row second, and a refusal never reported as a save. Every rule it applies is applied again
-   * by `evidence_derive_owner()` — the owner is derived from the claim, the capture date must
-   * match the day it proves, and a claim cannot be proved once its day has ended (AD-1).
+   * by `evidence_derive_owner()` — the owner is derived from the parent, the capture date must
+   * match the day it belongs to, and neither a claim nor a commitment-day accepts a photo once
+   * that day has ended (AD-1).
    *
    * `owner_id` is not sent. The trigger sets it before the NOT NULL is checked, and a client
    * that sent one would just have it overwritten — the whole point of NFR4.
+   *
+   * One function and one `evidenceState` key per commitment rather than two, because a row
+   * never offers both parents at once: a commitment carrying a `due_time` is proved by Epic 6's
+   * own control, and the all-day one is suppressed for it.
    */
-  async function attachProof(commitmentId: string, declarationId: string, file: File) {
-    const today = calendarMoment(new Date()).day;
+  async function attachProof(commitmentId: string, parent: EvidenceParent, file: File) {
+    // `localDay`, never a fresh `new Date()`. The two disagree for up to one tick after local
+    // midnight, and with a second clock here the guard would pass a file captured on the new day
+    // while the insert named the old one — the object written to Storage and only then refused
+    // by the trigger, which is the one outcome this check exists to prevent.
+    const today = localDay;
 
     // Refused before any upload starts, so an evidently wrong-dated file never reaches Storage.
     if (!isEvidenceDated(file, today)) {
@@ -394,7 +421,9 @@ export function Today({
 
     try {
       const supabase = createClient();
-      const path = evidenceObjectPath(declarationId, crypto.randomUUID(), file.name);
+      // Leads with the parent's own id whichever parent it is — that is what the bucket's
+      // policies read via `storage.foldername(name)` to derive access (NFR4).
+      const path = evidenceObjectPath(parent.id, crypto.randomUUID(), file.name);
 
       const { error: uploadError } = await supabase.storage
         .from('appeal-evidence')
@@ -411,7 +440,11 @@ export function Today({
       }
 
       const { error: insertError } = await supabase.from('evidence').insert({
-        declaration_id: declarationId,
+        // Exactly one parent, and `for_day` only ever alongside a commitment — the shape
+        // `evidence_exactly_one_parent` and `evidence_for_day_belongs_to_a_commitment` enforce.
+        ...(parent.kind === 'declaration'
+          ? { declaration_id: parent.id }
+          : { commitment_id: parent.id, for_day: today }),
         storage_path: path,
         captured_on: fileCapturedOn(file),
       });
@@ -585,7 +618,13 @@ export function Today({
                                   disabled={proof.kind === 'uploading'}
                                   onChange={(event) => {
                                     const file = event.target.files?.[0];
-                                    if (file) void attachProof(row.id, declarationId, file);
+                                    if (file) {
+                                      void attachProof(
+                                        row.id,
+                                        { kind: 'declaration', id: declarationId },
+                                        file,
+                                      );
+                                    }
                                   }}
                                 />
                                 <p className="row-muted">{EVIDENCE_COPY.hint}</p>
@@ -626,6 +665,75 @@ export function Today({
                 ))}
             </div>
           )}
+
+          {/* Story 6.8 — the photo the author keeps against a commitment, and against no
+              verdict.
+
+              Outside the timed block above and sharing none of its arithmetic, which is the
+              whole point: no claim, no due time, no open window, and no state where it draws
+              nothing. It is here for the whole of the local day and goes at midnight with it,
+              because the day is what a photo belongs to.
+
+              `!row.due_time` is the one condition on it. A commitment carrying a time is
+              already proved by Epic 6's own control above, and two upload controls on one row
+              would be two meanings for one act — the timed photo *is* that commitment's photo.
+
+              Nothing here can fail a day. A failed upload costs nothing and can simply be
+              retried later the same day, which is why there is no offline queue for it and no
+              warning anywhere near it. */}
+          {(() => {
+            const kept = view.rows.filter((row) => row.requires_photo && !row.due_time);
+            if (kept.length === 0) return null;
+
+            return (
+              <div className="card card-pad stack">
+                {kept.map((row) => {
+                  const proof: EvidenceState = evidenceState[row.id] ?? { kind: 'idle' };
+                  const inputId = `keep-photo-${row.id}`;
+
+                  return (
+                    <div key={row.id}>
+                      {/* Named per row rather than a bare `Proof`: several rows can offer this
+                          at once, and a screen reader hearing "Proof" three times has been told
+                          nothing about which commitment it is standing on. */}
+                      <label htmlFor={inputId}>{`${EVIDENCE_COPY.label} — ${row.name}`}</label>
+                      <input
+                        id={inputId}
+                        type="file"
+                        accept="image/png,image/jpeg,image/heic"
+                        capture="environment"
+                        disabled={proof.kind === 'uploading'}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          // Cleared so the same file can be chosen again. A file input fires no
+                          // change event when the selection does not change, so after a failed
+                          // upload the one retry the author would actually try — pick the same
+                          // photo again — did nothing at all, under a message still saying the
+                          // save had failed.
+                          event.target.value = '';
+                          if (file)
+                            void attachProof(row.id, { kind: 'commitment', id: row.id }, file);
+                        }}
+                      />
+                      <p className="row-muted">{EVIDENCE_COPY.hint}</p>
+
+                      {proof.kind === 'uploading' && <p role="status">{EVIDENCE_COPY.uploading}</p>}
+                      {proof.kind === 'saved' && <p role="status">{EVIDENCE_COPY.saved}</p>}
+                      {/* `role="status"` on the failure too, not only on the two successes.
+                          Announcing "Proof saved." and staying silent about "Proof not saved."
+                          is the one asymmetry that leaves a screen-reader user believing the
+                          opposite of what happened. */}
+                      {proof.kind === 'failed' && (
+                        <p role="status">
+                          <strong>{EVIDENCE_COPY.failed}</strong> {proof.reason}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           <DebtBlock totalDong={view.owedDong} onOpen={onOpenLedger} />
 

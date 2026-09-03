@@ -21,6 +21,8 @@ import { CommitmentList } from './commitment-list';
  */
 
 const calls: { table: string; op: string; payload?: unknown; options?: unknown }[] = [];
+/** The column string every read asked for — see `today.test.tsx`'s own note on why. */
+const selected: string[] = [];
 let listResult: unknown = { data: [], error: null };
 let writeResult: unknown = { error: null };
 
@@ -28,7 +30,10 @@ vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     from: (table: string) => {
       const query = {
-        select: () => query,
+        select: (columns?: string) => {
+          if (typeof columns === 'string') selected.push(columns);
+          return query;
+        },
         is: () => query,
         order: () => Promise.resolve(listResult),
         upsert: (payload: unknown, options: unknown) => {
@@ -59,10 +64,12 @@ const gym = {
   auto_check_last_checked_at: null,
   due_time: null,
   late_window_minutes: null,
+  requires_photo: false,
 };
 
 beforeEach(() => {
   calls.length = 0;
+  selected.length = 0;
   listResult = { data: [gym], error: null };
   writeResult = { error: null };
 });
@@ -204,5 +211,43 @@ describe('the commitment list', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(await screen.findByText(/row-level security/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Story 6.8 — the flag survives the round trip, which is the only thing `toDraft` is for.
+ *
+ * The column is `not null default false`, so nothing here can fail loudly: a `toDraft` that
+ * dropped it would render an unchecked box, an untouched save would send `false`, and the author
+ * would find out by opening Today the next day and finding the control gone.
+ */
+describe('a commitment that already keeps a photo', () => {
+  it('asks for the column, renders it checked, and sends it back untouched', async () => {
+    listResult = { data: [{ ...gym, requires_photo: true }], error: null };
+
+    render(<CommitmentList ownerId="u1" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+
+    // The read has to ask for it, or the checkbox below is drawn from a field the server never
+    // sent and reads `false` for a commitment that really does keep a photo.
+    expect(selected.some((columns) => columns.includes('requires_photo'))).toBe(true);
+    expect(screen.getByLabelText('Keep a photo against this')).toBeChecked();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    const update = calls.find((c) => c.op === 'update');
+    expect(update?.payload).toMatchObject({ requires_photo: true });
+  });
+
+  it('turns it off when the author actually unchecks it', async () => {
+    listResult = { data: [{ ...gym, requires_photo: true }], error: null };
+
+    render(<CommitmentList ownerId="u1" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    await userEvent.click(screen.getByLabelText('Keep a photo against this'));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    const update = calls.find((c) => c.op === 'update');
+    expect(update?.payload).toMatchObject({ requires_photo: false });
   });
 });

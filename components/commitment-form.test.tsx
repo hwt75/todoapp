@@ -107,9 +107,15 @@ describe('the commitment form', () => {
 
     await userEvent.selectOptions(screen.getByLabelText('Kind'), 'abstain');
 
+    // Two checkboxes on this form are not Auto-checks and are never disabled by kind: money,
+    // and the photo an author keeps for himself (Story 6.8, which every kind can carry).
     const checks = screen
       .getAllByRole('checkbox')
-      .filter((box) => box !== screen.getByLabelText(/Missing this costs money/));
+      .filter(
+        (box) =>
+          box !== screen.getByLabelText(/Missing this costs money/) &&
+          box !== screen.getByLabelText('Keep a photo against this'),
+      );
     // Every one is disabled and unchecked, Account elsewhere included: there is no sensor
     // for a thing not done, so the checkbox stays disabled exactly as it was before Story
     // 4.1 wired it up for every other kind.
@@ -320,5 +326,97 @@ describe('the time of day on a commitment form', () => {
     expect(screen.getByText('The late window has to end before midnight.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(onSave).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Story 6.8 — the checkbox for a photo that decides nothing.
+ *
+ * Two properties, both of which a later "consistency" edit could plausibly break: it is offered
+ * where a time is not, and it carries no warning. `TIMED_COMMITMENT_COPY.warning` exists because
+ * a missing photo on a timed commitment costs 500,000₫; putting the same sentence here would be
+ * a lie about the stakes, since nothing at all is at stake.
+ */
+describe('keeping a photo against a commitment', () => {
+  it('is offered on an Avoid-it commitment, which can never carry a time', async () => {
+    render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.selectOptions(screen.getByLabelText('Kind'), 'abstain');
+
+    expect(screen.queryByLabelText('Time of day')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Keep a photo against this')).toBeInTheDocument();
+  });
+
+  it('is offered on an Hours-per-day commitment too', async () => {
+    render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.selectOptions(screen.getByLabelText('Cadence'), 'daily_hours_quota');
+
+    expect(screen.queryByLabelText('Time of day')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Keep a photo against this')).toBeInTheDocument();
+  });
+
+  it('says nothing about failed days, because none is true', async () => {
+    render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.click(screen.getByLabelText('Keep a photo against this'));
+
+    expect(screen.queryByText(TIMED_COMMITMENT_COPY.warning)).not.toBeInTheDocument();
+    expect(screen.queryByText(/failed day/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Grace Day/i)).not.toBeInTheDocument();
+  });
+
+  it('does not name what settles the day, which differs by cadence', async () => {
+    render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.selectOptions(screen.getByLabelText('Cadence'), 'daily_hours_quota');
+
+    // An Hours-per-day commitment is judged by banked Focus minutes and never by a declaration
+    // (`commitments_owing()` excludes the cadence outright), so a line promising that "your
+    // morning answer still settles this" would be false on exactly this screen.
+    // Asserted on the help line itself, not on the screen: the Auto-checks block beside it
+    // legitimately says "never by a morning answer" about this very cadence.
+    const help = screen.getByText(/never decides a day/);
+    expect(help.textContent).not.toMatch(/morning answer/);
+    expect(help.textContent).not.toMatch(/settles/);
+  });
+
+  it('does not contradict the timed warning when a time is set', async () => {
+    render(<CommitmentForm initial={timed} onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    // Both lines are on screen at once. The timed warning says the photo settles the day; the
+    // untimed line says nothing reads it. Only one of them can be true of this commitment, and
+    // Today shows only Epic 6's own control for it — so this one says so instead.
+    expect(screen.getByText(TIMED_COMMITMENT_COPY.warning)).toBeInTheDocument();
+    expect(screen.queryByText(/never decides a day/)).not.toBeInTheDocument();
+    expect(screen.getByText(/adds nothing while it has a time/)).toBeInTheDocument();
+  });
+
+  it('is off until it is switched on, and reaches the save as it was left', async () => {
+    const onSave = vi.fn();
+    render(<CommitmentForm onSave={onSave} onCancel={vi.fn()} />);
+
+    await userEvent.type(screen.getByLabelText('Name'), 'Sketchbook');
+    expect(screen.getByLabelText('Keep a photo against this')).not.toBeChecked();
+
+    await userEvent.click(screen.getByLabelText('Keep a photo against this'));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ requiresPhoto: true }));
+  });
+
+  it('keeps the flag when the kind changes to one that cannot be timed', async () => {
+    const onSave = vi.fn();
+    render(<CommitmentForm initial={timed} onSave={onSave} onCancel={vi.fn()} />);
+
+    await userEvent.click(screen.getByLabelText('Keep a photo against this'));
+    await userEvent.selectOptions(screen.getByLabelText('Kind'), 'abstain');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    // The time goes with the kind; the photo does not. A flag that quietly switched itself off
+    // would only ever be discovered by the record that never got kept.
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ dueTime: null, requiresPhoto: true }),
+    );
   });
 });

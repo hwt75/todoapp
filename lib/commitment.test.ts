@@ -277,6 +277,7 @@ describe('the row that reaches the database', () => {
         'late_window_minutes',
         'name',
         'owner_id',
+        'requires_photo',
         'week_start_day',
         'weekly_target',
       ].sort(),
@@ -564,5 +565,61 @@ describe('what the author is told before a time is saved', () => {
     expect(TIMED_COMMITMENT_COPY.warning).toContain('not by the morning question');
     expect(TIMED_COMMITMENT_COPY.warning).toContain('No photo before midnight is a failed day');
     expect(TIMED_COMMITMENT_COPY.warning).toContain('two Grace Days a month');
+  });
+});
+
+/**
+ * Story 6.8 — the photo the author keeps against any commitment.
+ *
+ * Everything here is about what the flag is *not* coupled to. It is not an Auto-check and not a
+ * time, and the two functions that clear those on a kind or cadence switch must leave it alone —
+ * a flag that quietly turned itself off when the author changed his mind about a cadence would
+ * be discovered only by the record that never got kept.
+ */
+describe('keeping a photo against a commitment', () => {
+  it('is off on a blank commitment', () => {
+    expect(EMPTY_DRAFT.requiresPhoto).toBe(false);
+  });
+
+  it('is accepted on every kind and every cadence, unlike a time', () => {
+    // `canBeTimed()` excludes an abstention and an hours quota, and this deliberately shares
+    // neither exclusion: a photo that decides nothing is meaningless for no kind at all. An
+    // Avoid-it commitment is exactly the case this story exists for — it can never carry a
+    // time, so before this it had no path to a photo under any circumstance.
+    for (const kind of COMMITMENT_KINDS) {
+      for (const cadence of COMMITMENT_CADENCES) {
+        const targets =
+          cadence === 'weekly_quota'
+            ? { weeklyTarget: 3, weekStartDay: 1 }
+            : cadence === 'daily_hours_quota'
+              ? { dailyMinutesTarget: 120 }
+              : {};
+        const problems = draftProblems(draft({ kind, cadence, requiresPhoto: true, ...targets }));
+        expect(problems).toEqual([]);
+      }
+    }
+  });
+
+  it('survives a switch of kind, including to one that cannot carry a time', () => {
+    const on = draft({ requiresPhoto: true, dueTime: '20:00', lateWindowMinutes: 30 });
+    const switched = withKind(on, 'abstain');
+
+    // The time goes, because a constraint would refuse it. Nothing refuses this.
+    expect(switched.dueTime).toBeNull();
+    expect(switched.requiresPhoto).toBe(true);
+    expect(withKind(switched, 'do').requiresPhoto).toBe(true);
+  });
+
+  it('survives a switch of cadence, including to one judged by banked minutes', () => {
+    const on = draft({ requiresPhoto: true, dueTime: '20:00', lateWindowMinutes: 30 });
+    const switched = withCadence(on, 'daily_hours_quota');
+
+    expect(switched.dueTime).toBeNull();
+    expect(switched.requiresPhoto).toBe(true);
+  });
+
+  it('reaches the database as its own column, off by default', () => {
+    expect(toRow(draft({ requiresPhoto: true }), 'o', 'k').requires_photo).toBe(true);
+    expect(toRow(draft(), 'o', 'k').requires_photo).toBe(false);
   });
 });

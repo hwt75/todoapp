@@ -28,6 +28,8 @@ interface CommitmentRow {
   /** `HH:MM:SS` — Postgres renders a `time` with its seconds, which are always zero here. */
   due_time: string | null;
   late_window_minutes: number | null;
+  /** Story 6.8: whether the author keeps a photo against this one. Never read by settlement. */
+  requires_photo: boolean;
 }
 
 type View =
@@ -38,7 +40,7 @@ type View =
   | { kind: 'failed'; reason: string };
 
 const SELECT =
-  'id,name,kind,cadence,carries_penalty,weekly_target,week_start_day,daily_minutes_target,auto_check_kind,auto_check_account_ref,auto_check_last_checked_at,due_time,late_window_minutes';
+  'id,name,kind,cadence,carries_penalty,weekly_target,week_start_day,daily_minutes_target,auto_check_kind,auto_check_account_ref,auto_check_last_checked_at,due_time,late_window_minutes,requires_photo';
 
 /** The one query both the first load and every refresh use, so they cannot drift apart. */
 function fetchCommitments() {
@@ -64,6 +66,9 @@ function toDraft(row: CommitmentRow): CommitmentDraft {
     // and produces, so an edit that never touches the field sends back exactly what it read.
     dueTime: row.due_time === null ? null : row.due_time.slice(0, 5),
     lateWindowMinutes: row.late_window_minutes,
+    // Read back so an edit that never touches the checkbox cannot silently turn it off — the
+    // column is `not null default false`, so a row written before Story 6.8 reads as false.
+    requiresPhoto: row.requires_photo,
   };
 }
 

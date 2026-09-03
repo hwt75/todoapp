@@ -24,6 +24,17 @@ export interface RowCommitment {
   /** `HH:MM:SS` as Postgres renders a `time`, or null on an untimed commitment (Story 6.1). */
   due_time?: string | null;
   late_window_minutes?: number | null;
+  /**
+   * Story 6.8: whether the author keeps a photo against this commitment. Read by `today.tsx` to
+   * decide whether to offer an all-day upload control, and by nothing on the row itself — it is
+   * not part of `target()` for the same reason a due time is not: the row states what the
+   * commitment is set up to be and what its state is, and a place to put a file is neither.
+   *
+   * Required, unlike `due_time` above. An optional column is one a caller can forget to select,
+   * and forgetting this one turns the whole feature off in production while every type check and
+   * every test — whose fixtures supply the field regardless of the query — stays green.
+   */
+  requires_photo: boolean;
 }
 
 /**
