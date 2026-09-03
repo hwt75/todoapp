@@ -231,3 +231,10 @@ Worth knowing before testing: `captured_on` comes from the file's own `lastModif
 camera capture sets it to now; a file that has been synced or exported may carry a date that has
 nothing to do with when the photo was taken. That limitation is inherited knowingly and documented
 in `lib/evidence.ts`.
+
+**Checkpoint passed — 2026-09-03.** hwt75 confirmed all four items on a real device. Item 4, the
+private bucket, was also verified against the live project from here: `appeal-evidence` is
+`public = false`, capped at 10 MB and restricted to `image/png|jpeg|heic`, and the three policies on
+`storage.objects` grant nothing to `anon` — owner reads and writes its own (the predicate now names
+`declaration` alongside `appeal`, so this story's detachment is live), referee reads all, and no
+UPDATE or DELETE policy exists at all. Story promoted to `done` in `sprint-status.yaml`.

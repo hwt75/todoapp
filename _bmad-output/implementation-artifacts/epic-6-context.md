@@ -21,10 +21,10 @@ stops at Epic 5.
 
 - Story 6.1: A commitment can carry a time and a late window — done
 - Story 6.2: A same-day claim lands on the day it was made — done
-- Story 6.3: Evidence detaches from an appeal — in review, awaiting its device checkpoint
-- Story 6.4: Midnight decides the day — in review, awaiting its device checkpoint
-- Story 6.5: Today shows where the window stands
-- Story 6.6: The reminder lands inside the window
+- Story 6.3: Evidence detaches from an appeal — done
+- Story 6.4: Midnight decides the day — done
+- Story 6.5: Today shows where the window stands — done
+- Story 6.6: The reminder lands inside the window — in progress
 - Story 6.7: The referee may object — blocked on open questions
 
 ## Requirements & Constraints

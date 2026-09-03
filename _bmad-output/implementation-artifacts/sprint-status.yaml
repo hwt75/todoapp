@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 08-30-2026 00:00
+last_updated: 09-03-2026 00:00
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -83,9 +83,9 @@ development_status:
   epic-6: in-progress
   6-1-a-commitment-can-carry-a-time-and-a-late-window: done
   6-2-a-same-day-claim-lands-on-the-day-it-was-made: done
-  6-3-evidence-detaches-from-an-appeal: review
-  6-4-midnight-decides-the-day: review
-  6-5-today-shows-where-the-window-stands: review
+  6-3-evidence-detaches-from-an-appeal: done
+  6-4-midnight-decides-the-day: done
+  6-5-today-shows-where-the-window-stands: done
   6-6-the-reminder-lands-inside-the-window: backlog
   6-7-the-referee-may-object: backlog
   epic-6-retrospective: optional

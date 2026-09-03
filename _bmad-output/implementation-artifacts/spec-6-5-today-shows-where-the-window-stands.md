@@ -266,3 +266,10 @@ author is looking at it — and that the screen he comes back to hours later sti
 
 - The view under RLS, and the day boundary a browser cannot cross on demand.
   [`6-5-today:88`](../../supabase/tests/6-5-today-shows-where-the-window-stands.sql#L88)
+
+## Checkpoint passed — 2026-09-03
+
+hwt75 confirmed all three items on a real device: the pill advanced from the hour through
+`Open now` to `Shut` with no tap and no refresh, a claim survived closing and reopening the app with
+the photo control offered and *Claim* withdrawn, and attaching the photo read `Proven`. Story
+promoted to `done` in `sprint-status.yaml`.

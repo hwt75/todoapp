@@ -408,3 +408,10 @@ database's own clock; only a live day proves the hourly schedule fires on the ri
 
 - The documentation-only copy of the deadline stops claiming to be the only rule.
   [`expiry.ts:10`](../../lib/expiry.ts#L10)
+
+## Checkpoint passed — 2026-09-03
+
+hwt75 confirmed the timed day holds with its photo and fails at its own midnight without one, and
+that the morning gate does not ask again either way. The pre-push query this checkpoint requires was run against the live project first and returned no
+rows: no commitment carried both a `due_time` and an `auto_check_kind`, so the migration's refusal
+guard was never reached. Story promoted to `done` in `sprint-status.yaml`.
