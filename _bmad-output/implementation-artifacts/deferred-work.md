@@ -896,3 +896,27 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-4-midnight-decides-the-day.md`
   summary: "`README.md` still says `supabase/tests/` holds nine files; it now holds 34, and `supabase/tests/README.md` has not been updated for any of Epic 6's four test files."
   evidence: Raised by the blind review of Story 6.4. Pre-existing drift that this story extends. Revisit with a documentation pass rather than inside a feature story.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-6-the-reminder-lands-inside-the-window.md`
+  summary: "The outbox worker drains ten rows a minute, which bounds how many due-time reminders can land inside a five-minute window."
+  evidence: Raised by the blind and edge-case reviews of Story 6.6, twice. `BATCH = 10` in `supabase/functions/outbox-worker/index.ts:17` was set when every row was written to go out immediately; 6.6 is the first caller whose rows cluster on round wall-clock minutes, and `commitment_late_window_range` allows a window as narrow as five minutes. The story states the worker is untouched but never reasons about the arithmetic. Harmless for one doer; revisit before a second account exists, or state the bound where the batch size is set.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-6-the-reminder-lands-inside-the-window.md`
+  summary: "Nothing cancels a queued reminder when the owner stops being a doer, or when `is_live_doer` goes false."
+  evidence: Raised by the blind review of Story 6.6. The story's own principle is that every write which can invalidate a queued row deletes it, and the four commitment columns plus a filed declaration are covered; `profile.role` and `is_live_doer` are not, and both leave a row asserting a cost that cannot be charged. Not reachable today — both referee-promotion paths promote a freshly created account, so a referee owning a commitment does not occur — which is why it is deferred rather than built.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-6-the-reminder-lands-inside-the-window.md`
+  summary: "A reminder row held by a live worker at cancel time keeps its stale body, because the re-offer that follows hits `on conflict (dedupe_key) do nothing`."
+  evidence: Raised by the edge-case and blind reviews of Story 6.6. `cancel_due_time_reminders()` deliberately spares a row a worker is currently holding, which is correct; the consequence is that a rename or cadence change landing inside the worker's ~60-second visibility timeout delivers the old copy and the corrected reminder is lost for that day. Bounded by that timeout. Revisit by having the re-offer retry after the timeout, or by letting the worker re-read the commitment at send.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-6-the-reminder-lands-inside-the-window.md`
+  summary: "No test in the repository reads `cron.job` for the nine schedules that predate Story 6.6."
+  evidence: Raised by the verification-gap review of Stories 6.6 and repeatedly before it. 6.6 asserts its own job's name, schedule, command and `active` flag; the other nine — including `settle-days`, `outbox-worker` and `gate-reminders` — exist only as `cron.schedule` calls in migrations, so dropping or repointing one leaves `db reset` and every test green while the product silently stops working. The shape 6.6 uses generalises to all ten.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-6-the-reminder-lands-inside-the-window.md`
+  summary: "`outbox_claim()` orders by `created_at`, which stopped meaning delivery order when Story 6.6 introduced deferred rows."
+  evidence: Raised by the blind review of Story 6.6. Before it, every row was written to be sent on the next worker minute, so `created_at` order was send order. A due-time reminder is now written up to ninety minutes early and therefore outranks a settlement push created minutes ago. Harmless while one account produces a handful of rows an hour, and the reason it is harmless is written nowhere.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-6-the-reminder-lands-inside-the-window.md`
+  summary: "The pass rescans every timed commitment of every doer each hour with no supporting index."
+  evidence: Raised by the blind review of Story 6.6. `enqueue_due_time_reminders()` drives off `where due_time is not null and archived_at is null` with no partial index, and opens a subtransaction per commitment per day — past roughly 64 the backend's subxid cache spills into `pg_subtrans`. Irrelevant at this size; the same author added `outbox_claimable_idx` for exactly this reason, so the pattern exists when it matters.

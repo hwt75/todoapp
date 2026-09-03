@@ -447,6 +447,9 @@ do $$
 declare
   f text;
   r text;
+  v_acl aclitem[];
+  v_config text[];
+  v_open integer;
 begin
   foreach f in array array[
     'public.settle_day(date, boolean)',
@@ -463,7 +466,12 @@ begin
     'public.commitment_log_due_time_change()',
     'public.penalty_amount_dong()',
     'public.handle_new_user()',
-    'public.outbox_enqueue(uuid, text, jsonb, public.outbox_channel)',
+    -- Re-spelled by Story 6.6: the four-argument signature no longer exists. `drop function`
+    -- destroys the ACL, and a bare `create` in `public` hands EXECUTE straight back to PUBLIC.
+    'public.outbox_enqueue(uuid, text, jsonb, public.outbox_channel, timestamptz)',
+    -- Never listed before, and it is what Story 6.6's whole mechanism rests on: it can read and
+    -- mutate any account's outbox rows.
+    'public.outbox_claim(integer, public.outbox_channel)',
     'public.enqueue_gate_reminders()',
     'public.resolve_account_elsewhere(uuid)',
     'public.file_auto_check_result(uuid, uuid, public.auto_check_result)',
@@ -472,7 +480,17 @@ begin
     'public.appeal_hold_penalty()',
     'public.appeal_deadline(timestamptz)',
     'public.evidence_derive_owner()',
-    'public.void_expired_appeals()'
+    'public.void_expired_appeals()',
+    -- Story 6.6. The trigger functions are here for the reason commitment_log_due_time_change()
+    -- already is: a trigger fires regardless of its EXECUTE grant, so the grant buys nothing and
+    -- exposes an RPC that queues or deletes a notification for any account.
+    'public.due_time_instant(date, time)',
+    'public.enqueue_due_time_reminder(uuid, date, timestamptz)',
+    'public.offer_due_time_reminders(uuid, timestamptz)',
+    'public.enqueue_due_time_reminders(timestamptz)',
+    'public.cancel_due_time_reminders(uuid, date)',
+    'public.commitment_due_time_written()',
+    'public.declaration_cancels_due_time_reminder()'
   ]
   loop
     foreach r in array array['anon', 'authenticated'] loop
@@ -497,9 +515,101 @@ begin
     end if;
   end loop;
 
+  -- ---------------------------------------------------------------------------------
+  -- The same invariant, read rather than inferred, over the functions Story 6.6 adds or
+  -- re-creates.
+  --
+  -- `has_function_privilege` above already catches a dropped revoke — a function created in
+  -- `public` with no revoke comes out `anon=X/postgres` on this stack, and the loop turns red.
+  -- This reads `proacl` anyway for two reasons. It states the invariant instead of inferring it:
+  -- a **null** `proacl` means `acldefault()`, which is EXECUTE to PUBLIC, so "no ACL" and "open
+  -- to everyone" are the same fact and only this can say so. And it asserts the other direction,
+  -- which nothing else here does — an over-broad `revoke ... from public` that also stripped
+  -- `postgres` or `service_role` would pass every check above while killing every cron job and
+  -- both workers.
+  --
+  -- **Scoped to this story's own functions on purpose.** Applied to all thirty-one, any red would
+  -- read as a 6.6 regression, and two dozen untouched functions would be bound to whatever
+  -- default privileges the running stack happens to carry.
+  -- ---------------------------------------------------------------------------------
+  foreach f in array array[
+    'public.outbox_enqueue(uuid, text, jsonb, public.outbox_channel, timestamptz)',
+    'public.due_time_instant(date, time)',
+    'public.enqueue_due_time_reminder(uuid, date, timestamptz)',
+    'public.offer_due_time_reminders(uuid, timestamptz)',
+    'public.enqueue_due_time_reminders(timestamptz)',
+    'public.cancel_due_time_reminders(uuid, date)',
+    'public.commitment_due_time_written()',
+    'public.declaration_cancels_due_time_reminder()'
+  ]
+  loop
+    select p.proacl, p.proconfig into v_acl, v_config from pg_proc p
+     where p.oid = f::regprocedure;
+
+    if v_acl is null then
+      raise exception using message = format(
+        '`%s` carries a null proacl. Null is not "no grants" — it means acldefault(), which is '
+        'EXECUTE to PUBLIC. The function is reachable at /rest/v1/rpc/ by any signed-in account.',
+        f);
+    end if;
+
+    select count(*) into v_open
+      from aclexplode(v_acl) a
+     where a.privilege_type = 'EXECUTE'
+       and (a.grantee = 0 or pg_get_userbyid(a.grantee) in ('anon', 'authenticated'));
+
+    if v_open > 0 then
+      raise exception using message = format(
+        '`%s` grants EXECUTE to PUBLIC, anon or authenticated (%s such grant(s) in %s).',
+        f, v_open, v_acl::text);
+    end if;
+
+    -- The other half of the same lock, and the one an ACL cannot state. A `security definer`
+    -- function in `public` that inherits the caller's `search_path` is the classic escalation:
+    -- the caller creates `pg_temp.commitment`, prepends `pg_temp`, and the function reads its
+    -- table instead of ours with the owner's rights. Every migration in this repo pins
+    -- `set search_path = ''` for exactly that reason (20260819120000's own second convention),
+    -- and until now nothing asserted it.
+    -- `proconfig` stores the setting as `search_path=""` -- the value is quoted, so a plain
+    -- equality against `search_path=` matches nothing and would fail every function alike.
+    -- Read the value out and require it to be empty, which also catches `search_path=public`.
+    if v_config is null
+       or not exists (
+         select 1 from unnest(v_config) as c
+          where c like 'search_path=%'
+            and btrim(split_part(c, '=', 2), '"') = ''
+       ) then
+      raise exception using message = format(
+        '`%s` does not pin `search_path` to empty (proconfig reads %s). A definer function that '
+        'resolves names through a caller-controlled search_path runs the caller''s tables with '
+        'the owner''s rights.', f, coalesce(v_config::text, 'null'));
+    end if;
+
+    foreach r in array array['postgres', 'service_role'] loop
+      -- A stack without one of these roles must fail the invariant, not die on the lookup:
+      -- `has_function_privilege` raises `role "service_role" does not exist`, which reads as a
+      -- broken test rather than as the finding it is.
+      if not exists (select 1 from pg_roles where rolname = r) then
+        raise exception using message = format(
+          'The role `%s` does not exist on this stack, so whether `%s` is still callable by it '
+          'cannot be established. Every cron job and both workers run as one of postgres or '
+          'service_role.', r, f);
+      end if;
+
+      if not has_function_privilege(r, f, 'execute') then
+        raise exception using message = format(
+          '`%s` is no longer executable by `%s` (%s). The revoke went too far: every cron job '
+          'and both workers run as one of these two, and this fails silently — a pass that '
+          'cannot call its own chokepoint queues nothing and reports nothing.',
+          f, r, v_acl::text);
+      end if;
+    end loop;
+  end loop;
+
   raise notice using message =
-    'Step 6 ok: twenty-four deciding functions and the outbox are all out of reach of anon '
-    'and authenticated.';
+    'Step 6 ok: thirty-two deciding functions and the outbox are all out of reach of anon '
+    'and authenticated, and the eight Story 6.6 touches carry an explicit ACL that still lets '
+    'postgres and service_role in, with search_path pinned to empty.';
   raise notice using message =
     'PASS. A role is chosen server-side, cannot be raised from a session, and does not leak '
     'across accounts.';
