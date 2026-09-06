@@ -958,3 +958,9 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-7-the-referee-may-object.md`
   summary: "An appeal filed after an objection on the same day, and then approved, restores the objected commitment to `held` and undoes the objection, because `rule_appeal()` recomputes from `commitments_owing()` rather than from the frozen outcomes it supersedes."
   evidence: Raised by the implementer during Story 6.7 and confirmed against `20260825090000_the_referee_rules.sql`. Real, and the same class of defect Story 6.7 itself closed by copying frozen rows instead of recomputing — `rule_appeal()` still recomputes. Not fixed here for two reasons: the story's own Ask First forbids changing `rule_appeal()` without a human decision, and the path needs the referee to both object and then approve an appeal on the same day, so it is the referee undoing his own statement rather than anything the author can trigger. It also fails in the author's favour. Revisit alongside any pass that makes every correction writer copy frozen outcomes rather than re-derive them — `rule_appeal()` and `supersede_expiries()` are the two that still re-derive.
+
+## Deferred from: Epic 6 retrospective (2026-09-06)
+
+- source_spec: `_bmad-output/implementation-artifacts/epic-6-retro-2026-09-06.md`
+  summary: "Kept-photo reads chunk the requested dates but do not paginate rows, so a chunk containing more than the Data API row cap can be returned as a silent partial history."
+  evidence: `lib/evidence.ts:90,173-178` issues one query per 100-day chunk and treats every successful response as complete. `supabase/config.toml` sets `max_rows = 1000`. Real but remote for the current single-user app; add ordered range pagination before photo volume can approach this bound.

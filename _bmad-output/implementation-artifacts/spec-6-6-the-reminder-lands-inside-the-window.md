@@ -2,7 +2,7 @@
 title: 'The reminder lands inside the window'
 type: 'feature'
 created: '2026-09-03'
-status: 'done'
+status: 'review'
 baseline_commit: '8b22bb96e8da951d01f9297fc6cd922adfb18768'
 review_loop_iteration: 4
 context: []
@@ -474,6 +474,18 @@ has.
 
 ## Verification
 
+**Revalidation — 2026-09-06:**
+- `npm test`: 50 test files passed, 1,309 tests passed.
+- `npm run lint`, `npm run format:check`, and `npm run build`: passed.
+- All 38 SQL files under `supabase/tests/` passed using the local
+  `supabase_db_todoapp` container's `psql` with `ON_ERROR_STOP=1`. Each file rolled
+  back its transaction. Before execution, the local database was confirmed to have
+  no `is_live_doer` profile and all 62 migration versions matched the repository.
+  This run used the existing local database; it did not reset or replay migrations.
+- `npm run migrations:check`: all 62 migrations matched between local and remote.
+  The remote check was read-only; no migration was applied.
+- Real-device push delivery remains unverified, as confirmed by the maintainer.
+
 **Commands:**
 - `npx supabase db reset` then every file under `supabase/tests/` — expected: 36 pass, 0 fail,
   including the new file.
@@ -554,6 +566,10 @@ has.
   [`2-1-roles-and-rls:486`](../../supabase/tests/2-1-roles-and-rls.sql#L486)
 
 ## Done checkpoint — what hwt75 has to check on a real device
+
+As of 2026-09-06, the maintainer confirms that real-device verification has not yet
+been performed. The story remains in `review`, matching `sprint-status.yaml`;
+implementation and recorded migration parity do not complete this checkpoint.
 
 Nothing above proves the half this story exists for. The suite drives `enqueue_due_time_reminders()`
 by hand and asserts a row's `not_before`; it never waits for a minute to arrive, never wakes the
