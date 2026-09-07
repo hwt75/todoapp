@@ -2,7 +2,7 @@
 title: 'A queued claim keeps the meaning it had when it was tapped'
 type: 'bugfix'
 created: '2026-09-07'
-status: 'in-progress'
+status: 'done'
 baseline_commit: 'eb29a57ea650fa4051cca6cf548741090adce6ff'
 review_loop_iteration: 0
 context:
@@ -172,3 +172,18 @@ the only writer disagreeing with the judge.
 commitment's *creation* time for any day after its time was cleared, so a genuinely untimed day can
 read as timed. Recorded in `deferred-work.md` rather than fixed, because repairing it changes which
 days settlement calls timed and this spec's boundary is that no settled day may be re-judged.
+
+**Remote parity (2026-09-07):**
+
+- `npx supabase db push` — `20260907100000` applied to `hxzalpnlrunctbajgtkv`. Its only data write
+  is the additive backfill; both new columns are nullable with no default, so neither rewrites a
+  table.
+- `supabase migration list` — local and remote both carry all 65 migrations.
+- Backfill checked on the live project: 7 log rows, 4 of them carrying a time, and **all 4 carry a
+  window**. No row is left in the "never recorded" state, so no real commitment can meet that
+  refusal, and no row holds the impossible window-without-a-time combination.
+- Security advisor — one new warning, `late_window_at`, joining the pre-existing list of
+  `security definer` RPCs granted to `authenticated`. It is the exposure the migration's own grant
+  comment accepts deliberately: the trigger runs with invoker rights on purpose, so it can only
+  reach the log through a function the caller may execute, and `due_time_as_of()`'s existing grant
+  already accepts the identical exposure for the identical reason. No new class of finding.

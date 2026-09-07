@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 09-07-2026 10:25
+last_updated: 09-07-2026 10:41
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -377,7 +377,7 @@ action_items:
     action: "Preserve or explicitly reject stale timed-claim semantics when an offline
       claim flushes after a due-time edit, with client and SQL coverage."
     owner: "hwt75"
-    status: in-progress
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-06.md"
   - id: "epic-6-retro-item-39-finish-evidence-metadata-persistence-aft"
     epic: 6
