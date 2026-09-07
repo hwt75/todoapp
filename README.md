@@ -253,6 +253,31 @@ have no equivalent of. An unverified domain is a Resend API error, not a stuck c
 with Resend's own reason in `outbox.last_error`, so that column is where to look first if the
 Referee says an email never arrived.
 
+### The evidence sweeper
+
+Attaching a photo is two writes — the object into Storage, then the `evidence` row that gives
+it meaning — and the second can be refused after the first has succeeded: a capture date that
+does not match the day, a day that has already ended, a parent the caller does not own. The
+object then exists, proves nothing, and is reachable by nobody.
+
+A third worker, `evidence-sweeper`, removes those. `orphaned_evidence_objects()` decides which
+ones under two independent guards — no `evidence` row points at it, **and** it is older than a
+one-hour grace period, because an object with no row yet may simply be a write whose second half
+has not happened. The function only _names_ them; the deletion goes through the Storage API,
+which is the only path that removes the stored bytes as well as the row. Deleting the row alone
+would leave a worse orphan than the one being cleaned up, which is what `storage.protect_delete()`
+refuses in order to prevent.
+
+It runs hourly (`wake_evidence_sweeper()`, cron `evidence-sweeper`, `:17`) and reuses the same
+two Vault secrets — no separate entry — so it needs no setup beyond deploying the function:
+
+```bash
+npx supabase functions deploy evidence-sweeper
+```
+
+Until it is deployed the cron job posts to a function that is not there. That is visible in
+`cron.job_run_details` and in `net._http_response`, and it costs nothing but the sweep.
+
 ### Watching the queue
 
 ```sql
