@@ -2,7 +2,7 @@
 title: 'The reminder lands inside the window'
 type: 'feature'
 created: '2026-09-03'
-status: 'review'
+status: 'done'
 baseline_commit: '8b22bb96e8da951d01f9297fc6cd922adfb18768'
 review_loop_iteration: 4
 context: []
@@ -591,3 +591,32 @@ instant or up to a minute later. The migration is on the live project as of 2026
 `migrations:check` reads 60/60 matched, `cron.job` holds `due-time-reminders` at `50 * * * *`,
 `active`, and the security advisor reports no finding this migration introduced — none of the seven
 new functions is reachable by `anon` or `authenticated`, and each carries `search_path=""`.
+
+## Done checkpoint — result (2026-09-07)
+
+**hwt75 ran the real-device checks and reports them passing.**
+
+That sentence is the whole evidence, and it is the right kind: this checkpoint exists precisely
+because nothing in the repository can produce an artifact for it. No test waits for a minute to
+arrive, wakes the worker, or puts anything on a lock screen — so the record is a person's word about
+a phone, and it is recorded as that rather than dressed as an observation. Nobody but the maintainer
+saw the screen.
+
+Two things had changed under the checks by the time they ran, both on the live project the same day:
+
+- Check 5 (claim before the window opens, expect no push) is now serialized. `enqueue_due_time_
+  reminder()` and `declaration_cancels_due_time_reminder()` take one per-commitment-day advisory
+  lock (`20260907110000`), so the gap a claim could commit into is gone. Before that fix the check
+  could have passed by luck.
+- Check 3 (a commitment created with a time today still gets its reminder) has a neighbouring case
+  that looks like a failure and is not: *switching a time on* for a commitment that already existed
+  makes that day untimed by `due_time_as_of()`, so no reminder is due and the day belongs to the
+  next morning's question (`20260907140000`). Only a commitment created *with* its time exercises
+  check 3.
+
+**What this does and does not settle.** Story 6.6's own delivery is verified as far as a person can
+verify it. CAP-6's `success:` line also says a reminder must *never* arrive after the window has
+shut, and that half remains enforced at enqueue only — `outbox_claim` has no upper bound
+(`20260819180000:176-177`), so a backed-up or recovering worker can still deliver late. No device
+check covers that case in either direction, and it is carried as an open finding in
+`epic-6-retro-2026-09-07.md` (F1) rather than closed here.
