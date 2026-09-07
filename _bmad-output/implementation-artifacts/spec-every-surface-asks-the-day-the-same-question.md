@@ -153,3 +153,18 @@ question nobody was asking.
 after: no commitment has ever carried a `commitment_due_time_change` entry beyond its own creation,
 so no day was ever judged by the broken combination. The window was from the item 38 push until
 this fix, and the first due-time edit in it would have been the first loss.
+
+**Remote parity (2026-09-07):**
+
+- `npx supabase db push` — `20260907140000` applied to `hxzalpnlrunctbajgtkv`; local and remote both
+  carry all 69 migrations.
+- Verified on the live project rather than assumed: `enqueue_gate_reminders()` now contains
+  `due_time_as_of(c.id, asked_day)`, `timed_claim_today`'s definition reads `due_time_as_of`, and
+  `morning_question_day` exists.
+- Re-checked after the push: still no commitment on the live project has ever carried a due-time
+  entry beyond its own creation, so the regression window closed having reached nothing.
+
+**Not finished by the database push.** The third surface is the client's own gate, and it is the
+load-bearing one — the push is a reminder, `useGate` is what puts the question on screen. An app
+build from before this commit still reads the live column and still skips the day, whatever the
+database says. The fix reaches an author only when the app is redeployed.
