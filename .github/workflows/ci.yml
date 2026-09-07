@@ -57,6 +57,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
       - uses: supabase/setup-cli@v3
         with:
           version: latest
@@ -84,3 +88,9 @@ jobs:
             docker exec -i supabase_db_todoapp psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$f"
             echo "::endgroup::"
           done
+
+      # Transactional SQL files intentionally use one session and roll back. This harness uses
+      # two real psql sessions so each winner order proves the losing RPC waits on the shared
+      # per-account advisory lock before it re-reads current Penalty state.
+      - name: Run the current-Penalty collection race
+        run: node scripts/test-current-penalty-race.mjs

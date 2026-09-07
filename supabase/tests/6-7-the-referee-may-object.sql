@@ -115,6 +115,7 @@ declare
 
   v_correction uuid;
   v_penalty    uuid;
+  v_current_penalty uuid;
   v_appeal     uuid;
   v_claim      uuid;
   v_claimrow   record;
@@ -846,6 +847,54 @@ begin
       v_count, v_state, v_amount, public.penalty_amount_dong());
   end if;
 
+  -- The settlement correction copied account C's still-owed Penalty onto a new row. A referee
+  -- may have kept the original id on an already-open Ledger screen; collecting that historical
+  -- row must fail, even though its own state still reads `owed`, and must leave both history and
+  -- the one current replacement untouched.
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
+    true);
+
+  v_refused := false;
+  begin
+    perform public.mark_penalty_collected(v_penalty);
+  exception when others then
+    v_refused := true;
+    v_message := sqlerrm;
+  end;
+
+  perform set_config('role', 'postgres', true);
+
+  if not v_refused or v_message not ilike '%current Penalty%' then
+    raise exception using message = format(
+      'Collecting account C''s superseded Penalty read "%s", expected a clear current-Penalty '
+      'refresh refusal.', coalesce(v_message, '<null>'));
+  end if;
+
+  select state into v_state from public.penalty where id = v_penalty;
+  if v_state <> 'owed'
+     or (select collected_at from public.penalty where id = v_penalty) is not null then
+    raise exception using message = format(
+      'Account C''s historical Penalty changed to `%s` after stale-id collection was refused, '
+      'expected the append-only copy to remain `owed` with no collected_at.', v_state);
+  end if;
+
+  select p.id, p.state into v_current_penalty, v_state
+    from public.penalty_current p
+   where p.subject = v_c and p.period = v_d1 and p.kind = 'day';
+
+  select count(*) into v_count from public.penalty
+   where subject = v_c and settlement_id in (v_s_c, v_correction);
+
+  if v_current_penalty is null or v_current_penalty = v_penalty
+     or v_state <> 'owed' or v_count <> 2 then
+    raise exception using message = format(
+      'Account C''s stale-id refusal left current Penalty %s / `%s` and %s historical+current '
+      'rows, expected one different owed replacement and exactly two total rows.',
+      v_current_penalty, v_state, v_count);
+  end if;
+
   -- The notification must not name an amount: nothing changed hands, and a sentence naming
   -- 500.000₫ would read as a second charge. It must still be sendable.
   select payload ->> 'body' into v_body from public.outbox
@@ -865,7 +914,8 @@ begin
   raise notice using message =
     'Step 6 ok: an objection on a day that already failed freezes the objected commitment as '
     'missed, leaves the honest slip''s own outcome alone, keeps exactly one live penalty at the '
-    'same amount, and tells the author nothing further is owed in a sendable body. A commitment '
+    'same amount, refuses collection through the superseded Penalty id without changing either '
+    'row, and tells the author nothing further is owed in a sendable body. A commitment '
     'that is not held, one that was never part of the day, a blank reason and an over-long one '
     'are each refused in their own words.';
 

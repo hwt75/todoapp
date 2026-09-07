@@ -964,3 +964,17 @@ Carved out of specs during planning. Each entry names work that left a spec's sc
 - source_spec: `_bmad-output/implementation-artifacts/epic-6-retro-2026-09-06.md`
   summary: "Kept-photo reads chunk the requested dates but do not paginate rows, so a chunk containing more than the Data API row cap can be returned as a silent partial history."
   evidence: `lib/evidence.ts:90,173-178` issues one query per 100-day chunk and treats every successful response as complete. `supabase/config.toml` sets `max_rows = 1000`. Real but remote for the current single-user app; add ordered range pagination before photo volume can approach this bound.
+
+## Deferred from: code review of spec-epic-6-retro-item-36-current-penalty-collection (2026-09-06)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-epic-6-retro-item-36-current-penalty-collection.md`
+  summary: "`supersede_expiries()` can still race current-Penalty collection because it appends a correction without taking the collector's per-account advisory lock."
+  evidence: The verification-gap review confirmed that `supersede_expiries()` reads and supersedes an expired settlement while `mark_penalty_collected()` can update its owed Penalty in a different transaction. The collector's final `not exists` predicate cannot see an uncommitted successor, so both transactions can commit and leave a collected historical Penalty plus an owed current replacement. This predates item 36 and its frozen scope names only `object_to_day()`; repair it as a focused correction-writer serialization change with a two-session race regression.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-epic-6-retro-item-36-current-penalty-collection.md`
+  summary: "A Grace Day whose date equals a weekly settlement period can block collection of that unrelated weekly Penalty."
+  evidence: `mark_penalty_collected()` applies its `(owner_id, for_day)` Grace Day guard without checking settlement kind. That behavior predates item 36, and the existing week-Penalty test does not combine a weekly debt with a Grace Day on the same date. Decide whether the guard is intentionally day-only, then add the cross-kind regression before changing the refusal.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-epic-6-retro-item-36-current-penalty-collection.md`
+  summary: "`mark_penalty_collected()` authorizes the referee role but does not scope a supplied Penalty id to the account that referee is paired with."
+  evidence: The function is `security definer` and resolves the target owner solely from the caller-supplied Penalty id. This behavior predates item 36 and the product currently has one live doer, but it becomes an authorization boundary if multiple retained/non-live accounts or pairing histories coexist. Align collection with `paired_doer_id()` before the data model ever permits more than one collectible account.

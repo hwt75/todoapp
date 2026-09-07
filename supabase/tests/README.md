@@ -33,6 +33,18 @@ Each assertion raises with a message saying what the specification promised and 
 actually did, so a failure is a finding rather than a puzzle. `-v ON_ERROR_STOP=1` is what makes
 the failure a non-zero exit code.
 
+The collection/correction race needs two database sessions and therefore runs outside the
+rollback-only SQL loop:
+
+```
+node scripts/test-current-penalty-race.mjs
+```
+
+It creates isolated local fixture accounts, drives both winner orders, verifies the losing RPC is
+waiting on the shared advisory lock, asserts the committed state, and removes its fixtures even
+when an assertion fails. Set `SUPABASE_DB_CONTAINER` only when the local/preview database container
+does not use the repository default `supabase_db_todoapp` name.
+
 ## Continuous integration
 
 **Every file here now runs on every push**, in the `db-tests` job in `.github/workflows/ci.yml` —
@@ -99,8 +111,13 @@ override path — most of Epic 6's — does not need the guard and does not carr
 | `6-6-the-reminder-lands-inside-the-window.sql`      | A reminder is scheduled inside the window it belongs to and never after it has shut; a repeated pass enqueues nothing new; an already-claimed commitment is not reminded.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `6-8-a-photo-i-can-keep-against-any-commitment.sql` | A commitment of any kind holds a photo for its own local day with no claim, no due time and no window; the owner is derived from the commitment; each malformed shape is refused by the specific constraint or trigger rule it names; the folder is private to its owner under RLS on both read and write; **the referee reaches a commitment-day photo as neither row nor object, while a claim's evidence stays exactly as visible to him as before**; and `timed_claim_today.proven` stays blind to the new kind.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
-**All 37 files pass**, most recently re-run on 2026-09-03 (including
-`6-8-a-photo-i-can-keep-against-any-commitment.sql`, added by Story 6.8) against a local stack
+`scripts/test-current-penalty-race.mjs` separately proves that collection and objection serialize
+on the account advisory lock in both winner orders: collection-first leaves one collected current
+Penalty and no correction; objection-first leaves one owed current replacement and refuses the
+stale original id.
+
+**All 38 files pass**, most recently re-run on 2026-09-06 (including the Story 6.7
+current-Penalty regression) against a local stack
 with every migration applied from scratch (`npx supabase db reset`). The first run of `2-7-supersession.sql`
 did not: it failed at step 4 with `A1 CONFIRMED`, which is what it was written to do.
 `supersede_expiries()` wrote a correction carrying no frozen outcomes, so a day answered in time
@@ -115,9 +132,9 @@ Nothing on the client, any more. Nine of the eleven components have tests as of 
 no file of their own because they are rendered and asserted through `commitment-row` and `today`,
 which is where their rules are actually visible.
 
-Two database properties are still out of reach here: `outbox_claim`'s skip-locked behaviour under
-two simultaneous workers, which needs two sessions holding locks at once, and anything the Edge
-Function worker does after it claims a row.
+Two database properties remain uncovered here: `outbox_claim`'s skip-locked behaviour under two
+simultaneous workers, which needs its own dedicated two-session fixture beyond the collection race
+harness above, and anything the Edge Function worker does after it claims a row.
 
 **One thing these files deliberately do not assert: table grants.** The local stack's default
 privileges differ from the author's project — `authenticated` has no `select` on any application

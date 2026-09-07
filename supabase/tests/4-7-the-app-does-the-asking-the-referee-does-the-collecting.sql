@@ -12,7 +12,8 @@
 -- new security-definer function (never an RLS policy on `settlement_commitment` itself --
 -- that table is also `chain_current`'s own base table, see the migration's own header); that
 -- same function returning nothing at all for a non-referee caller (a row filter, not a
--- refusal -- AD-7's own read convention); and a week-kind owed Penalty (Week Close, 3.4)
+-- refusal -- AD-7's own read convention); a day already claimed by a Grace Day refusing
+-- collection while its Penalty remains owed; and a week-kind owed Penalty (Week Close, 3.4)
 -- collecting through `mark_penalty_collected()` exactly the same way a day-kind one does --
 -- the function itself has no `kind` restriction of any sort, by design (a week-kind debt has
 -- to be just as discharge-able as a day-kind one, or it sits owed forever with no control
@@ -31,6 +32,7 @@ begin;
 -- ordinary table/view reads this fixture exercises through RLS still do.
 grant select on table public.profile to authenticated;
 grant select, insert on table public.appeal to authenticated;
+grant select, insert on table public.grace_day to authenticated;
 grant select on public.penalty, public.settlement, public.commitment to authenticated;
 grant select on public.penalty_current, public.settlement_current to authenticated;
 -- Note: no grant on public.settlement_commitment for `authenticated` -- nothing in this file
@@ -251,7 +253,7 @@ begin
   end if;
 
   select state into v_state from public.penalty where id = v_penalty1;
-  if v_state <> 'owed' then
+  if v_state is distinct from 'owed' then
     raise exception using message = format(
       'Account 1''s penalty reads `%s` after two refused non-referee attempts, expected '
       '`owed` -- untouched.', v_state);
@@ -469,6 +471,48 @@ begin
     '-- a row filter, never an exception, and never another account''s own commitment names.';
 
   -- -------------------------------------------------------------------------------
+  -- 6b. A Grace Day already claims account 3's current day. Collection must see the existing
+  --     row, refuse in its own words, and leave the owed Penalty untouched for
+  --     apply_grace_days() to fold into a correction later. The two-session harness, not this
+  --     sequential regression, proves the account-lock serialization.
+  -- -------------------------------------------------------------------------------
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', v_user3, 'role', 'authenticated', 'app_role', 'doer')::text, true);
+
+  insert into public.grace_day (owner_id, for_day) values (v_user3, v_day);
+
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
+    true);
+
+  v_refused := false;
+  begin
+    perform public.mark_penalty_collected(v_penalty3);
+  exception when others then
+    v_refused := true;
+    v_message := sqlerrm;
+  end;
+
+  perform set_config('role', 'postgres', true);
+
+  if not v_refused or v_message not ilike '%Grace Day has already been spent%' then
+    raise exception using message = format(
+      'Collecting account 3''s Penalty after its Grace Day read "%s", expected the existing '
+      'Grace Day refusal.', coalesce(v_message, '<null>'));
+  end if;
+
+  select state into v_state from public.penalty where id = v_penalty3;
+  if v_state is distinct from 'owed' then
+    raise exception using message = format(
+      'Account 3''s Penalty reads `%s` after Grace Day collection was refused, expected `owed` '
+      '-- untouched for the correction pass.', v_state);
+  end if;
+
+  raise notice using message =
+    'Step 6b ok: an existing Grace Day refuses collection and leaves the current Penalty owed.';
+
+  -- -------------------------------------------------------------------------------
   -- 7. A week-kind owed Penalty (account 5, Week Close/3.4) collects exactly the way a
   --    day-kind one does -- mark_penalty_collected() has no kind of its own to check, so a
   --    week-kind debt must never sit uncollectable just because it has no per-commitment
@@ -545,6 +589,7 @@ begin
     'names nothing through referee_missed_commitments() despite a genuine missed outcome '
     'existing for it; a multi-commitment day names every commitment through '
     'referee_missed_commitments(), which returns nothing at all to any non-referee session; a '
+    'Grace Day already claiming the day refuses collection and leaves its Penalty owed; a '
     'week-kind owed Penalty collects exactly the same way a day-kind one does; and a bogus '
     'penalty id reads a distinct "No such penalty." message, never "already been resolved."';
 end $$;
