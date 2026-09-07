@@ -34,6 +34,14 @@ grant select on public.timed_claim_today to authenticated;
 -- assumed either way.
 grant select, insert on table storage.objects to authenticated;
 
+-- And the bucket those rows belong to. It is `config.toml` configuration created by the CLI
+-- through the storage API, not by a migration, so a database started with `-x storage-api` --
+-- which is how CI starts it -- has the schema but not the row. Staged here rather than in the
+-- workflow so the file still runs against any database, and it rolls back with everything else.
+insert into storage.buckets (id, name)
+values ('appeal-evidence', 'appeal-evidence')
+on conflict (id) do nothing;
+
 do $$
 declare
   v_a          uuid := gen_random_uuid();

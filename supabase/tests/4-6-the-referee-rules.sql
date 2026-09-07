@@ -28,6 +28,16 @@ grant select, insert on table public.appeal, public.evidence to authenticated;
 grant select on public.penalty, public.settlement, public.settlement_commitment, public.commitment
   to authenticated;
 
+-- The bucket is `config.toml` configuration, created by the CLI through the storage API rather
+-- than by any migration. CI starts the database with `-x storage-api` and so never gets it, and
+-- Step 8's real `storage.objects` row then fails a foreign key on a bucket that is not there --
+-- which is what has been failing every CI run since 2026-09-03 while this file passed locally.
+-- Staged here rather than in the workflow so the file still runs against any database, and it
+-- rolls back with everything else.
+insert into storage.buckets (id, name)
+values ('appeal-evidence', 'appeal-evidence')
+on conflict (id) do nothing;
+
 do $$
 declare
   -- Account 1: sole cause. One machine-filed miss, appealed, then approved -- the day's only
