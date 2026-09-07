@@ -24,10 +24,18 @@ import { classifyConflict, classifyWriteError, shouldRetry } from '@/lib/declara
 /**
  * A queued declaration, plus the one thing the *read* side needs.
  *
- * `timed` never reaches the server. `declaration_derive_day()` owns `for_day` and derives it
- * from `answeredAt` alone (AD-6); this flag exists only so the duplicate-versus-conflict read
- * below looks on the day the server will have chosen. Absent on items queued before Story 6.2,
- * which were all untimed, so the falsy default is also the correct one.
+ * `declaration_derive_day()` owns `for_day` and derives it from `answeredAt` (AD-6); this flag
+ * exists so the duplicate-versus-conflict read below looks on the day the server will have
+ * chosen. Absent on items queued before Story 6.2, which were all untimed, so the falsy default
+ * is also the correct one for that read.
+ *
+ * Since Epic 6 retrospective item 38 it is also *sent*, as `claimed_timed` — not as a value the
+ * server uses, but as the assertion it checks. An item can sit in this queue for days, and the
+ * commitment it names can stop being timed while it waits; the server compares what this
+ * remembered against what the log says governed that day and refuses the mismatch, rather than
+ * quietly filing a claim against the day before the one it was tapped on. An item queued by an
+ * older client carries no flag at all, and `undefined` must reach the server as null — "not
+ * asserted" — rather than as false, which would assert the opposite of what was meant.
  *
  * Declared here rather than in `lib/offline-queue.ts` because the queue is generic over its
  * item type on purpose and has no business knowing what a due time is.
@@ -68,13 +76,19 @@ export async function submitDeclaration(
   let landedId: string | null = null;
 
   const outcome = await flush<QueuedClaim>(storage, async (pending) => {
-    const { error } = await createClient().from('declaration').insert({
-      owner_id: pending.ownerId,
-      commitment_id: pending.commitmentId,
-      idempotency_key: pending.idempotencyKey,
-      answer: pending.answer,
-      answered_at: pending.answeredAt,
-    });
+    const { error } = await createClient()
+      .from('declaration')
+      .insert({
+        owner_id: pending.ownerId,
+        commitment_id: pending.commitmentId,
+        idempotency_key: pending.idempotencyKey,
+        answer: pending.answer,
+        answered_at: pending.answeredAt,
+        // Checked against the due-time log, never trusted. `?? null` rather than `?? false`:
+        // an item queued before this shipped asserts nothing, and asserting "untimed" on its
+        // behalf would refuse a claim that is perfectly good.
+        claimed_timed: pending.timed ?? null,
+      });
 
     const result = classifyWriteError(error);
 

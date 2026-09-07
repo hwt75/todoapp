@@ -84,6 +84,30 @@ describe('one declaration on its way to the server', () => {
     expect(sent).not.toHaveProperty('timed');
   });
 
+  // Epic 6 retrospective item 38. The commitment can stop being timed while an item waits in
+  // this queue, and the server can only tell that this claim meant something else if the claim
+  // says what it meant. It is checked against the due-time log, never trusted.
+  it('sends what the client believed the commitment was when he tapped', async () => {
+    await submitDeclaration(storage, claim({ timed: true }));
+
+    expect(insert.mock.calls[0][0].claimed_timed).toBe(true);
+  });
+
+  it('sends the morning question’s own assertion too, from the other side', async () => {
+    await submitDeclaration(storage, claim({ timed: false }));
+
+    expect(insert.mock.calls[0][0].claimed_timed).toBe(false);
+  });
+
+  // The distinction that matters: an item queued before this shipped asserts *nothing*. Sending
+  // false on its behalf would assert "this was a morning answer", and the server would refuse a
+  // perfectly good claim on a commitment that has carried a time all along.
+  it('asserts nothing for an item queued before the flag existed', async () => {
+    await submitDeclaration(storage, claim());
+
+    expect(insert.mock.calls[0][0].claimed_timed).toBeNull();
+  });
+
   it('reports a clean write as sent and leaves nothing queued', async () => {
     const outcome = await submitDeclaration(storage, claim());
 
