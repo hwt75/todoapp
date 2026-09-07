@@ -175,3 +175,11 @@ forgets the shared lock.
 
 - Review discoveries outside this fix remain explicit, bounded follow-up work.
   [`deferred-work.md:968`](deferred-work.md#L968)
+
+**Remote parity (2026-09-07):**
+
+- `npx supabase db push` — `20260906080451_collection_follows_the_current_penalty.sql` is on
+  the live project `hxzalpnlrunctbajgtkv`, pushed together with item 37's migration.
+- `supabase migration list` — local and remote agree on all 64 migrations.
+- Security advisor — no new finding; `mark_penalty_collected` and `object_to_day` were already
+  on the pre-existing `security definer` warning list before this change.

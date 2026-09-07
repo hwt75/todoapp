@@ -2,7 +2,7 @@
 title: 'Appeal approval changes only the appealed commitment'
 type: 'bugfix'
 created: '2026-09-07'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '4e32bb841db2b4ee4e264a8b23243c535e532b9f'
 review_loop_iteration: 0
 context:
@@ -110,3 +110,16 @@ owed. Copy changes are intentionally outside this database-correction fix.
 - `npm run lint`, `npm run format:check`, `npm run build` — passed.
 - `npm run migrations:check` — expected non-zero result: `20260906080451` and `20260907090000`
   are local-only until a separately authorized push.
+
+**Remote parity (2026-09-07):**
+
+- `npx supabase db push` — applied `20260906080451` and `20260907090000` to project
+  `hxzalpnlrunctbajgtkv`, the project the deployed app queries. Both migrations are
+  `create or replace function` plus comment/revoke/grant only; no DDL touches a table and no
+  statement runs outside a function body, so no existing row was read or written by the push.
+- `supabase migration list` — local and remote both carry all 64 migrations; no mismatch in
+  either direction.
+- Security advisor — no new finding. The remaining warnings are the pre-existing
+  `security definer` RPCs that check `role_from_table()` internally (`rule_appeal`,
+  `object_to_day`, `mark_penalty_collected`, `referee_day_lookup` and the rest) plus Auth's
+  leaked-password protection; this push added no function that was not already on that list.
