@@ -18,6 +18,10 @@
 --      a commitment archived before the day it names, which a live `commitments_owing()` recompute
 --      cannot even see.
 --   4. **The referee may only act on the account he is paired to.** Step 3.
+--   5. **A later Appeal changes only its own commitment.** Account C's objection correction is
+--      the Appeal's source snapshot. Step 6 proves approval copies that whole freeze, preserves
+--      the objected miss, restores only the appealed machine miss, and replaces only the current
+--      Held Penalty.
 --
 --   docker exec -i supabase_db_todoapp psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/6-7-the-referee-may-object.sql
 --
@@ -76,7 +80,7 @@ declare
   v_b_pill   uuid; -- objected to
   v_b_gym    uuid; -- untimed, held both days: the commitment the freeze must not lose
   v_c_pill   uuid;
-  v_c_gym    uuid; -- untimed, slipped: the day already failed without the referee
+  v_c_gym    uuid; -- untimed, machine-filed miss: appealed after the pill objection
   v_d_pill   uuid;
   v_e_pill   uuid;
   v_f_pill   uuid;
@@ -117,6 +121,9 @@ declare
   v_penalty    uuid;
   v_current_penalty uuid;
   v_appeal     uuid;
+  v_c_appeal  uuid;
+  v_c_appeal_correction uuid;
+  v_c_appeal_penalty uuid;
   v_claim      uuid;
   v_claimrow   record;
 
@@ -185,8 +192,10 @@ begin
   values (v_c, gen_random_uuid(), 'Pill', 'do', 'daily', true, time '10:00', 30)
   returning id into v_c_pill;
 
-  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence, carries_penalty)
-  values (v_c, gen_random_uuid(), 'Gym', 'do', 'daily', true)
+  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence, carries_penalty,
+                                 auto_check_kind, auto_check_account_ref)
+  values (v_c, gen_random_uuid(), 'Gym', 'do', 'daily', true,
+          'account_elsewhere', 'story-6-7-c')
   returning id into v_c_gym;
 
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
@@ -336,7 +345,6 @@ begin
   -- The honest slips, on the same day the timed commitment was proved.
   for v_claimrow in
     select * from (values
-      (v_c, v_c_gym, v_d1),
       (v_f, v_f_gym, v_d1),
       (v_l, v_l_gym, v_d1)
     ) as t(owner_id, commitment_id, for_day)
@@ -347,8 +355,10 @@ begin
               at time zone 'Asia/Ho_Chi_Minh');
   end loop;
 
-  -- Account M's machine-filed miss, which is what an appeal needs. file_auto_check_result() is
-  -- security definer, so its declaration lands on the previous local day exactly as above.
+  -- Account C and M's machine-filed misses, which are what their appeals need.
+  -- file_auto_check_result() is security definer, so each declaration lands on the previous
+  -- local day exactly as above.
+  perform public.file_auto_check_result(v_c_gym, v_c, 'missed');
   perform public.file_auto_check_result(v_m_auto, v_m, 'missed');
 
   -- Account I's gym commitment answers nothing at all: that is what makes its day `expired`.
@@ -734,9 +744,11 @@ begin
 
   -- -------------------------------------------------------------------------------
   -- 6. Objection on a day that already failed and already owes (account C). The commitment
-  --    freezes `missed`, the honest slip keeps its own `missed`, and the day still carries the
-  --    same one penalty -- no second charge (FR-13). Also: the refusals that are about the call
-  --    rather than the landing.
+  --    freezes `missed`, the separate machine miss keeps its own `missed`, and the day still
+  --    carries the same one penalty -- no second charge (FR-13). That machine miss is then
+  --    appealed and approved: the next correction must preserve the objection and change only
+  --    the appealed commitment. Also: the refusals that are about the call rather than the
+  --    landing.
   -- -------------------------------------------------------------------------------
   update public.referee_invite set created_by = v_c;
 
@@ -825,15 +837,15 @@ begin
   if v_correction is null or v_verdict <> 'failed' or v_count <> 2 then
     raise exception using message = format(
       'Account C''s correction is %s / `%s` / missed_count %s, expected `failed` with 2 -- the '
-      'honest slip and the objected claim both count.', v_correction, v_verdict, v_count);
+       'machine miss and the objected claim both count.', v_correction, v_verdict, v_count);
   end if;
 
   select outcome into v_outcome from public.settlement_commitment
    where settlement_id = v_correction and commitment_id = v_c_gym;
   if v_outcome is distinct from 'missed' then
     raise exception using message = format(
-      'The honest slip reads `%s` on account C''s correction, expected `missed` -- an objection '
-      'about a different commitment must not rewrite it.',
+       'The machine-filed miss reads `%s` on account C''s correction, expected `missed` -- an objection '
+       'about a different commitment must not rewrite it.',
       coalesce(v_outcome::text, '<no row at all>'));
   end if;
 
@@ -911,11 +923,132 @@ begin
       'names no money still has to date itself.', v_body);
   end if;
 
+  -- Continue the same account and same day through Appeal approval. The Appeal trigger captures
+  -- the objection correction and its current Penalty, not the original settlement/Penalty.
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', v_c, 'role', 'authenticated', 'app_role', 'doer')::text, true);
+
+  insert into public.appeal (owner_id, commitment_id, idempotency_key, for_day)
+  values (v_c, v_c_gym, gen_random_uuid(), v_d1)
+  returning id into v_c_appeal;
+
+  if (select settlement_id from public.appeal where id = v_c_appeal) is distinct from v_correction
+     or (select penalty_id from public.appeal where id = v_c_appeal)
+          is distinct from v_current_penalty then
+    raise exception using message =
+      'Account C''s Appeal did not capture the objection correction and its current Penalty.';
+  end if;
+
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
+    true);
+  perform public.rule_appeal(v_c_appeal, true);
+
+  perform set_config('role', 'postgres', true);
+
+  select id, verdict, missed_count
+    into v_c_appeal_correction, v_verdict, v_count
+    from public.settlement
+   where supersedes = v_correction;
+
+  if v_c_appeal_correction is null or v_verdict <> 'failed' or v_count <> 1 then
+    raise exception using message = format(
+      'Account C''s Appeal correction is %s / `%s` / missed_count %s, expected `failed` / 1 -- '
+      'only the appealed machine miss stops contributing; the objection still stands.',
+      v_c_appeal_correction, v_verdict, v_count);
+  end if;
+
+  select count(*) into v_count
+    from public.settlement s0
+    join public.settlement s1 on s1.supersedes = s0.id
+    join public.settlement s2 on s2.supersedes = s1.id
+   where s0.id = v_s_c and s1.id = v_correction and s2.id = v_c_appeal_correction
+     and s0.supersedes is null;
+  if v_count <> 1
+     or (select count(*) from public.settlement
+          where subject = v_c and period = v_d1 and kind = 'day') <> 3 then
+    raise exception using message =
+      'Account C''s settlement graph is not exactly original -> objection -> Appeal correction.';
+  end if;
+
+  select count(*) into v_count from public.settlement_commitment
+   where settlement_id = v_c_appeal_correction;
+  if v_count <> 2 then
+    raise exception using message = format(
+      'Account C''s Appeal correction froze %s commitment outcome(s), expected the source''s 2.',
+      v_count);
+  end if;
+
+  select outcome into v_outcome from public.settlement_commitment
+   where settlement_id = v_c_appeal_correction and commitment_id = v_c_pill;
+  if v_outcome is distinct from 'missed' then
+    raise exception using message = format(
+      'The objected pill reads `%s` after the gym Appeal was approved, expected `missed` -- '
+      'approval must not undo the referee''s earlier decision.',
+      coalesce(v_outcome::text, '<no row at all>'));
+  end if;
+
+  select outcome into v_outcome from public.settlement_commitment
+   where settlement_id = v_c_appeal_correction and commitment_id = v_c_gym;
+  if v_outcome is distinct from 'held' then
+    raise exception using message = format(
+      'The appealed gym reads `%s` after approval, expected `held`.',
+      coalesce(v_outcome::text, '<no row at all>'));
+  end if;
+
+  select id, state into v_c_appeal_penalty, v_state from public.penalty
+   where settlement_id = v_c_appeal_correction;
+  if v_c_appeal_penalty is null or v_state <> 'owed'
+     or v_c_appeal_penalty in (v_penalty, v_current_penalty)
+     or (select state from public.penalty where id = v_penalty) <> 'owed'
+     or (select state from public.penalty where id = v_current_penalty) <> 'voided'
+     or (select count(*) from public.penalty
+          where subject = v_c
+            and settlement_id in (v_s_c, v_correction, v_c_appeal_correction)) <> 3 then
+    raise exception using message = format(
+      'Account C''s Penalty lineage is not historical owed %s -> appealed voided %s -> current '
+      'owed %s; observed states `%s` / `%s` / `%s`.',
+      v_penalty, v_current_penalty, v_c_appeal_penalty,
+      (select state from public.penalty where id = v_penalty),
+      (select state from public.penalty where id = v_current_penalty), v_state);
+  end if;
+
+  select count(*) into v_count from public.penalty_current
+   where subject = v_c and period = v_d1 and kind = 'day';
+  select id, state into v_current_penalty, v_state from public.penalty_current
+   where subject = v_c and period = v_d1 and kind = 'day';
+  if v_count <> 1 or v_current_penalty <> v_c_appeal_penalty or v_state <> 'owed' then
+    raise exception using message = format(
+      'Account C''s current Penalty projection is %s row(s), id %s / `%s`; expected only %s / owed.',
+      v_count, v_current_penalty, v_state, v_c_appeal_penalty);
+  end if;
+
+  if (select ruled_at from public.appeal where id = v_c_appeal) is null then
+    raise exception using message =
+      'Account C''s approved Appeal left ruled_at null.';
+  end if;
+
+  select count(*) into v_count from public.outbox
+   where owner_id = v_c and dedupe_key = 'ruling-' || v_c_appeal::text
+     and payload ->> 'title' = 'The referee ruled'
+     and payload ->> 'body' ilike '%did it%'
+     and payload ->> 'body' ilike '%cleared%';
+  if v_count <> 1
+     or (select count(*) from public.outbox
+          where owner_id = v_c
+            and (dedupe_key like 'objection-%' or dedupe_key = 'ruling-' || v_c_appeal::text)) <> 2 then
+    raise exception using message =
+      'Account C did not keep exactly one objection notice and one approved-ruling notice.';
+  end if;
+
   raise notice using message =
     'Step 6 ok: an objection on a day that already failed freezes the objected commitment as '
-    'missed, leaves the honest slip''s own outcome alone, keeps exactly one live penalty at the '
-    'same amount, refuses collection through the superseded Penalty id without changing either '
-    'row, and tells the author nothing further is owed in a sendable body. A commitment '
+    'missed, leaves the machine miss alone, keeps one current Penalty, and refuses collection '
+    'through the superseded Penalty id. Appealing and approving that separate machine miss then '
+    'preserves the objection, changes only the appealed outcome to held, derives failed/1 from '
+    'the source aggregate, replaces the voided held Penalty, stamps the Appeal, and enqueues one '
+    'ruling notice. A commitment '
     'that is not held, one that was never part of the day, a blank reason and an over-long one '
     'are each refused in their own words.';
 
@@ -1492,8 +1625,11 @@ begin
     'the window supersedes the day with a freeze of the whole day taken from its own frozen '
     'rows, forces the objected commitment to missed, charges the day exactly once whatever it '
     'already owed, records who said it and why, notifies the author with a sendable body '
-    'carrying no free text, and breaks one chain while leaving every other alone. It lands as a '
-    'failed day with an owed penalty or it does not land: an expired day, a commitment carrying '
+    'carrying no free text, and breaks one chain while leaving every other alone. A later approved '
+    'Appeal copies that correction''s complete freeze, restores only its machine-filed miss, '
+    'preserves the objection, and replaces the voided Held Penalty when the day still fails. An '
+    'objection lands as a failed day with an owed penalty or it does not land: an expired day, '
+    'a commitment carrying '
     'no penalty, a Weekly Quota, a waived penalty and one held under an open appeal are all '
     'refused. So are a closed window, a second objection, a day corrected since it was read, a '
     'collected penalty, an outcome that is not held, a commitment that was not there, a blank '
