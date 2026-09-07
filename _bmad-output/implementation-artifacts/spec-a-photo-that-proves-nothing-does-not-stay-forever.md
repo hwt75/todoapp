@@ -149,3 +149,17 @@ to half-delete an object without ever being able to finish the job.
 job is created by the migration, so pushing the migration without deploying the function leaves an
 hourly POST to a function that is not there — visible in `cron.job_run_details` and
 `net._http_response`, costing nothing but the sweep. The two belong in the same change.
+
+**Remote parity and deployment (2026-09-07):**
+
+- `npx supabase functions deploy evidence-sweeper` ran **before** the migration push, deliberately:
+  the migration is what creates the cron job, so deploying second would have left an hourly POST to
+  a function that was not there.
+- `npx supabase db push` — `20260907130000` applied to `hxzalpnlrunctbajgtkv`. Local and remote both
+  carry all 68 migrations, and `cron.job` holds `evidence-sweeper` at `17 * * * *`, active.
+- Smoke-tested through the path cron itself takes, rather than by invoking the function directly:
+  `select public.wake_evidence_sweeper();` on the live project, then reading `net._http_response`.
+  The answer was `200 {"ok":true,"named":0,"removed":0}` — Vault secret found, URL right, function
+  reachable, bearer accepted, RPC callable, and the result shape the worker returns.
+- Safe to run at that moment by inspection, not by hope: the live project holds zero objects in
+  `appeal-evidence` and zero `evidence` rows, so the first pass had nothing it could delete.
