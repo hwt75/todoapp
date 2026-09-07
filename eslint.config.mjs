@@ -6,6 +6,10 @@ const config = [
   {
     ignores: [
       '.next/**',
+      '.agents/**',
+      '.claude/skills/**',
+      '_bmad/**',
+      '_bmad-output/**',
       'public/sw.js',
       'public/sw.js.map',
       // Deno, not Node: `npm:` specifiers and Deno globals that this config's parser and

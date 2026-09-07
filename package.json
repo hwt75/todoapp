@@ -15,8 +15,8 @@
     "push": "node scripts/send-push.mjs",
     "migrations:check": "node scripts/check-migrations-pushed.mjs",
     "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format": "prettier --write \"*.{js,json,md,mjs,mts,ts}\" \"{.github,app,components,lib,scripts,supabase}/**/*.{css,js,jsx,json,md,mjs,mts,ts,tsx,yaml,yml}\"",
+    "format:check": "prettier --check \"*.{js,json,md,mjs,mts,ts}\" \"{.github,app,components,lib,scripts,supabase}/**/*.{css,js,jsx,json,md,mjs,mts,ts,tsx,yaml,yml}\""
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
