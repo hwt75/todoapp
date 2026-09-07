@@ -487,16 +487,26 @@ export function Today({
         .from(EVIDENCE_BUCKET)
         .upload(path, file, { contentType: file.type || undefined });
 
-      if (!mounted.current) return;
-
       if (uploadError) {
-        setEvidenceState((c) => ({
-          ...c,
-          [commitmentId]: { kind: 'failed', reason: EVIDENCE_COPY.failed },
-        }));
+        // Nothing reached Storage, so there is nothing to finish — only a state update, and
+        // that is the one thing an unmounted screen must not do.
+        if (mounted.current) {
+          setEvidenceState((c) => ({
+            ...c,
+            [commitmentId]: { kind: 'failed', reason: EVIDENCE_COPY.failed },
+          }));
+        }
         return;
       }
 
+      // Deliberately *not* guarded by `mounted.current`, unlike every state update below.
+      //
+      // The object is already in Storage by the time this line runs. Returning here because the
+      // author swiped to another tab while the upload was in flight would leave the photo he
+      // took existing but proving nothing: no `evidence` row, so the timed claim it was meant to
+      // prove has no proof, and the object becomes an orphan nothing in the product can reach or
+      // clean up (`deferred-work.md`). The upload and this insert are two halves of one write,
+      // and the second half cannot be conditional on a screen still being open.
       const { error: insertError } = await supabase.from('evidence').insert({
         // Exactly one parent, and `for_day` only ever alongside a commitment — the shape
         // `evidence_exactly_one_parent` and `evidence_for_day_belongs_to_a_commitment` enforce.

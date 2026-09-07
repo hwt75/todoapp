@@ -45,6 +45,17 @@ let graceInsertResult: unknown = { error: null };
 // Story 6.3: what `supabase.storage.from(...).upload(...)` comes back with. Default clean.
 let uploadResult: unknown = { error: null };
 const uploaded: Array<{ bucket: string; path: string }> = [];
+// Epic 6 retrospective item 39: held open, an upload stays in flight for as long as a test wants
+// it to. That is the only way to reach the window the defect lived in — the author leaving Today
+// after the object has landed in Storage but before its row exists.
+let uploadGate: Promise<void> | null = null;
+let releaseUpload: (() => void) | null = null;
+
+function holdTheUploadOpen() {
+  uploadGate = new Promise((resolve) => {
+    releaseUpload = resolve;
+  });
+}
 // Story 6.9: what `createSignedUrls` comes back with, per storage path. Anything absent signs
 // cleanly, so a test that has nothing to say about signing says nothing about it.
 let signedByPath: Record<string, unknown> = {};
@@ -54,9 +65,10 @@ vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     storage: {
       from: (bucket: string) => ({
-        upload: (path: string) => {
+        upload: async (path: string) => {
           uploaded.push({ bucket, path });
-          return Promise.resolve(uploadResult);
+          if (uploadGate) await uploadGate;
+          return uploadResult;
         },
         createSignedUrls: (paths: string[], ttl: number) => {
           signCalls.push({ paths, ttl });
@@ -128,6 +140,8 @@ beforeEach(() => {
   graceInsertResult = { error: null };
   uploadResult = { error: null };
   uploaded.length = 0;
+  uploadGate = null;
+  releaseUpload = null;
   signedByPath = {};
   signCalls.length = 0;
   for (const key of Object.keys(rows)) delete rows[key];
@@ -1057,6 +1071,81 @@ describe('keeping a photo against a commitment', () => {
     expect(evidence?.payload).not.toHaveProperty('declaration_id');
     expect(evidence?.payload).not.toHaveProperty('owner_id');
     expect(await screen.findByText('Proof saved.')).toBeInTheDocument();
+  });
+
+  /**
+   * Epic 6 retrospective item 39.
+   *
+   * The upload and the `evidence` insert are two halves of one write, and the screen used to
+   * abandon the second half whenever the author left before it ran. The photo he took then
+   * existed in Storage and proved nothing: no row, so nothing in the product could reach it, and
+   * nothing could clean it up either.
+   *
+   * Unmounting is not an edge case here. The upload is a network round trip with a photo in it,
+   * and the author is standing in a gym — swiping to another tab, or the browser reclaiming a
+   * backgrounded page, is the ordinary thing to do while waiting.
+   */
+  it('finishes the row even when the author leaves Today mid-upload', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+    holdTheUploadOpen();
+
+    const { unmount } = render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await userEvent.upload(
+      await screen.findByLabelText('Proof — Sketchbook'),
+      photoTakenOn(todayLocal()),
+    );
+
+    // In Storage, and still in flight.
+    expect(uploaded).toHaveLength(1);
+    expect(inserted.find((i) => i.table === 'evidence')).toBeUndefined();
+
+    unmount();
+
+    await act(async () => {
+      releaseUpload?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(inserted.find((i) => i.table === 'evidence')).toBeDefined();
+    });
+    expect(inserted.find((i) => i.table === 'evidence')?.payload).toMatchObject({
+      commitment_id: 'c3',
+      for_day: todayLocal(),
+    });
+  });
+
+  // The other half of the same rule: what must *not* survive the unmount is the state update.
+  // React complains about a setState on an unmounted tree, and that complaint is the symptom of
+  // a screen that has been left behind still trying to redraw itself.
+  it('writes the row without touching the state of a screen that is gone', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+    holdTheUploadOpen();
+    const complained = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { unmount } = render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await userEvent.upload(
+      await screen.findByLabelText('Proof — Sketchbook'),
+      photoTakenOn(todayLocal()),
+    );
+    unmount();
+
+    await act(async () => {
+      releaseUpload?.();
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(inserted.find((i) => i.table === 'evidence')).toBeDefined();
+    });
+
+    expect(complained).not.toHaveBeenCalled();
+    complained.mockRestore();
   });
 
   it('refuses a photo from another day before it reaches Storage', async () => {
