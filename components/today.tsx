@@ -132,30 +132,40 @@ function timedRowsToday(
   claimState: Record<string, ClaimState>,
   now: Date,
 ): TimedRow[] {
-  return rows
-    .filter((row) => row.due_time)
-    .map((row) => {
-      const server = windows[row.id];
-      const claim: ClaimState = claimState[row.id] ?? { kind: 'idle' };
-      const position: TimedWindowPosition = {
-        dueTime: row.due_time as string,
-        // `commitment_time_needs_a_moment` makes the two columns null together
-        // (20260828130000), so a row with a `due_time` always has this one. The fallback is
-        // for a caller that selected one column and not the other, never for real data.
-        lateWindowMinutes: row.late_window_minutes ?? 30,
-        claimed: server?.declarationId != null || claim.kind === 'claimed',
-        proven: server?.proven ?? false,
-      };
+  return (
+    rows
+      // Carrying a time now is not the same as having been governed by one *today*, and this block
+      // is about today. `timed_claim_today` answers the second question through `due_time_as_of()`,
+      // so a commitment whose time was switched on part-way through today is absent from it — and
+      // must be absent here too, because `declaration_derive_day()` refuses every claim on such a
+      // day. Offering the control anyway spends the author's attention on a button that can only
+      // fail, and hides the fact that the day belongs to tomorrow's morning question instead.
+      .filter((row) => row.due_time && windows[row.id] !== undefined)
+      .map((row) => {
+        const server = windows[row.id];
+        const claim: ClaimState = claimState[row.id] ?? { kind: 'idle' };
+        const position: TimedWindowPosition = {
+          dueTime: row.due_time as string,
+          // `commitment_time_needs_a_moment` makes the two columns null together
+          // (20260828130000), so a row with a `due_time` always has this one. The fallback is
+          // for a caller that selected one column and not the other, never for real data.
+          lateWindowMinutes: row.late_window_minutes ?? 30,
+          claimed: server?.declarationId != null || claim.kind === 'claimed',
+          proven: server?.proven ?? false,
+        };
 
-      return {
-        row,
-        position,
-        state: timedWindowState(position, now),
-        claim,
-        declarationId:
-          (claim.kind === 'claimed' ? claim.declarationId : null) ?? server?.declarationId ?? null,
-      };
-    });
+        return {
+          row,
+          position,
+          state: timedWindowState(position, now),
+          claim,
+          declarationId:
+            (claim.kind === 'claimed' ? claim.declarationId : null) ??
+            server?.declarationId ??
+            null,
+        };
+      })
+  );
 }
 
 /**

@@ -91,7 +91,27 @@ vi.mock('@/lib/supabase/client', () => ({
       let key = table;
       const call: (typeof fromCalls)[number] = { table, columns: [], filters: [] };
       fromCalls.push(call);
-      const result = () => rows[key] ?? { data: [], error: null };
+      const result = () => {
+        if (rows[key] !== undefined) return rows[key];
+        // `timed_claim_today` carries one row per commitment a due_time governed *today* —
+        // claimed or not, `declaration_id` simply null until it is. An empty default modelled a
+        // server that returns nothing until something is claimed, which is not this server, and
+        // it hid the fact that the view is what says a commitment is claimable at all
+        // (2026-09-07: the view moved onto `due_time_as_of()`, and Today follows it rather than
+        // the live column). Derived from the commitments a test declares, so a test that says
+        // nothing about the view still gets a truthful one; set `rows.timed_claim_today`
+        // explicitly to say something else.
+        if (key === 'timed_claim_today') {
+          const declared = (rows.commitment as { data?: unknown[] } | undefined)?.data ?? [];
+          return {
+            data: (declared as { id: string; due_time?: string | null }[])
+              .filter((c) => c.due_time)
+              .map((c) => ({ commitment_id: c.id, declaration_id: null, proven: false })),
+            error: null,
+          };
+        }
+        return { data: [], error: null };
+      };
       const query = {
         select: (columns?: string) => {
           if (typeof columns === 'string') call.select = columns;
@@ -956,8 +976,13 @@ describe('where the window stands', () => {
     expect(await screen.findByText('Proven')).toBeInTheDocument();
 
     // Midnight. Yesterday's claim is not today's, and the server says so — but only if the
-    // screen asks again.
-    rows.timed_claim_today = { data: [], error: null };
+    // screen asks again. The commitment is still governed by its time today, so the view still
+    // carries its row; what changes is that the row has nothing claimed against it yet. An empty
+    // array would mean something else entirely — that no time governs today at all.
+    rows.timed_claim_today = {
+      data: [{ commitment_id: 'c2', declaration_id: null, proven: false }],
+      error: null,
+    };
     await act(async () => {
       vi.advanceTimersByTime(120_000);
     });
