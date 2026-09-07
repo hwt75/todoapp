@@ -81,7 +81,7 @@ declare
   v_penalty_d   uuid;
 
   v_referee     uuid := gen_random_uuid();
-  v_third       uuid := gen_random_uuid(); -- the second promotion profile_single_referee refuses
+  v_third       uuid := gen_random_uuid(); -- a second referee: refused for A, allowed for B
 
   v_day_a       date;
   v_day_b       date;
@@ -218,6 +218,10 @@ begin
   -- write promoting it (mirroring the Edge Function's own two writes, not its HTTP shape).
   update public.profile set role = 'referee' where id = v_referee;
 
+  -- A referee reads only the account he is paired to (`profile.referee_of`). Account A is the
+  -- one this file's assertions are about.
+  update public.profile set referee_of = v_doer_a where id = v_referee;
+
   raise notice using message =
     'Fixture ok: account A holds a `held` Penalty behind an appeal with evidence, a '
     'declaration, a focus session and a push subscription; account B holds a plain `owed` '
@@ -229,25 +233,41 @@ begin
   -- -------------------------------------------------------------------------------
   v_refused := false;
   begin
-    update public.profile set role = 'referee' where id = v_third;
+    update public.profile set role = 'referee', referee_of = v_doer_a where id = v_third;
   exception when unique_violation then
     v_refused := true;
   end;
 
   if not v_refused then
     raise exception using message =
-      'A second profile was promoted to role = ''referee'' -- profile_single_referee did '
-      'not refuse it. Non-Goal: no second Referee beyond the single doer-Referee pair.';
+      'A second referee was paired to account A -- profile_one_referee_per_doer did not refuse '
+      'it. "At most one referee, ever" stopped being the rule on 2026-09-07; "at most one per '
+      'doer" replaced it, and it is the one that keeps a doer from having two people who can '
+      'rule on his money.';
   end if;
 
+  -- And the other direction, which is the change: a referee for a *different* account is now
+  -- allowed, where `profile_single_referee` refused it outright.
+  update public.profile set role = 'referee', referee_of = v_doer_b where id = v_third;
+
+  if not exists (
+    select 1 from public.profile where id = v_third and role = 'referee' and referee_of = v_doer_b
+  ) then
+    raise exception using message =
+      'A second account could not become the referee of a different doer. That is the whole '
+      'point of the per-account model -- every doer may invite his own.';
+  end if;
+
+  -- Put it back, so the rest of this file measures one referee against one account.
+  update public.profile set role = 'doer', referee_of = null where id = v_third;
+
   raise notice using message =
-    'Step 1 ok: profile_single_referee refuses a second referee profile outright.';
+    'Step 1 ok: a doer may not have two referees, and two doers may each have their own.';
 
   -- -------------------------------------------------------------------------------
   -- 2. The referee session: appeal, evidence, penalty/penalty_current and
-  --    settlement/settlement_current, across BOTH doer accounts -- none of these policies
-  --    scope by owner_id, on purpose (there is at most one referee, so "every appeal" and
-  --    "the one doer's appeals" are the same set).
+  --    settlement/settlement_current -- scoped to the doer who invited him, since 2026-09-07.
+  --    Account B's rows sit beside them in the same tables and must stay invisible.
   -- -------------------------------------------------------------------------------
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
@@ -274,35 +294,46 @@ begin
       v_count);
   end if;
 
+  -- Account B's owed Penalty is *not* his to see, and that is the change.
+  --
+  -- This file asserted the opposite until 2026-09-07: one referee, every account, "not
+  -- owner-scoped, because there is at most one referee to grant it to". That reasoning held only
+  -- while exactly one referee could exist. Once a doer may invite his own, the same seven policies
+  -- become a hole -- referee B reading account A's appeals, photos, settlements and debts -- so
+  -- every one of them now compares against `profile.referee_of`. FR-19's home surface still shows
+  -- what this referee must collect; it is simply his own doer's, not the world's.
   select count(*), coalesce(sum(amount_dong), 0) into v_count, v_total
     from public.penalty_current where state = 'owed';
-  if v_count <> 1 or v_total <> v_amount then
+  if v_count <> 0 or v_total <> 0 then
     raise exception using message = format(
-      'The referee session read %s owed penalty row(s) totalling %s, expected 1 row '
-      'totalling %s -- the count and total FR-19''s own home surface displays.',
-      v_count, v_total, v_amount);
+      'The referee session read %s owed penalty row(s) totalling %s from an account he is not '
+      'paired to. He is account A''s referee; account B''s debt is somebody else''s to collect.',
+      v_count, v_total);
   end if;
 
+  -- One settlement, not two: account A's. `v_amount` stays referenced by the held-Penalty
+  -- fixture above, which is account A's own.
   select count(*) into v_count from public.settlement_current where kind in ('day', 'week');
-  if v_count <> 2 then
+  if v_count <> 1 then
     raise exception using message = format(
-      'The referee session read %s day/week settlement row(s) across both accounts, '
-      'expected 2.', v_count);
+      'The referee session read %s day/week settlement row(s), expected 1 -- his own doer''s. '
+      'Reading another account''s settlement is reading whose money moved and why.', v_count);
   end if;
 
   raise notice using message =
     'Step 2 ok: the referee session reads every appeal, every piece of evidence, and every '
-    'day/week settlement and penalty across both doer accounts -- not owner-scoped, because '
-    'there is at most one referee to grant it to.';
+    'day/week settlement and penalty of the doer who invited him -- and nothing at all of the '
+    'account beside it.';
 
   -- -------------------------------------------------------------------------------
   -- 3. Commitment: full-row read, including the auto_check_account_ref column this
   --    migration's own comment documents as the cost of Postgres having no column-level RLS.
   -- -------------------------------------------------------------------------------
   select count(*) into v_count from public.commitment where id in (v_commit_a1, v_commit_b);
-  if v_count <> 2 then
+  if v_count <> 1 then
     raise exception using message = format(
-      'The referee session read %s of account A/B''s commitments, expected both (2).', v_count);
+      'The referee session read %s of account A and B''s commitments, expected exactly 1 -- '
+      'account A''s. He is A''s referee, and B''s configuration is not his to read.', v_count);
   end if;
 
   perform 1 from public.commitment
@@ -613,10 +644,12 @@ begin
 
   raise notice using message =
     'PASS. The referee session reads every appeal, every piece of evidence, and every '
-    'day/week settlement and penalty across every doer account, plus full commitment rows; '
+    'day/week settlement and penalty of the doer who invited him -- and none of the account '
+    'beside it -- plus full commitment rows; '
     'it reads zero rows of declaration, chain_current, focus_session or push_subscription, '
     'proven against real data; a doer session is granted none of that width; '
-    'profile_single_referee refuses a second referee outright; and the referee session can '
+    'a doer may not have two referees while two doers may each have their own; and the '
+    'referee session can '
     'insert, update or delete nothing on appeal, evidence, penalty, settlement or '
     'commitment, proven by attempt.';
 end $$;

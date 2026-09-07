@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
 
   const { data: invite, error: lookupError } = await admin
     .from('referee_invite')
-    .select('id,email,accepted_at,revoked_at,expires_at')
+    .select('id,email,accepted_at,revoked_at,expires_at,created_by')
     .eq('token_hash', await sha256Hex(fields.token))
     .maybeSingle();
 
@@ -88,6 +88,7 @@ Deno.serve(async (req) => {
     accepted_at: string | null;
     revoked_at: string | null;
     expires_at: string;
+    created_by: string;
   };
 
   if (row.accepted_at) {
@@ -118,16 +119,22 @@ Deno.serve(async (req) => {
   // `pair-referee`'s own two-write shape, for its own reason: `on_auth_user_created` lands
   // every account as `doer` unconditionally, and only a service-role update promotes it. A
   // role read from user metadata would be a role the account could have written itself.
+  // The pairing is written in the same statement as the role, and it is what every referee
+  // policy reads (2026-09-07): a referee reaches exactly the account that invited him.
+  // `row.created_by` is the doer who minted this invitation, so the link itself carries whose
+  // referee this account becomes. Written here rather than derived later, because a promoted
+  // profile with no pairing sees nothing at all -- the intended direction of failure, but not a
+  // state this path should ever produce.
   const { error: promoteError } = await admin
     .from('profile')
-    .update({ role: 'referee' })
+    .update({ role: 'referee', referee_of: row.created_by })
     .eq('id', created.user.id);
 
   if (promoteError) {
     await admin.auth.admin.deleteUser(created.user.id);
 
     if (promoteError.code === '23505') {
-      return json({ error: 'A referee is already paired. There is no re-pairing yet.' }, 409);
+      return json({ error: 'That account already has a referee.' }, 409);
     }
     return json({ error: promoteError.message }, 500);
   }

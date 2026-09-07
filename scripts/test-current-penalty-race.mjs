@@ -203,6 +203,12 @@ function setup() {
             ${quote(ids.objectionWinsOwner)}::uuid, now() + interval '1 day', now(),
             ${quote(ids.referee)}::uuid);
 
+    -- paired_doer_id() reads profile.referee_of since the per-account referee model; the
+    -- invitation above stays in step with it so both tell the same story. No backticks in here:
+    -- this is a JS template literal, and one would end the string.
+    update public.profile set referee_of = ${quote(ids.objectionWinsOwner)}::uuid
+     where id = ${quote(ids.referee)}::uuid;
+
     insert into public.commitment
       (id, owner_id, idempotency_key, name, kind, cadence, carries_penalty, created_at)
     values
@@ -329,7 +335,9 @@ async function objectionWins() {
 
 async function collectionWins() {
   psql(`update public.referee_invite set created_by = ${quote(ids.collectionWinsOwner)}::uuid
-         where token_hash = ${quote(ids.inviteToken)};`);
+         where token_hash = ${quote(ids.inviteToken)};
+        update public.profile set referee_of = ${quote(ids.collectionWinsOwner)}::uuid
+         where id = ${quote(ids.referee)}::uuid;`);
 
   const winner = openSession(
     `penalty-race-collection-winner-${runTag}`,

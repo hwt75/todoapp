@@ -171,6 +171,8 @@ begin
   values ('story-6-7-referee@example.test', 'story-6-7-token-hash', v_a,
           now() + interval '1 day', now(), v_referee);
 
+  update public.profile set referee_of = v_a where id = v_referee;
+
   -- The timed commitment each account is judged on. 10:00 with a 30-minute window, the same
   -- shape 6-1/6-2/6-4 use, so a claim at 10:14 is inside it.
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
@@ -458,6 +460,11 @@ begin
 
   update public.referee_invite set created_by = v_g;
 
+  -- `paired_doer_id()` reads `profile.referee_of` since the per-account model; the
+
+  -- invitation above stays in step with it so both tell the same story.
+
+  update public.profile set referee_of = v_g where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_g, 'role', 'authenticated', 'app_role', 'doer')::text, true);
@@ -521,7 +528,9 @@ begin
   --    20260824160000 accepted that unscoped reach explicitly *because it was read-only*.
   -- -------------------------------------------------------------------------------
   update public.referee_invite set created_by = v_b;
-
+  -- `paired_doer_id()` reads `profile.referee_of` since the per-account model; the
+  -- invitation above stays in step with it so both tell the same story.
+  update public.profile set referee_of = v_b where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
@@ -751,7 +760,9 @@ begin
   --    landing.
   -- -------------------------------------------------------------------------------
   update public.referee_invite set created_by = v_c;
-
+  -- `paired_doer_id()` reads `profile.referee_of` since the per-account model; the
+  -- invitation above stays in step with it so both tell the same story.
+  update public.profile set referee_of = v_c where id = v_referee;
   select verdict into v_verdict from public.settlement where id = v_s_c;
   select id, state into v_penalty, v_state from public.penalty where settlement_id = v_s_c;
   if v_verdict <> 'failed' or v_penalty is null or v_state <> 'owed' then
@@ -1057,6 +1068,9 @@ begin
   --    settled_at, so ageing that column by 49 hours is the whole scenario.
   -- -------------------------------------------------------------------------------
   update public.referee_invite set created_by = v_d;
+  -- `paired_doer_id()` reads `profile.referee_of` since the per-account model; the
+  -- invitation above stays in step with it so both tell the same story.
+  update public.profile set referee_of = v_d where id = v_referee;
   update public.settlement set settled_at = now() - interval '49 hours' where id = v_s_d;
 
   perform set_config('role', 'authenticated', true);
@@ -1102,7 +1116,9 @@ begin
   --    stale settlement id he originally read, and the correction his own first call produced.
   -- -------------------------------------------------------------------------------
   update public.referee_invite set created_by = v_e;
-
+  -- `paired_doer_id()` reads `profile.referee_of` since the per-account model; the
+  -- invitation above stays in step with it so both tell the same story.
+  update public.profile set referee_of = v_e where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
@@ -1191,7 +1207,9 @@ begin
   --    for one day: superseding would drop a paid debt out of penalty_current.
   -- -------------------------------------------------------------------------------
   update public.referee_invite set created_by = v_f;
-
+  -- `paired_doer_id()` reads `profile.referee_of` since the per-account model; the
+  -- invitation above stays in step with it so both tell the same story.
+  update public.profile set referee_of = v_f where id = v_referee;
   select id into v_penalty from public.penalty where settlement_id = v_s_f;
 
   perform set_config('role', 'authenticated', true);
@@ -1243,7 +1261,9 @@ begin
   --     is the assertion the landing guard in step 11 exists to make true everywhere.
   -- -------------------------------------------------------------------------------
   update public.referee_invite set created_by = v_h;
-
+  -- `paired_doer_id()` reads `profile.referee_of` since the per-account model; the
+  -- invitation above stays in step with it so both tell the same story.
+  update public.profile set referee_of = v_h where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
@@ -1307,7 +1327,9 @@ begin
   --     what keeps supersede_expiries() away from an objection forever: it loops over
   --     `settlement_current` rows reading `expired`, and no correction written here can be one.
   update public.referee_invite set created_by = v_i;
-
+  -- `paired_doer_id()` reads `profile.referee_of` since the per-account model; the
+  -- invitation above stays in step with it so both tell the same story.
+  update public.profile set referee_of = v_i where id = v_referee;
   select verdict into v_verdict from public.settlement where id = v_s_i;
   if v_verdict <> 'expired' then
     raise exception using message = format(
@@ -1339,7 +1361,9 @@ begin
   -- (b) A commitment that carried no penalty that day: the corrected day would read `clean` and
   --     cost nothing, so there would be no Grace Day to spend on it.
   update public.referee_invite set created_by = v_j;
-
+  -- `paired_doer_id()` reads `profile.referee_of` since the per-account model; the
+  -- invitation above stays in step with it so both tell the same story.
+  update public.profile set referee_of = v_j where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
@@ -1366,7 +1390,9 @@ begin
   --     reached a different way, and the reason settle_day()/rule_appeal() both exclude the
   --     cadence from their own admitted counts.
   update public.referee_invite set created_by = v_k;
-
+  -- `paired_doer_id()` reads `profile.referee_of` since the per-account model; the
+  -- invitation above stays in step with it so both tell the same story.
+  update public.profile set referee_of = v_k where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
@@ -1393,7 +1419,9 @@ begin
   --     Day able to reach it. This is also what closes the reopened-window hole: a Grace Day
   --     correction restamps settled_at and reopens 48 hours, onto a day this refuses.
   update public.referee_invite set created_by = v_l;
-
+  -- `paired_doer_id()` reads `profile.referee_of` since the per-account model; the
+  -- invitation above stays in step with it so both tell the same story.
+  update public.profile set referee_of = v_l where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_l, 'role', 'authenticated', 'app_role', 'doer')::text, true);
@@ -1437,7 +1465,9 @@ begin
   --     superseding it would strand the appeal on a penalty penalty_current can no longer see,
   --     held forever, never dropping in the author's favour.
   update public.referee_invite set created_by = v_m;
-
+  -- `paired_doer_id()` reads `profile.referee_of` since the per-account model; the
+  -- invitation above stays in step with it so both tell the same story.
+  update public.profile set referee_of = v_m where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_m, 'role', 'authenticated', 'app_role', 'doer')::text, true);
@@ -1517,6 +1547,9 @@ begin
   --     recompute-based implementation, which is the point.
   -- -------------------------------------------------------------------------------
   update public.referee_invite set created_by = v_p;
+  -- `paired_doer_id()` reads `profile.referee_of` since the per-account model; the
+  -- invitation above stays in step with it so both tell the same story.
+  update public.profile set referee_of = v_p where id = v_referee;
   update public.commitment set archived_at = public.day_begins_at(v_d1) where id = v_p_pill;
 
   select count(*) into v_count

@@ -30,6 +30,10 @@ declare
   -- not merely "any authenticated session sees the invitations table".
   v_other       uuid := gen_random_uuid();
 
+  -- A third account, for the one thing two cannot show: that a *second* referee pairing to the
+  -- same doer is refused. Created in step 6 rather than the fixture, since nothing before it cares.
+  v_extra       uuid := gen_random_uuid();
+
   v_first       uuid;
   v_second      uuid;
   v_count       integer;
@@ -205,25 +209,37 @@ begin
     'Step 5 ok: insert, update and delete are all refused to an authenticated session.';
 
   -- -------------------------------------------------------------------------------
-  -- 6. The acceptance still cannot produce a second referee. `accept-referee-invite`
+  -- 6. The acceptance still cannot give one doer a second referee. `accept-referee-invite`
   --    promotes with a plain update and treats 23505 as a refusal; this is the constraint
   --    that makes that refusal real, restated here in the invitation's own context because
   --    an invite flow is a second door into the slot `4-5` proved single for the first.
+  --
+  --    The slot is per doer since 2026-09-07, not per system: `profile_one_referee_per_doer`
+  --    replaced `profile_single_referee`, so what must be refused is a second referee for the
+  --    *same* account rather than a second referee anywhere.
   -- -------------------------------------------------------------------------------
-  update public.profile set role = 'referee' where id = v_other;
+  update public.profile set role = 'referee', referee_of = v_doer where id = v_other;
+
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
+                          email_confirmed_at, created_at, updated_at,
+                          raw_app_meta_data, raw_user_meta_data)
+  values (v_extra, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+          'story-4-5a-extra-' || gen_random_uuid()::text || '@example.test',
+          'not-a-real-password-this-account-never-signs-in', now(), now(), now(),
+          '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb);
 
   begin
-    update public.profile set role = 'referee' where id = v_doer;
+    update public.profile set role = 'referee', referee_of = v_doer where id = v_extra;
 
     raise exception using message =
-      'A second profile reached role = referee through the invitation path. The invite flow '
-      'has opened a hole profile_single_referee closed for pairing.';
+      'A second referee was paired to the same account through the invitation path. The invite '
+      'flow has opened a hole profile_one_referee_per_doer closed for pairing.';
   exception when unique_violation then
     null;
   end;
 
   raise notice using message =
-    'Step 6 ok: profile_single_referee still refuses a second referee, invitation or not.';
+    'Step 6 ok: the invitation path cannot give one doer a second referee either.';
 
   raise notice using message =
     'All steps passed: one outstanding invitation at a time, a slot vacated only by revoking '

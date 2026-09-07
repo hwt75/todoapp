@@ -369,6 +369,10 @@ begin
   -- -------------------------------------------------------------------------------
   -- 2. Referee, bogus id -- "No such appeal", distinct from the role refusal above.
   -- -------------------------------------------------------------------------------
+  -- A referee reads only the account he is paired to (`profile.referee_of`). This file predates
+  -- that rule and drives one referee across seven accounts, so it pairs him to the account each
+  -- step is about. The subject here is ruling, not pairing.
+  update public.profile set referee_of = v_user1 where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
@@ -401,6 +405,10 @@ begin
   --     rules on normally -- proving the guard changed nothing about the real ruling that
   --     follows it.
   -- -------------------------------------------------------------------------------
+  -- A referee reads only the account he is paired to (`profile.referee_of`). This file predates
+  -- that rule and drives one referee across seven accounts, so it pairs him to the account each
+  -- step is about. The subject here is ruling, not pairing.
+  update public.profile set referee_of = v_user1 where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
@@ -438,6 +446,10 @@ begin
   --    missed, on the day it was corrected; one outbox notification, self-dated, naming the
   --    amount cleared.
   -- -------------------------------------------------------------------------------
+  -- A referee reads only the account he is paired to (`profile.referee_of`). This file predates
+  -- that rule and drives one referee across seven accounts, so it pairs him to the account each
+  -- step is about. The subject here is ruling, not pairing.
+  update public.profile set referee_of = v_user1 where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
@@ -507,6 +519,10 @@ begin
   --    corrective settlement still reads failed, with a new, smaller-context penalty --
   --    distinct from the one that voided -- covering c2b's own honest, non-appealed slip.
   -- -------------------------------------------------------------------------------
+  -- A referee reads only the account he is paired to (`profile.referee_of`). This file predates
+  -- that rule and drives one referee across seven accounts, so it pairs him to the account each
+  -- step is about. The subject here is ruling, not pairing.
+  update public.profile set referee_of = v_user2 where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
@@ -578,6 +594,10 @@ begin
   -- -------------------------------------------------------------------------------
   -- 5. Reject (account 3). "He didn't" -- owed, no settlement written, no chain change.
   -- -------------------------------------------------------------------------------
+  -- A referee reads only the account he is paired to (`profile.referee_of`). This file predates
+  -- that rule and drives one referee across seven accounts, so it pairs him to the account each
+  -- step is about. The subject here is ruling, not pairing.
+  update public.profile set referee_of = v_user3 where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
@@ -627,6 +647,10 @@ begin
       'expected `dropped`.', v_state);
   end if;
 
+  -- A referee reads only the account he is paired to (`profile.referee_of`). This file predates
+  -- that rule and drives one referee across seven accounts, so it pairs him to the account each
+  -- step is about. The subject here is ruling, not pairing.
+  update public.profile set referee_of = v_user4 where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
@@ -671,6 +695,10 @@ begin
   --    AD-15 from the other direction -- the first call's own side effects must stand
   --    exactly as it left them.
   -- -------------------------------------------------------------------------------
+  -- A referee reads only the account he is paired to (`profile.referee_of`). This file predates
+  -- that rule and drives one referee across seven accounts, so it pairs him to the account each
+  -- step is about. The subject here is ruling, not pairing.
+  update public.profile set referee_of = v_user5 where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
@@ -731,6 +759,10 @@ begin
   insert into storage.objects (bucket_id, name, owner)
   values ('appeal-evidence', v_appeal1::text || '/proof.jpg', v_user1);
 
+  -- A referee reads only the account he is paired to (`profile.referee_of`). This file predates
+  -- that rule and drives one referee across seven accounts, so it pairs him to the account each
+  -- step is about. The subject here is ruling, not pairing.
+  update public.profile set referee_of = v_user1 where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,
@@ -769,6 +801,10 @@ begin
   --    penalty. commitments_owing() never excludes weekly_quota from its result set (only
   --    daily_hours_quota is), so this is a real, reachable path, not a hypothetical one.
   -- -------------------------------------------------------------------------------
+  -- A referee reads only the account he is paired to (`profile.referee_of`). This file predates
+  -- that rule and drives one referee across seven accounts, so it pairs him to the account each
+  -- step is about. The subject here is ruling, not pairing.
+  update public.profile set referee_of = v_user7 where id = v_referee;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,

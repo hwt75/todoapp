@@ -78,26 +78,27 @@ Deno.serve(async (req) => {
 
   const { data: callerProfile, error: callerError } = await caller
     .from('profile')
-    .select('role,is_live_doer')
+    .select('id,role,is_live_doer')
     .maybeSingle();
 
   if (callerError) {
     return json({ error: callerError.message }, 500);
   }
 
-  const profile = callerProfile as { role?: string; is_live_doer?: boolean } | null;
+  const profile = callerProfile as { id?: string; role?: string; is_live_doer?: boolean } | null;
 
-  // Not merely `role = 'doer'`: `sign-in.tsx`'s own signup is open to anyone, so any visitor
-  // can self-register a `doer` profile with no cap. `is_live_doer` is never client-writable
-  // (only `morning_hour` is granted to `authenticated` — 20260819201000) and defaults false,
-  // exactly the AD-16 flag every settlement function already uses to tell the real account
-  // from an incidental one. Without this check, a self-registered stranger could call this
-  // function first and permanently claim the one referee slot `profile_single_referee`
-  // allows (this story builds no unpair/re-pair path) — locking the real doer out and
-  // handing that stranger's referee account read access to the real doer's own appeals,
-  // evidence, penalties, settlements and commitments.
-  if (profile?.role !== 'doer' || !profile.is_live_doer) {
-    return json({ error: 'Only the live doer account may pair a referee.' }, 403);
+  // `is_live_doer` gated this until 2026-09-07, and the reason it had to was written here: a
+  // self-registered stranger calling first would have claimed the one referee slot
+  // `profile_single_referee` allowed, locking the real doer out *and* handing that stranger's
+  // referee read access to the real doer's appeals, evidence, penalties, settlements and
+  // commitments — because those policies had no owner comparison in them.
+  //
+  // Both halves of that are gone. There is no single slot to claim (the slot is per account),
+  // and a referee now reaches only the account that paired him, enforced by every one of those
+  // policies rather than by scarcity. So the check is what it always read as: a doer, pairing
+  // his own referee.
+  if (profile?.role !== 'doer' || !profile.id) {
+    return json({ error: 'Only a doer account may pair a referee.' }, 403);
   }
 
   // The referee exists to rule on the doer's own appeals (Story 4.6) and collect his own
@@ -117,10 +118,12 @@ Deno.serve(async (req) => {
     );
   }
 
+  // Per account since 2026-09-07, not per system: the referee a doer pairs reaches only that
+  // doer's rows, so another account having one is none of this call's business.
   const { data: existingReferee, error: existingError } = await admin
     .from('profile')
     .select('id')
-    .eq('role', 'referee')
+    .eq('referee_of', profile.id)
     .maybeSingle();
 
   if (existingError) {
@@ -146,12 +149,12 @@ Deno.serve(async (req) => {
     return json({ error: createError?.message ?? 'The account could not be created.' }, 500);
   }
 
-  // Loses cleanly if `profile_single_referee` refuses this update because a concurrent
+  // Loses cleanly if `profile_one_referee_per_doer` refuses this update because a concurrent
   // pairing attempt won the race between the read above and here — the auth user this
   // attempt just created is deleted rather than left as a dangling, unreachable doer row.
   const { error: promoteError } = await admin
     .from('profile')
-    .update({ role: 'referee' })
+    .update({ role: 'referee', referee_of: profile.id })
     .eq('id', created.user.id);
 
   if (promoteError) {

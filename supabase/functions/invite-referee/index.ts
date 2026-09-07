@@ -87,8 +87,13 @@ Deno.serve(async (req) => {
     | { id?: string; role?: string; is_live_doer?: boolean }
     | null;
 
-  if (profile?.role !== 'doer' || !profile.is_live_doer || !profile.id) {
-    return json({ error: 'Only the live doer account may invite a referee.' }, 403);
+  // `is_live_doer` no longer gates this (2026-09-07). It used to, because
+  // `profile_single_referee` made the referee global and the unscoped read policies were safe
+  // only while the one referee that could exist had been authorised by the one real account.
+  // Every one of those policies now compares against `profile.referee_of`, so a referee reaches
+  // exactly the account that invited him and any doer may invite his own.
+  if (profile?.role !== 'doer' || !profile.id) {
+    return json({ error: 'Only a doer account may invite a referee.' }, 403);
   }
 
   const { data: callerUser, error: callerUserError } = await caller.auth.getUser();
@@ -101,13 +106,13 @@ Deno.serve(async (req) => {
     return json({ error: 'The referee must be a different account than your own.' }, 400);
   }
 
-  // The cheap common-case check, exactly as `pair-referee` frames its own: worth a round
-  // trip to refuse an ordinary second attempt before minting anything, while
-  // `profile_single_referee` remains the actual guarantee at acceptance time.
+  // Per account, not per system. The cheap common-case check, exactly as `pair-referee` frames
+  // its own: worth a round trip to refuse an ordinary second attempt before minting anything,
+  // while `profile_one_referee_per_doer` remains the actual guarantee at acceptance time.
   const { data: existingReferee, error: existingError } = await admin
     .from('profile')
     .select('id')
-    .eq('role', 'referee')
+    .eq('referee_of', profile.id)
     .maybeSingle();
 
   if (existingError) {
@@ -115,7 +120,7 @@ Deno.serve(async (req) => {
   }
 
   if (existingReferee) {
-    return json({ error: 'A referee is already paired. There is no re-pairing yet.' }, 409);
+    return json({ error: 'You already have a referee. There is no unpair or re-pair yet.' }, 409);
   }
 
   const token = generateToken();

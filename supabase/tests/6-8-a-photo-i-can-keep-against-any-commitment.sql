@@ -440,6 +440,10 @@ begin
   -- The claim shape is `4-6-the-referee-rules.sql:725-727`'s own: `role_from_token()` reads
   -- `app_role` from the JWT, so a referee session is a real one here.
   -- -------------------------------------------------------------------------------
+  -- This file never promotes the profile -- `role_from_token()` reads the JWT claim. The
+  -- pairing is a row, though, and account A is the one being read.
+  update public.profile set referee_of = v_a where id = v_referee;
+
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_referee, 'role', 'authenticated', 'app_role', 'referee')::text,

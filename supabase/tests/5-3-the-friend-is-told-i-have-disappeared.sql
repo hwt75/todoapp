@@ -108,6 +108,9 @@ begin
 
   update public.profile set role = 'referee' where id = v_referee;
 
+  -- A referee reads only the account he is paired to (`profile.referee_of`).
+  update public.profile set referee_of = v_user where id = v_referee;
+
   -- v_after needs one real commitment so a real Declaration can be inserted against it in
   -- Step 4 -- declaration_satisfies_silence() fires on any Declaration, but a Declaration
   -- still needs a commitment_id that exists.
