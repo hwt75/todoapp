@@ -131,6 +131,7 @@ export interface OwedCommitment {
 export function commitmentsOwing(
   commitments: readonly (OwedCommitment & {
     archived_at?: string | null;
+    created_at?: string | null;
     due_time?: string | null;
   })[],
   alreadyAnsweredCommitmentIds: readonly string[],
@@ -145,6 +146,7 @@ export function commitmentsOwing(
   return commitments
     .filter((c) => isAskedNextMorning(c))
     .filter((c) => !answered.has(c.id))
+    .filter((c) => !createdAfter(c.created_at ?? null, day))
     .filter((c) => !archivedBefore(c.archived_at ?? null, day))
     .map(({ id, name, cadence }) => ({ id, name, cadence }));
 }
@@ -153,6 +155,24 @@ export function commitmentsOwing(
 function archivedBefore(archivedAt: string | null, day: string): boolean {
   if (!archivedAt) return false;
   return calendarMoment(new Date(archivedAt)).day <= day;
+}
+
+/**
+ * True when the commitment did not exist yet on the day being asked about.
+ *
+ * The mirror of the rule `commitments_owing()` has carried since 20260824090000 and states as
+ * `(c.created_at at time zone 'Asia/Ho_Chi_Minh')::date <= p_day`. This file did not copy it, so
+ * the gate asked about days the judge does not believe in: on a fresh account the first commitment
+ * ever created blocked the whole app behind "did it hold yesterday?" — about a day before it
+ * existed — and answering filed a declaration `commitments_owing()` returns nothing for.
+ *
+ * An absent `created_at` does not filter, matching `archivedBefore` above: a caller that did not
+ * select the column behaves exactly as it did before. That permissiveness is also how this gap
+ * survived, so `components/use-gate.test.tsx` pins that the one caller that matters selects it.
+ */
+function createdAfter(createdAt: string | null, day: string): boolean {
+  if (!createdAt) return false;
+  return calendarMoment(new Date(createdAt)).day > day;
 }
 
 /**

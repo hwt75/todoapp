@@ -41,7 +41,7 @@ export function useGate(ownerId: string | null): GateState {
           // that carries one is claimed on its own day and must not be asked about here
           // (`isAskedNextMorning()`, Story 6.2). The *live* value only says what is true now,
           // which is the wrong question — see the merge below.
-          supabase.from('commitment').select('id,name,cadence,archived_at,due_time'),
+          supabase.from('commitment').select('id,name,cadence,archived_at,created_at,due_time'),
           supabase.from('declaration').select('commitment_id').eq('for_day', day),
           // What actually governed the day being asked about, from the same door
           // `enqueue_gate_reminders()` and `settle_day()` read (2026-09-07).

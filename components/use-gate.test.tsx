@@ -90,6 +90,50 @@ describe('which value decides whether a commitment is asked about', () => {
     expect(screen.queryByText('Pill')).not.toBeInTheDocument();
   });
 
+  // Found on the live project by creating a commitment and watching the app block itself behind a
+  // question about the day before it existed. `commitments_owing()` has refused to judge that day
+  // since 20260824090000; this mirror never copied the clause, and it is the mirror that decides
+  // what the author sees.
+  it('does not ask about a day the commitment did not exist for', async () => {
+    const madeToday = {
+      ...gym,
+      id: 'c3',
+      name: 'Made just now',
+      created_at: new Date().toISOString(),
+    };
+    const older = { ...gym, created_at: '2020-01-01T00:00:00.000Z' };
+    // Both, deliberately. A bare `not.toBeInTheDocument()` on an empty screen passes before the
+    // load has even resolved, so it would pass just as happily against the code this test exists
+    // to refuse. Waiting for the commitment that *should* be asked about is what proves the list
+    // was actually rendered when the absence was checked.
+    rows.commitment = { data: [older, madeToday], error: null };
+    rows.morning_question_day = {
+      data: [
+        { commitment_id: 'c1', governing_due_time: null },
+        { commitment_id: 'c3', governing_due_time: null },
+      ],
+      error: null,
+    };
+
+    render(createElement(Probe));
+
+    expect(await screen.findByText('Gym')).toBeInTheDocument();
+    expect(screen.queryByText('Made just now')).not.toBeInTheDocument();
+  });
+
+  it('still asks about one that existed on the day, created or not today', async () => {
+    const older = { ...gym, created_at: '2020-01-01T00:00:00.000Z' };
+    rows.commitment = { data: [older], error: null };
+    rows.morning_question_day = {
+      data: [{ commitment_id: 'c1', governing_due_time: null }],
+      error: null,
+    };
+
+    render(createElement(Probe));
+
+    expect(await screen.findByText('Gym')).toBeInTheDocument();
+  });
+
   it('still asks about an ordinary untimed commitment', async () => {
     rows.commitment = { data: [gym], error: null };
     rows.morning_question_day = {

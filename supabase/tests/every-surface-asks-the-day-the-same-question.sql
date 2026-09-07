@@ -34,6 +34,7 @@ declare
   v_c_switched    uuid;
   v_c_today       uuid;
   v_c_governed    uuid;
+  v_c_newborn     uuid;
 
   v_today         date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
   v_yesterday     date;
@@ -235,6 +236,51 @@ begin
   raise notice using message =
     'Step 4 ok: a commitment governed all day is still claimed on its own day and never asked '
     'about in the morning.';
+
+  -- -------------------------------------------------------------------------------
+  -- 5. Nothing is asked about a day it did not exist for.
+  --
+  -- `commitments_owing()` has carried this rule since 20260824090000 -- a commitment is not
+  -- judged for a day that predates it -- and states it as
+  -- `(c.created_at at time zone 'Asia/Ho_Chi_Minh')::date <= p_day` (20260829090000:348). The two
+  -- *asking* surfaces never copied it, so both the push and the client gate asked a brand-new
+  -- commitment about yesterday. On a real account the first commitment ever created blocks the
+  -- whole app behind a question about a day before it existed, and the server would never have
+  -- asked it: `commitments_owing()` returns nothing for that day.
+  -- -------------------------------------------------------------------------------
+  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence, carries_penalty)
+  values (v_governed, gen_random_uuid(), 'Made just now', 'do', 'daily', false)
+  returning id into v_c_newborn;
+
+  -- Deliberately *not* back-dated: this one really was created today, which is the whole case.
+  delete from public.outbox
+   where owner_id = v_governed and dedupe_key like 'gate-' || v_governed::text || '-%';
+
+  perform public.enqueue_gate_reminders();
+
+  select payload ->> 'body' into v_body
+    from public.outbox
+   where owner_id = v_governed
+     and dedupe_key like 'gate-' || v_governed::text || '-' || v_yesterday::text || '%';
+
+  if v_body is not null then
+    raise exception using message = format(
+      'The morning question was raised for an account whose only unanswered commitment was '
+      'created today: "%s". commitments_owing() returns nothing for that commitment on that day, '
+      'so this asks about a day the judge does not believe in -- and on the client the same gap '
+      'blocks the whole app behind an unanswerable question the first time anyone adds a '
+      'commitment.', v_body);
+  end if;
+
+  if (select count(*) from public.commitments_owing(v_governed, v_yesterday) o
+       where o.commitment_id = v_c_newborn) <> 0 then
+    raise exception using message =
+      'commitments_owing() itself now returns a commitment created after the day asked about. '
+      'That rule predates this file; if it changed, this test is measuring the wrong thing.';
+  end if;
+
+  raise notice using message =
+    'Step 5 ok: a commitment created today is not asked about for yesterday, by either surface.';
 
   raise notice using message =
     'PASS. Every surface that decides whether to ask about a day now reads the same door the '

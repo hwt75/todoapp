@@ -132,6 +132,12 @@ begin
   -- outstanding and its chain is running -- Story 2.9's own feature, restored by
   -- 20260826130000 after Stories 5.2/5.3 silently dropped it across two rewrites.
   -- ===================================================================================
+  -- The second call the back-date above says this file expects: accounts 2 and 3 got their
+  -- commitments *after* that loop ran, so without this the pass refuses to ask about a day they
+  -- did not exist for and the fixture reads as broken.
+  update public.commitment set created_at = created_at - interval '90 days'
+   where created_at > now() - interval '30 days';
+
   perform public.enqueue_gate_reminders();
 
   select payload->>'body' into v_body

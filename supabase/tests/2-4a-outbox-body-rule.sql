@@ -126,6 +126,12 @@ begin
   values (v_user, gen_random_uuid(), 'TryHackMe', 'do', 'daily', true)
   returning id into v_commitment;
 
+  -- The commitment has to have existed on the day being asked about, which a fixture creating it
+  -- moments before the pass does not. Same idiom and same reason as `epic-5-retro-2026-08-26-fixes`
+  -- carries: order-preserving and idempotent, so it can be repeated safely.
+  update public.commitment set created_at = created_at - interval '90 days'
+   where owner_id = v_user and created_at > now() - interval '30 days';
+
   v_queued := public.enqueue_gate_reminders();
 
   select count(*) into v_count from public.outbox where owner_id = v_user;
