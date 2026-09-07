@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 09-07-2026 10:58
+last_updated: 09-07-2026 11:22
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -391,7 +391,7 @@ action_items:
     action: "Serialize due-reminder enqueue and declaration cancellation on the commitment-day
       key and add a race regression."
     owner: "hwt75"
-    status: in-progress
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-06.md"
   - id: "epic-6-retro-item-41-run-and-record-story-6-6-real-device-che"
     epic: 6

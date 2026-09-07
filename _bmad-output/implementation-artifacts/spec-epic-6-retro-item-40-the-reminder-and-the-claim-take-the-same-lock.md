@@ -2,7 +2,7 @@
 title: 'The reminder and the claim take the same lock'
 type: 'bugfix'
 created: '2026-09-07'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '16ab30adb661d2882c73f0645fb2409a4ed89a2f'
 review_loop_iteration: 0
 context:
@@ -134,3 +134,17 @@ the claim, which is what costs money.
 - `npm run lint`, `npm run format:check`, `npm run build` — passed.
 - `npm run migrations:check` — expected non-zero result: `20260907110000` is local-only until a
   separately authorized push.
+
+**Remote parity (2026-09-07):**
+
+- `npx supabase db push` — `20260907110000` applied to `hxzalpnlrunctbajgtkv`. The migration is
+  `create or replace function` plus its comments and one revoke; no DDL touches a table and no
+  statement writes a row.
+- Local and remote both carry all 66 migrations.
+- Checked on the live project rather than assumed: both `enqueue_due_time_reminder` and
+  `declaration_cancels_due_time_reminder` now contain `pg_advisory_xact_lock`, and the
+  `due-time-reminders` cron job is still present and active — the pass that meets this lock every
+  hour is the one that was already running.
+- Security advisor — no new finding. Neither function appears on the `security definer` warning
+  list, because both remain revoked from `anon` and `authenticated`; the list is unchanged from
+  before this push.
