@@ -67,6 +67,8 @@ declare
   v_i_quota    uuid;
   v_j_new      uuid;
   v_k_timed    uuid;
+  -- Epic 6 retrospective follow-up: created timed, switched back to untimed later.
+  v_k_switched uuid;
 
   v_claim      uuid;   -- v_a's claim for today
   v_c_claim    uuid;   -- v_c's claim for yesterday, the one that was proved
@@ -920,7 +922,102 @@ begin
   raise notice using message =
     'Step 16 ok: a Grace Day still undoes a day a missing photo failed.';
 
-  raise notice using message = 'All 16 steps passed.';
+  -- -------------------------------------------------------------------------------
+  -- 17. Switching the time off leaves the days after it untimed.
+  --
+  -- The other direction of Step 12, and the one the implementation got wrong. `due_time_as_of()`
+  -- documents its creation-value fallback as being "for any day at or before its own creation",
+  -- but it was written as a `coalesce` of two subqueries — so when the entry in force at day
+  -- start was the one that *cleared* the time, that subquery correctly answered null and the
+  -- coalesce read the null as "no entry applies" and fell through to the creation value.
+  --
+  -- A commitment switched back to untimed therefore kept demanding a photo forever, on every
+  -- day after the switch, and a day answered under the morning rule would settle `failed` with
+  -- a penalty and a broken chain. The distinction is between "no entry applies" and "the entry
+  -- that applies says null", which a coalesce cannot make and an existence test can.
+  -- -------------------------------------------------------------------------------
+  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
+                                 carries_penalty, due_time, late_window_minutes)
+  values (v_k, gen_random_uuid(), 'Switched off', 'do', 'daily', true, time '20:00', 30)
+  returning id into v_k_switched;
+
+  -- Created long ago, then switched off two days ago. Only the log stamps matter to
+  -- `due_time_as_of()`: they are what the reader orders by, and back-dating them is how one
+  -- transaction can hold a history. `created_at` is back-dated for a different reason — a
+  -- commitment does not owe an answer for a day that predates it (20260824090000), and this one
+  -- has to be owed on a day after the switch for the judge below to have an opinion at all.
+  update public.commitment
+     set created_at = created_at - interval '90 days'
+   where id = v_k_switched;
+
+  update public.commitment_due_time_change
+     set changed_at = ((v_today - 30)::timestamp + interval '8 hours')
+                        at time zone 'Asia/Ho_Chi_Minh'
+   where commitment_id = v_k_switched;
+
+  update public.commitment
+     set due_time = null, late_window_minutes = null
+   where id = v_k_switched;
+
+  update public.commitment_due_time_change
+     set changed_at = ((v_today - 2)::timestamp + interval '12 hours')
+                        at time zone 'Asia/Ho_Chi_Minh'
+   where commitment_id = v_k_switched and due_time is null;
+
+  -- Before the switch: still governed, unchanged by this fix.
+  v_due_read := public.due_time_as_of(v_k_switched, v_today - 10);
+  if v_due_read is distinct from time '20:00' then
+    raise exception using message = format(
+      'A day ten days before the time was switched off reads a due_time of %s, expected 20:00. '
+      'Switching a time off must not rewrite the days it did govern.',
+      coalesce(v_due_read::text, 'nothing at all'));
+  end if;
+
+  -- The switch-off day itself: changed part-way through, so untimed. True before this fix too,
+  -- and asserted here so the two rules stay visibly distinct.
+  v_due_read := public.due_time_as_of(v_k_switched, v_today - 2);
+  if v_due_read is not null then
+    raise exception using message = format(
+      'The day the time was switched off reads a due_time of %s. Nothing governed the whole of '
+      'it, which is the rule Step 12 already proves from the other side.', v_due_read);
+  end if;
+
+  -- Every day after it: the defect. The entry in force is the one that cleared the time.
+  foreach v_case in array array['the day after', 'yesterday', 'today']
+  loop
+    v_old_day := case v_case
+                   when 'the day after' then v_today - 1
+                   when 'yesterday' then v_yesterday
+                   else v_today
+                 end;
+
+    v_due_read := public.due_time_as_of(v_k_switched, v_old_day);
+    if v_due_read is not null then
+      raise exception using message = format(
+        'On "%s" (%s) a commitment whose time was switched off still reads a due_time of %s -- '
+        'the value it was created with, months earlier. It would demand a photo it no longer '
+        'offers to take, and the day would settle failed with a penalty for a rule that is no '
+        'longer in force.', v_case, v_old_day, v_due_read);
+    end if;
+  end loop;
+
+  -- And the judge agrees, which is the half that costs money. An untimed day is the morning
+  -- question's to ask about, and `commitments_owing()` is what settlement reads.
+  select o.due_time is null into v_is_untimed
+    from public.commitments_owing(v_k, v_yesterday) o
+   where o.commitment_id = v_k_switched;
+
+  if v_is_untimed is distinct from true then
+    raise exception using message =
+      'commitments_owing() still carries a due_time for a commitment switched back to untimed. '
+      'The one door being wrong is only a problem because every judge reads through it.';
+  end if;
+
+  raise notice using message =
+    'Step 17 ok: switching a time off leaves every later day untimed, while the days it did '
+    'govern keep it.';
+
+  raise notice using message = 'All 17 steps passed.';
 end;
 $$;
 
