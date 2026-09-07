@@ -94,3 +94,9 @@ jobs:
       # per-account advisory lock before it re-reads current Penalty state.
       - name: Run the current-Penalty collection race
         run: node scripts/test-current-penalty-race.mjs
+
+      # Same reason, one lock down: the gap between the enqueue's claimed-day check and its insert
+      # is only reachable from a second session, and it is where a reminder for an already-claimed
+      # day came from.
+      - name: Run the due-time reminder race
+        run: node scripts/test-due-reminder-race.mjs
