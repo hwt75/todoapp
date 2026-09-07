@@ -2,7 +2,7 @@
 title: 'A time switched off stays off'
 type: 'bugfix'
 created: '2026-09-07'
-status: 'in-progress'
+status: 'done'
 baseline_commit: 'cbd6c0183cf3f6a5ab13d6a8e7217bb54130b972'
 review_loop_iteration: 0
 context:
@@ -123,3 +123,16 @@ would otherwise have paid for it.
 - `npm test` — passed, 50 files and 1329 tests (three more than before, all of them
   `lib/roles.test.ts`'s per-migration security assertions on the new file).
 - `npm run lint`, `npm run format:check`, `npm run build` — passed.
+
+**Remote parity (2026-09-07):**
+
+- `npx supabase db push` — `20260907120000` applied to `hxzalpnlrunctbajgtkv`. One
+  `create or replace function` plus its comment and grants; no DDL touches a table and no statement
+  writes a row.
+- Local and remote both carry all 67 migrations.
+- The live definition was read back rather than assumed: it is the three-branch version, with no
+  `coalesce` call. (A first probe searched the function body for the string "coalesce" and reported
+  a false negative — the word survives in a comment inside the body that explains what the branch
+  replaced.)
+- Re-checked after the push: still no commitment on the live project carries a due-time entry
+  beyond its own creation, so nothing that has ever been settled is judged differently.
