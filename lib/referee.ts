@@ -445,6 +445,20 @@ export function collectionMessage(amountDong: number, forDay: Date): string {
 export const OWED_PENALTIES_COPY = {
   heading: 'Owed penalties',
 
+  /** Story 7.2 — the state label on a collection card. The same word `lib/ledger.ts`'s own
+   *  `ledgerLabel` gives a Penalty in this state, and deliberately not a call to it: that
+   *  function classifies a settlement row, and this list has Penalties without settlements
+   *  attached. Neutral, never tinted — `Owed` is money not yet collected, which is a state
+   *  and not an outcome, and only a resolved one takes a colour. */
+  owedLabel: 'Owed',
+
+  /** The accessible name of one collection card. The card is one fact — this sum, for these
+   *  commitments, on this day — and the sentence below it says the sum out loud, so a
+   *  screen-reader user must not arrive at the sentence having never been told which debt
+   *  it belongs to. */
+  cardLabel: (amountLabel: string, missed: string, day: string): string =>
+    `${amountLabel} owed — ${missed}, ${day}`,
+
   copy: 'Copy message',
   copied: 'Copied.',
   /** The first clipboard use in this codebase — an unsupported browser, a denied

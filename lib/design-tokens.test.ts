@@ -297,9 +297,21 @@ describe('structural rules the stylesheet cannot state about itself', () => {
         'make the app loud; a missing one means one of those three lost its face.',
     ).toBe(3);
 
-    // Nothing has earned the serif yet — the referee's collection message is designed but not
-    // yet built. A second serif string deletes the signal the first one carries.
-    expect(GLOBALS).not.toMatch(/font-quote/);
+    // The serif is rationed hardest of the three, and to exactly one thing: the referee's
+    // pre-written collection message (Story 7.2, `.collection-message`). It marks that string
+    // as something a person says out loud rather than interface chrome, and a second serif
+    // string deletes the signal the first one carries.
+    //
+    // Asserted in both directions, like the two budgets above. Zero is the state this test
+    // held until 7.2 — the screen was drawn in the handoff and not built — and going back to
+    // zero now would mean the one thing that earned the face has silently lost it.
+    const quoteUses = GLOBALS.match(/var\(\s*--font-quote\s*[,)]/g) ?? [];
+    expect(
+      quoteUses.length,
+      "Lora italic belongs to one string in the entire product: the referee's collection " +
+        'message. A second claimant deletes what the first one signals; none at all means ' +
+        'the sentence he is meant to say out loud is dressed as interface chrome again.',
+    ).toBe(1);
   });
 
   it('keeps literal colours out of the base stylesheet', () => {
