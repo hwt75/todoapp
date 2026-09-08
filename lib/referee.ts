@@ -10,6 +10,7 @@
 
 import type { CommitmentOutcome } from './chain';
 import type { PenaltyState } from './ledger';
+import { EVIDENCE_RETENTION_DAYS } from './evidence';
 import { formatDong } from './money';
 import { ZONE, dayInQuestion } from './declaration';
 
@@ -356,6 +357,14 @@ export const REFEREE_APPEAL_DETAIL_COPY = {
 
   evidenceHeading: 'Evidence',
   noEvidence: 'No evidence attached.',
+
+  /** Retention. Distinct from `noEvidence` and from `evidenceLoadFailed`: this appeal *was*
+   *  filed with a photograph, and saying "no evidence attached" would blame the author for the
+   *  product's own housekeeping. Says the number and the period, and offers no retry, because
+   *  there is nothing left to retry. */
+  evidenceCleared: (count: number): string =>
+    `${count} photo${count === 1 ? ' was' : 's were'} cleared after ` +
+    `${EVIDENCE_RETENTION_DAYS} days and can no longer be opened.`,
   /** Distinguishes one attachment from another for a screen-reader user — identical alt
    *  text on every image reads as one image repeated, not several. 1-indexed to match how
    *  the count itself is said out loud ("photo 1 of 3"), never a 0-indexed position. */

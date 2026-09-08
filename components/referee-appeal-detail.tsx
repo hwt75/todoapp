@@ -25,6 +25,8 @@ type View =
       // from `evidence` itself so a per-item failure surfaces as a note rather than
       // silently shrinking the list to look like nothing was ever attached.
       evidenceFailures: number;
+      /** How many were cleared by the retention sweep — gone rather than broken. */
+      evidenceCleared: number;
     };
 
 type Ruling = { kind: 'idle' } | { kind: 'ruling' } | { kind: 'failed'; reason: string };
@@ -157,7 +159,7 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
 
       const { data: evidenceRows, error: evidenceError } = await supabase
         .from('evidence')
-        .select('id,storage_path')
+        .select('id,storage_path,swept_at')
         .eq('appeal_id', appealId);
       if (cancelled) return;
 
@@ -168,7 +170,18 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
 
       const evidence: RefereeEvidenceItem[] = [];
       let evidenceFailures = 0;
+      let evidenceCleared = 0;
       for (const row of evidenceRows ?? []) {
+        // Swept after the retention period: the row is still here because
+        // `commitments_owing()` reads it to decide whether a day held, but the bytes are gone.
+        // Counted apart from a signing failure and skipped before one can be attempted --
+        // signing a path whose object no longer exists would report this as something that
+        // might work later, and it will not.
+        if (row.swept_at != null) {
+          evidenceCleared++;
+          continue;
+        }
+
         // One hour, not one minute — long enough for an actual review to happen without
         // the image simply failing partway through with no explanation. Evidence review is
         // exactly the slow, unhurried case this screen exists for (FR-15's own point: the
@@ -206,6 +219,7 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
         },
         evidence,
         evidenceFailures,
+        evidenceCleared,
       });
     }
 
@@ -263,9 +277,9 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
             <p>{formatDong(view.appeal.amountDong)}</p>
 
             <h2>{REFEREE_APPEAL_DETAIL_COPY.evidenceHeading}</h2>
-            {view.evidence.length === 0 && view.evidenceFailures === 0 && (
-              <p>{REFEREE_APPEAL_DETAIL_COPY.noEvidence}</p>
-            )}
+            {view.evidence.length === 0 &&
+              view.evidenceFailures === 0 &&
+              view.evidenceCleared === 0 && <p>{REFEREE_APPEAL_DETAIL_COPY.noEvidence}</p>}
             {/* A signed URL into a private bucket, not an asset next/image's own optimiser
                 is set up to fetch. */}
             {view.evidence.map((item, index) => (
@@ -280,6 +294,12 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
               <p role="status">
                 {REFEREE_APPEAL_DETAIL_COPY.evidenceLoadFailed(view.evidenceFailures)}
               </p>
+            )}
+            {/* "No evidence attached" would be a lie about an appeal that was filed with a
+                photograph — he needs to know one existed and that its absence is the product's
+                doing, not the author's. */}
+            {view.evidenceCleared > 0 && (
+              <p>{REFEREE_APPEAL_DETAIL_COPY.evidenceCleared(view.evidenceCleared)}</p>
             )}
 
             {view.appeal.penaltyState === 'held' && (

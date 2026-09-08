@@ -1366,7 +1366,7 @@ describe('opening a photo kept for today', () => {
     // same way, so a read scoped to the wrong commitment or to yesterday renders identically —
     // this is the only place that difference is visible at all.
     const read = fromCalls.find((c) => c.table === 'evidence');
-    expect(read?.select).toBe('id,commitment_id,for_day,storage_path');
+    expect(read?.select).toBe('id,commitment_id,for_day,storage_path,swept_at');
     expect(read?.filters).toEqual([
       // `gym` is not flagged, so it is not asked about.
       ['commitment_id', ['c3', 'c4']],

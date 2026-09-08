@@ -80,6 +80,18 @@ export const EVIDENCE_BUCKET = 'appeal-evidence';
 export const EVIDENCE_URL_TTL_SECONDS = 3600;
 
 /**
+ * How long a photograph's bytes are kept.
+ *
+ * Stated here so the copy the author reads and the sweeper's own default cannot drift into saying
+ * two different numbers. The database owns the real decision
+ * (`expired_evidence_objects(p_age)`); this is what the product says about it.
+ *
+ * Every kind expires — an appeal's, a claim's, and the commitment-day records Story 6.8 exists to
+ * let him keep. That last one is a deliberate cost the maintainer accepted, not an oversight.
+ */
+export const EVIDENCE_RETENTION_DAYS = 30;
+
+/**
  * How many days one `for_day` filter may name.
  *
  * PostgREST puts an `.in()` list in the query string, so an unbounded one is a URL whose length
@@ -113,13 +125,23 @@ export interface KeptPhotoRead {
    * which on this surface would tell the author he never kept a record he did keep.
    */
   unsigned: number;
+  /**
+   * How many rows were found whose bytes have been swept after
+   * `EVIDENCE_RETENTION_DAYS`.
+   *
+   * Counted separately from `unsigned` because they are different facts to the person reading
+   * the screen: one is "something went wrong and it may work later", the other is "it is gone
+   * and it is not coming back". Collapsing them would tell him to retry a photo that no longer
+   * exists.
+   */
+  cleared: number;
   /** The row read itself failed. Null on success, including the honest success of no rows. */
   failed: string | null;
 }
 
 /** Nothing was asked for, or nothing came back. A shape rather than three literals, so an
  *  empty answer is the same object everywhere. */
-const NOTHING_KEPT: KeptPhotoRead = { photos: [], unsigned: 0, failed: null };
+const NOTHING_KEPT: KeptPhotoRead = { photos: [], unsigned: 0, cleared: 0, failed: null };
 
 /** What tells the reader its caller has gone. See `readKeptPhotos`'s own note on it. */
 export interface KeptPhotoOptions {
@@ -173,7 +195,7 @@ export async function readKeptPhotos(
     chunk(wanted, DAYS_PER_QUERY).map((someDays) =>
       supabase
         .from('evidence')
-        .select('id,commitment_id,for_day,storage_path')
+        .select('id,commitment_id,for_day,storage_path,swept_at')
         .in('commitment_id', ids)
         .in('for_day', someDays),
     ),
@@ -184,18 +206,30 @@ export async function readKeptPhotos(
   // One failed page is a failed read. A partial history presented as the whole of it is the
   // one answer this surface must never give.
   const readError = pages.find((page) => page.error)?.error;
-  if (readError) return { photos: [], unsigned: 0, failed: readError.message };
+  if (readError) return { photos: [], unsigned: 0, cleared: 0, failed: readError.message };
 
-  const rows = pages
-    .flatMap(
-      (page) =>
-        (page.data ?? []) as {
-          id: string;
-          commitment_id: string;
-          for_day: string;
-          storage_path: string;
-        }[],
-    )
+  const allRows = pages.flatMap(
+    (page) =>
+      (page.data ?? []) as {
+        id: string;
+        commitment_id: string;
+        for_day: string;
+        storage_path: string;
+        swept_at: string | null;
+      }[],
+  );
+
+  // A swept row is a photo whose bytes the retention sweep removed. Filtered out here rather than
+  // in the query, because the count is worth saying: a day that shows nothing where a photo used
+  // to be should say so, not look like a day he never photographed. The row itself stays -- it is
+  // what `commitments_owing()` reads to decide the day held.
+  // `!= null`, not `!== null`: a row that arrives without the column at all is treated as *not*
+  // swept. That is the safe direction — the photo is shown and, if its bytes really are gone,
+  // counted as unloadable — where the strict form would silently report every photo as cleared.
+  const cleared = allRows.filter((row) => row.swept_at != null).length;
+
+  const rows = allRows
+    .filter((row) => row.swept_at == null)
     .map((row) => ({
       id: row.id,
       commitmentId: row.commitment_id,
@@ -205,7 +239,10 @@ export async function readKeptPhotos(
     // Sorted so two renders of the same day never number the same photo differently.
     .sort((a, b) => a.day.localeCompare(b.day) || a.id.localeCompare(b.id));
 
-  if (rows.length === 0) return NOTHING_KEPT;
+  // Nothing left to sign. Not `NOTHING_KEPT`: a day whose every photo has been swept is not the
+  // same answer as a day that never had one, and the count is the only thing that tells them
+  // apart on screen.
+  if (rows.length === 0) return { photos: [], unsigned: 0, cleared, failed: null };
 
   // One call for every path, not one per photo. `createSignedUrls` reports its failures per
   // item — a `path` with no `signedUrl` — which is exactly the per-item failure the sequential
@@ -261,7 +298,7 @@ export async function readKeptPhotos(
     })),
   );
 
-  return { photos, unsigned, failed: null };
+  return { photos, unsigned, cleared, failed: null };
 }
 
 /** One commitment's photos for one day — the whole of what a surface has to do to place
@@ -315,6 +352,21 @@ export const EVIDENCE_COPY = {
    *  the screen those are one fact. */
   photosFailed: (count: number): string =>
     `${count} photo${count === 1 ? '' : 's'} could not be loaded.`,
+
+  /**
+   * A photo that is gone rather than broken.
+   *
+   * Said in the past tense and with no suggestion of a retry, because there is nothing to retry:
+   * the bytes were removed after `EVIDENCE_RETENTION_DAYS` and the record of them is all that is
+   * left. Deliberately distinct from `photosFailed` above -- telling him a deleted photo "could
+   * not be loaded" would send him back to check a screen that will never show it again.
+   *
+   * It names the period rather than saying "removed", so the sentence explains itself the first
+   * time he meets it.
+   */
+  photosCleared: (count: number): string =>
+    `${count} photo${count === 1 ? ' was' : 's were'} cleared after ` +
+    `${EVIDENCE_RETENTION_DAYS} days.`,
 
   /** The read itself failed, so nothing at all can be shown. Distinct from the count above,
    *  which reports a photo that is known to exist, and shown with the server's own reason —
