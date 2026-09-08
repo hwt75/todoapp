@@ -125,3 +125,65 @@ comment on function public.mark_evidence_swept(uuid[]) is
   that would cost money. Revoked from every client role: it writes to every account''s rows.';
 
 revoke execute on function public.mark_evidence_swept(uuid[]) from public, anon, authenticated;
+
+
+-- ---------------------------------------------------------------------------------
+-- The referee's day lookup stops offering a photo that is gone.
+-- ---------------------------------------------------------------------------------
+
+/* `referee_day_lookup()` (20260908170000, epic 6 retrospective item 43) hands the referee the
+   storage paths of the photos a day's claims were proved with. It was written before `swept_at`
+   existed, so it would go on naming paths whose bytes this migration removes -- and the screen
+   would report them as photos that "could not be opened", which invites him to try again at
+   something that is never coming back.
+
+   Filtered here rather than in the client for the same reason the join lives in this function at
+   all: it is the one door that screen goes through, and a second reader deciding for itself what
+   counts as present is how two surfaces start disagreeing.
+
+   Replaced wholesale rather than patched: the return type is unchanged, but `create or replace`
+   on a `returns table` function is only safe while the column list matches exactly, and stating
+   the whole body is what makes the diff readable. */
+create or replace function public.referee_day_lookup(p_settlement_id uuid)
+returns table (
+  commitment_id uuid,
+  commitment_name text,
+  outcome public.commitment_outcome,
+  objection_deadline timestamptz,
+  already_objected boolean,
+  evidence_paths text[]
+)
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select sc.commitment_id,
+         c.name,
+         sc.outcome,
+         public.objection_deadline(s.settled_at),
+         exists (
+           select 1 from public.objection o
+            where o.subject = s.subject and o.for_day = s.period
+         ),
+         coalesce(
+           (select array_agg(e.storage_path order by e.created_at, e.id)
+              from public.declaration d
+              join public.evidence e on e.declaration_id = d.id
+             where d.commitment_id = sc.commitment_id
+               and d.for_day = s.period
+               and d.owner_id = s.subject
+               and e.commitment_id is null
+               -- Retention: the row survives because commitments_owing() reads it, but the bytes
+               -- are gone. Naming the path would put a photo on his screen that cannot load.
+               and e.swept_at is null),
+           '{}'::text[]
+         )
+    from public.settlement_commitment sc
+    join public.settlement s on s.id = sc.settlement_id
+    join public.commitment c on c.id = sc.commitment_id
+   where sc.settlement_id = p_settlement_id
+     and s.kind = 'day'
+     and public.role_from_table() = 'referee'
+     and s.subject = public.paired_doer_id();
+$$;
