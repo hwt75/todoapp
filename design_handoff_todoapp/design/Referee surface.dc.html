@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600&family=Lora:ital@1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_ds/organic-d76a8a32-d512-4ae4-8cc0-d0cd42e4bd69/styles.css">
+<script src="_ds/organic-d76a8a32-d512-4ae4-8cc0-d0cd42e4bd69/_ds_bundle.js"></script>
+<style>
+:root{
+--pg:var(--color-bg);--cd:var(--color-neutral-100);--sk:var(--color-neutral-200);--hl:var(--color-neutral-300);--st:var(--color-neutral-400);
+--ink:var(--color-text);--ink2:var(--color-neutral-700);--ink3:#736a5c;
+--heldT:var(--color-accent-2-200);--heldI:var(--color-accent-2-800);--urgT:#fbeacd;--urgI:#8a5a0a;
+--failT:#f7dcda;--failI:#8e2f2b;--neuT:var(--color-neutral-200);--neuI:var(--color-neutral-700);
+--actF:var(--color-accent-700);--actI:#fff8ef;--board:#e7dcc8;
+}
+[data-mode="dark"]{
+--pg:#17140f;--cd:#211c16;--sk:#262019;--hl:#37302a;--st:#4c4339;
+--ink:#f2ece1;--ink2:#b6ab9b;--ink3:#8a8072;
+--heldT:var(--color-accent-2-900);--heldI:var(--color-accent-2-300);--urgT:#33260f;--urgI:#edc47a;
+--failT:#3a1a17;--failI:#efaba4;--neuT:#262019;--neuI:#b6ab9b;
+--actF:var(--color-accent-400);--actI:#1b1207;--board:#100e0a;
+}
+body{margin:0;font-family:"Figtree",system-ui,sans-serif;background:var(--board);color:var(--ink)}
+a{color:var(--actF)}
+a:hover{color:var(--failI)}
+</style>
+</helmet>
+<div data-mode="{{ mode }}" style="background:var(--board);min-height:100vh;padding:40px 24px 96px;font-family:'Figtree',system-ui,sans-serif;color:var(--ink)">
+
+  <div style="max-width:1280px;margin:0 auto 36px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:14px">
+      <img src="assets/logo.png" alt="" style="width:48px;height:48px;border-radius:12px;object-fit:cover">
+      <div>
+        <div style="font-family:'Caprasimo',serif;font-size:28px;line-height:1;letter-spacing:-0.02em">todoapp</div>
+        <div style="font-size:13px;color:var(--ink3);margin-top:8px">Referee surface · any browser · 1280 × 900, content in the same 544px column</div>
+      </div>
+    </div>
+    <button onClick="{{ toggle }}" style="font-size:13px;font-family:'Figtree',system-ui,sans-serif;min-height:44px;padding:0 16px;border-radius:16px;border:1px solid var(--hl);background:var(--cd);color:var(--ink2);cursor:pointer" style-hover="background:var(--sk)">Light / dark</button>
+  </div>
+
+  <div style="max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:36px">
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:12px;color:var(--ink3)">14 · Sign in / accept invite — choose your password (first visit). Return visits show the same frame with one password field and “Sign in”.</div>
+      <div style="width:1280px;max-width:100%;height:900px;border-radius:20px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;border-bottom:1px solid var(--hl);display:flex;align-items:center;padding:0 26px;gap:11px;flex:none;background:var(--cd)">
+          <div style="font-family:'Caprasimo',serif;font-size:17px;letter-spacing:-0.02em">todoapp</div>
+          <div style="width:18px;height:3px;border-radius:2px;background:var(--heldI)"></div>
+        </div>
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:26px">
+          <div style="width:100%;max-width:544px;display:flex;flex-direction:column;gap:26px">
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="font-size:26px;font-weight:600;letter-spacing:-0.01em">Hoàng asked you to referee.</div>
+              <div style="font-size:17px;color:var(--ink2);text-wrap:pretty">You'll rule on the odd appeal and collect what he owes, in person. A few minutes a week.</div>
+            </div>
+            <div style="background:var(--cd);border:1px solid var(--hl);border-radius:16px;padding:22px;display:flex;flex-direction:column;gap:16px">
+              <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:13px;font-weight:500;color:var(--ink2)">Email</span><span style="min-height:48px;display:flex;align-items:center;padding:0 16px;border:1px solid var(--st);border-radius:16px;background:var(--pg);font-size:16px">nam@mail.com</span></label>
+              <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:13px;font-weight:500;color:var(--ink2)">Choose your password</span><span style="min-height:48px;display:flex;align-items:center;padding:0 16px;border:1px solid var(--st);border-radius:16px;background:var(--pg);font-size:16px;color:var(--ink3)">••••••••••</span></label>
+              <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:13px;font-weight:500;color:var(--ink2)">One-time password from Hoàng</span><span style="min-height:48px;display:flex;align-items:center;padding:0 16px;border:1px solid var(--st);border-radius:16px;background:var(--pg);font-size:16px;letter-spacing:0.06em">4K7Q-92DM</span></label>
+              <button style="min-height:48px;border:0;border-radius:16px;background:var(--actF);color:var(--actI);font-size:16px;font-weight:500;font-family:'Figtree',system-ui,sans-serif;cursor:pointer">Accept and continue</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:12px;color:var(--ink3)">15 · Referee home — empty, which is his normal state</div>
+      <div style="width:1280px;max-width:100%;height:900px;border-radius:20px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;border-bottom:1px solid var(--hl);display:flex;align-items:center;justify-content:space-between;padding:0 26px;flex:none;background:var(--cd)">
+          <div style="display:flex;align-items:center;gap:11px"><img src="assets/logo.png" alt="" style="width:26px;height:26px;border-radius:7px;object-fit:cover"><div style="font-family:'Caprasimo',serif;font-size:17px;letter-spacing:-0.02em">todoapp</div></div>
+          <div style="font-size:14px;color:var(--ink2)">Nam · Sign out</div>
+        </div>
+        <div style="flex:1;display:flex;justify-content:center;padding:44px 26px">
+          <div style="width:100%;max-width:544px;display:flex;flex-direction:column;gap:26px">
+            <div style="min-height:44px;display:flex;align-items:center"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">This week</span></div>
+            <div style="background:var(--cd);border:1px solid var(--hl);border-radius:16px;padding:26px;display:flex;flex-direction:column;gap:11px">
+              <div style="font-size:17px;line-height:1.55;text-wrap:pretty">Nothing for you this week. Hoàng is at 4 of 5 today. You'll get an email if that changes.</div>
+              <div style="display:flex;align-items:center;gap:9px;padding-top:4px">
+                <div style="height:6px;flex:1;border-radius:3px;background:var(--sk);overflow:hidden"><div style="width:80%;height:6px;border-radius:3px;background:var(--heldI)"></div></div>
+                <span style="font-size:13px;color:var(--ink2);font-variant-numeric:tabular-nums">4 of 5</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:16px;align-items:center;border-top:1px solid var(--hl);padding-top:22px">
+              <button style="min-height:44px;padding:0 18px;border:1px solid var(--st);border-radius:16px;background:var(--cd);color:var(--ink);font-size:15px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--sk)">Look up a day</button>
+              <button style="min-height:44px;padding:0 4px;border:0;background:transparent;color:var(--ink2);font-size:15px;font-family:'Figtree',system-ui,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer">Sign out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--ink3)">The progress crumb is the only retention lever the product has over him, so it is the one thing in the empty frame that carries a number.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:12px;color:var(--ink3)">15 · Referee home — appeals pending and penalties owed (each section appears on its own when only one applies)</div>
+      <div style="width:1280px;max-width:100%;height:900px;border-radius:20px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;border-bottom:1px solid var(--hl);display:flex;align-items:center;justify-content:space-between;padding:0 26px;flex:none;background:var(--cd)">
+          <div style="display:flex;align-items:center;gap:11px"><img src="assets/logo.png" alt="" style="width:26px;height:26px;border-radius:7px;object-fit:cover"><div style="font-family:'Caprasimo',serif;font-size:17px;letter-spacing:-0.02em">todoapp</div></div>
+          <div style="font-size:14px;color:var(--ink2)">Nam · Sign out</div>
+        </div>
+        <div style="flex:1;display:flex;justify-content:center;padding:44px 26px;overflow:hidden">
+          <div style="width:100%;max-width:544px;display:flex;flex-direction:column;gap:26px">
+            <div style="min-height:44px;display:flex;align-items:center"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">This week</span></div>
+
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <div style="font-size:13px;font-weight:500;color:var(--ink2)">Pending appeals</div>
+              <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);overflow:hidden">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 18px;min-height:44px;border-bottom:1px solid var(--hl)">
+                  <div style="flex:1;min-width:0"><div style="font-size:16px">Gym</div><div style="font-size:12px;color:var(--ink3)">Saturday 14 March</div></div>
+                  <button style="min-height:44px;padding:0 16px;border:1px solid var(--st);border-radius:16px;background:var(--pg);color:var(--ink);font-size:15px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--sk)">Open</button>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 18px;min-height:44px">
+                  <div style="flex:1;min-width:0"><div style="font-size:16px">Evening study</div><div style="font-size:12px;color:var(--ink3)">Tuesday 10 March</div></div>
+                  <button style="min-height:44px;padding:0 16px;border:1px solid var(--st);border-radius:16px;background:var(--pg);color:var(--ink);font-size:15px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--sk)">Open</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <div style="font-size:13px;font-weight:500;color:var(--ink2)">Owed penalties</div>
+              <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);padding:18px;display:flex;flex-direction:column;gap:16px">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px">
+                  <div><div style="font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-0.01em">500,000</div><div style="font-size:13px;color:var(--ink2)">Gym · Tuesday 10 March</div></div>
+                  <span style="font-size:13px;padding:5px 11px;border-radius:999px;border:1px solid var(--st);color:var(--ink2)">Owed</span>
+                </div>
+                <div style="border-top:1px solid var(--hl);padding-top:16px;display:flex;flex-direction:column;gap:13px">
+                  <div style="font-family:'Lora',Georgia,serif;font-style:italic;font-size:18px;line-height:1.5;text-wrap:pretty">todoapp says you owe 500,000 for Tuesday. I'm just the one collecting it. When are you free?</div>
+                  <div style="display:flex;gap:11px;flex-wrap:wrap">
+                    <button style="min-height:44px;padding:0 16px;border:1px solid var(--st);border-radius:16px;background:var(--pg);color:var(--ink);font-size:15px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--sk)">Copy message</button>
+                    <button style="min-height:44px;padding:0 16px;border:0;border-radius:16px;background:var(--actF);color:var(--actI);font-size:15px;font-weight:500;font-family:'Figtree',system-ui,sans-serif;cursor:pointer">Mark Collected</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:16px;align-items:center;border-top:1px solid var(--hl);padding-top:22px">
+              <button style="min-height:44px;padding:0 18px;border:1px solid var(--st);border-radius:16px;background:var(--cd);color:var(--ink);font-size:15px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--sk)">Look up a day</button>
+              <button style="min-height:44px;padding:0 4px;border:0;background:transparent;color:var(--ink2);font-size:15px;font-family:'Figtree',system-ui,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer">Sign out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--ink3);text-wrap:pretty">His judgment controls are coloured — he is ruling on someone else. The collection message is the one serif string in the product.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:12px;color:var(--ink3)">15 · Referee home — the doer has gone quiet (informational, never a queue item)</div>
+      <div style="width:1280px;max-width:100%;height:900px;border-radius:20px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;border-bottom:1px solid var(--hl);display:flex;align-items:center;justify-content:space-between;padding:0 26px;flex:none;background:var(--cd)">
+          <div style="display:flex;align-items:center;gap:11px"><img src="assets/logo.png" alt="" style="width:26px;height:26px;border-radius:7px;object-fit:cover"><div style="font-family:'Caprasimo',serif;font-size:17px;letter-spacing:-0.02em">todoapp</div></div>
+          <div style="font-size:14px;color:var(--ink2)">Nam · Sign out</div>
+        </div>
+        <div style="flex:1;display:flex;justify-content:center;padding:44px 26px">
+          <div style="width:100%;max-width:544px;display:flex;flex-direction:column;gap:26px">
+            <div style="min-height:44px;display:flex;align-items:center"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">This week</span></div>
+            <div style="background:var(--cd);border:1px solid var(--hl);border-radius:16px;padding:26px">
+              <div style="font-size:17px;line-height:1.55;text-wrap:pretty">Hoàng hasn't opened this in four days. Nothing needs deciding — but he'd probably rather hear from you than from the app.</div>
+            </div>
+            <div style="display:flex;gap:16px;align-items:center;border-top:1px solid var(--hl);padding-top:22px">
+              <button style="min-height:44px;padding:0 18px;border:1px solid var(--st);border-radius:16px;background:var(--cd);color:var(--ink);font-size:15px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--sk)">Look up a day</button>
+              <button style="min-height:44px;padding:0 4px;border:0;background:transparent;color:var(--ink2);font-size:15px;font-family:'Figtree',system-ui,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer">Sign out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:12px;color:var(--ink3)">16 · Appeal detail — pending ruling (resolved replaces the two controls with “You ruled: he did it · Sunday 15 March”)</div>
+      <div style="width:1280px;max-width:100%;height:900px;border-radius:20px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;border-bottom:1px solid var(--hl);display:flex;align-items:center;justify-content:space-between;padding:0 26px;flex:none;background:var(--cd)">
+          <div style="display:flex;align-items:center;gap:11px"><img src="assets/logo.png" alt="" style="width:26px;height:26px;border-radius:7px;object-fit:cover"><div style="font-family:'Caprasimo',serif;font-size:17px;letter-spacing:-0.02em">todoapp</div></div>
+          <div style="font-size:14px;color:var(--ink2)">Nam · Sign out</div>
+        </div>
+        <div style="flex:1;display:flex;justify-content:center;padding:44px 26px;overflow:hidden">
+          <div style="width:100%;max-width:544px;display:flex;flex-direction:column;gap:22px">
+            <div style="min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid var(--hl)"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Gym · Saturday 14 March</span><span style="font-size:15px;color:var(--ink2)">Back</span></div>
+            <div style="background:var(--cd);border:1px solid var(--hl);border-radius:16px;padding:22px;display:flex;flex-direction:column;gap:9px">
+              <div style="font-size:13px;font-weight:500;color:var(--ink2)">What the check recorded</div>
+              <div style="font-size:19px;line-height:1.45">Location saw you for 4 minutes. It needed 30.</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <div style="font-size:13px;font-weight:500;color:var(--ink2)">What he attached</div>
+              <div style="display:flex;gap:13px">
+                <div style="flex:1;aspect-ratio:4/3;border-radius:16px;background:var(--sk);border:1px solid var(--hl);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink3)">photo 1</div>
+                <div style="flex:1;aspect-ratio:4/3;border-radius:16px;background:var(--sk);border:1px solid var(--hl);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink3)">photo 2</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:13px">
+              <button style="flex:1;min-height:52px;border:0;border-radius:16px;background:var(--color-accent-2-800);color:var(--color-accent-2-200);font-size:17px;font-weight:500;font-family:'Figtree',system-ui,sans-serif;cursor:pointer">He did it</button>
+              <button style="flex:1;min-height:52px;border:0;border-radius:16px;background:#8e2f2b;color:#f7dcda;font-size:17px;font-weight:500;font-family:'Figtree',system-ui,sans-serif;cursor:pointer">He didn't</button>
+            </div>
+            <div style="font-size:15px;color:var(--ink2);text-wrap:pretty">Ignore this and it's dropped in his favor on Sunday.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:12px;color:var(--ink3)">17 · Day lookup — result (the form is the same frame with an empty date field; recording an objection adds “Objection recorded. Hoàng has been told.”)</div>
+      <div style="width:1280px;max-width:100%;height:900px;border-radius:20px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;border-bottom:1px solid var(--hl);display:flex;align-items:center;justify-content:space-between;padding:0 26px;flex:none;background:var(--cd)">
+          <div style="display:flex;align-items:center;gap:11px"><img src="assets/logo.png" alt="" style="width:26px;height:26px;border-radius:7px;object-fit:cover"><div style="font-family:'Caprasimo',serif;font-size:17px;letter-spacing:-0.02em">todoapp</div></div>
+          <div style="font-size:14px;color:var(--ink2)">Nam · Sign out</div>
+        </div>
+        <div style="flex:1;display:flex;justify-content:center;padding:44px 26px;overflow:hidden">
+          <div style="width:100%;max-width:544px;display:flex;flex-direction:column;gap:22px">
+            <div style="min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid var(--hl)"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Look up a day</span><span style="font-size:15px;color:var(--ink2)">Back</span></div>
+            <div style="display:flex;gap:13px;align-items:flex-end">
+              <label style="flex:1;display:flex;flex-direction:column;gap:5px"><span style="font-size:13px;font-weight:500;color:var(--ink2)">Date</span><span style="min-height:48px;display:flex;align-items:center;padding:0 16px;border:1px solid var(--st);border-radius:16px;background:var(--cd);font-size:16px;font-variant-numeric:tabular-nums">14 / 03 / 2026</span></label>
+              <button style="min-height:48px;padding:0 18px;border:0;border-radius:16px;background:var(--actF);color:var(--actI);font-size:16px;font-weight:500;font-family:'Figtree',system-ui,sans-serif;cursor:pointer">Look it up</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <div style="font-size:13px;font-weight:500;color:var(--ink2)">Saturday 14 March</div>
+              <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);overflow:hidden">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 18px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Morning exercise</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">Held · 12</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 18px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Gym</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--failT);color:var(--failI);border:1px solid var(--failI)">Missed · appealed</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 18px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Company work</span><span style="font-size:13px;color:var(--ink3)">1:20 of 3:00</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 18px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Evening study</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">Held · 8</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 18px;min-height:44px"><span style="font-size:16px">No gambling</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">Held · 31</span></div>
+              </div>
+              <div style="font-size:13px;color:var(--ink2)">Declared by Hoàng at 07:41. One appeal is open on this day.</div>
+            </div>
+            <button style="align-self:flex-start;min-height:44px;padding:0 18px;border:1px solid var(--st);border-radius:16px;background:var(--cd);color:var(--ink);font-size:15px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--sk)">Record an objection</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="max-width:1280px;margin:36px auto 0;display:flex;gap:16px;flex-wrap:wrap;font-size:14px">
+    <a href="Style page.dc.html">Style page</a>
+    <a href="Doer surface.dc.html">Doer surface — screens 1–13</a>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  state = { dark: false };
+  renderVals() {
+    return {
+      mode: this.state.dark ? "dark" : "light",
+      toggle: () => this.setState(s => ({ dark: !s.dark })),
+    };
+  }
+}
+
+</script>
+</body>
+</html>
