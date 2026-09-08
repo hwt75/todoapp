@@ -26,6 +26,32 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* The page inset. Edge-to-edge is declared in the viewport, so the content has to inset
+   itself out from under the notch and the home indicator.
+
+   Named rather than written inline on `body`, because one element has to undo it exactly:
+   the referee's brand bar is full-bleed and reaches the window's edges by cancelling this
+   with a negative margin. Written twice — once as padding and once as its own negation —
+   the two would drift the first time either changed, and the failure would be a hairline
+   of page colour down the side of a bar that is supposed to be flush. */
+:root {
+  --inset-top: max(var(--space-4), env(safe-area-inset-top));
+  --inset-right: max(var(--space-4), env(safe-area-inset-right));
+  --inset-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+  --inset-left: max(var(--space-4), env(safe-area-inset-left));
+}
+
+/* A window wide enough to have room to spare gets some above and below the column. The
+   horizontal inset stays where it is — widening it would only move a column that is
+   already centred. There is no wider composition at any breakpoint, on either surface:
+   this is a phone app that happens to open on a desktop. */
+@media (min-width: 40rem) {
+  :root {
+    --inset-top: max(var(--space-6), env(safe-area-inset-top));
+    --inset-bottom: max(var(--space-6), env(safe-area-inset-bottom));
+  }
+}
+
 body {
   margin: 0;
   min-height: 100dvh;
@@ -35,22 +61,7 @@ body {
   font-size: var(--type-body);
   font-weight: var(--weight-regular);
   line-height: 1.55;
-  /* Edge-to-edge is declared in the viewport, so the content has to inset itself out
-     from under the notch and the home indicator. */
-  padding: max(var(--space-4), env(safe-area-inset-top))
-    max(var(--space-4), env(safe-area-inset-right)) max(var(--space-4), env(safe-area-inset-bottom))
-    max(var(--space-4), env(safe-area-inset-left));
-}
-
-/* A window wide enough to have room to spare gets some above and below the column. The
-   horizontal inset stays where it is — widening it would only move a column that is
-   already centred. There is no wider composition at any breakpoint, on either surface:
-   this is a phone app that happens to open on a desktop. */
-@media (min-width: 40rem) {
-  body {
-    padding-top: max(var(--space-6), env(safe-area-inset-top));
-    padding-bottom: max(var(--space-6), env(safe-area-inset-bottom));
-  }
+  padding: var(--inset-top) var(--inset-right) var(--inset-bottom) var(--inset-left);
 }
 
 /* The shell. One column, centred, 544px at most, the same column at every width. `gap`
@@ -226,6 +237,93 @@ small {
 
 .utility .card {
   background: var(--surface-sunken);
+}
+
+/* The referee's brand bar — see `app/referee/layout.tsx` for why only his surface has one.
+
+   Full-bleed, and the one element in the product that is. It reaches the window's edges by
+   cancelling the page inset with a negative margin on three sides, which is why that inset
+   is a named value above rather than a literal on `body`.
+
+   This is not a hole in the rule that says the product is one 544px column at every width.
+   That rule is about the *content* column — the thing being read, which stays 544px and
+   centred beneath this. A bar carrying a name and a session is chrome above that column,
+   and chrome that stops short of the window's edge reads as a card that failed to load
+   rather than as a header.
+
+   The safe-area inset is added to the height and paid back as top padding, so on an
+   installed launch the bar's colour runs up under the status bar while its contents sit
+   below it — which is the whole reason a bar is full-bleed in the first place. */
+.brandbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: calc(44px + env(safe-area-inset-top));
+  background: var(--surface-card);
+  border-bottom: var(--hairline) solid var(--border);
+  margin-top: calc(-1 * var(--inset-top));
+  margin-inline: calc(-1 * var(--inset-left)) calc(-1 * var(--inset-right));
+  margin-bottom: var(--space-8);
+  padding-top: env(safe-area-inset-top);
+  /* 26px from the window's edge, or clear of the notch in landscape, whichever is further. */
+  padding-left: max(var(--space-6), var(--inset-left));
+  padding-right: max(var(--space-6), var(--inset-right));
+}
+
+.brandbar img {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  flex: none;
+}
+
+/* Who is signed in, and the way out. `margin-inline-start: auto` rather than
+   `justify-content: space-between` on the bar: when this renders nothing — every screen
+   before he has a session — the mark and the wordmark must stay together at the left rather
+   than drifting apart to fill a row with one thing in it. */
+.brandbar-session {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin-inline-start: auto;
+  font-size: var(--type-label);
+  color: var(--text-secondary);
+}
+
+/* The separator and the way out keep their full width on a 375px window. Without this the
+   words "Sign out" wrap onto a second line and take the bar from 44px to 51px, which is
+   worse than a truncated address in every way: the address is arbitrary text nobody reads,
+   and the bar's height is a structural value the screen beneath it is positioned against. */
+.brandbar-session > :not(.brandbar-account) {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* An address is long, arbitrary, and not what he came here to read. It is the only thing in
+   the bar that gives up width, and it truncates rather than wrapping. Nothing is lost by it:
+   this names a session, and he already knows which account he signed into. */
+.brandbar-account {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The mark and the name never yield to it. */
+.brandbar > .wordmark {
+  flex: none;
+}
+
+/* The third and last claimant of the display face. It is the only place either surface says
+   its own name, which is exactly why it gets the face the two figures share: a wordmark that
+   appeared everywhere would spend the voice, and one set in the body face would not be a
+   wordmark at all. */
+.wordmark {
+  font-family: var(--font-display);
+  font-size: var(--type-screen-title);
+  letter-spacing: var(--tracking-figure);
+  line-height: 1;
 }
 
 /* ----------------------------------------------------------- navigation */

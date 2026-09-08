@@ -292,9 +292,10 @@ describe('structural rules the stylesheet cannot state about itself', () => {
     const displayUses = GLOBALS.match(/var\(\s*--font-display\s*[,)]/g) ?? [];
     expect(
       displayUses.length,
-      'Caprasimo is the display voice and belongs to the debt total and the running timer. ' +
-        'A third claimant would make the app loud; a missing one means a figure lost its face.',
-    ).toBe(2);
+      'Caprasimo is the display voice and belongs to three things: the wordmark on the ' +
+        "referee's brand bar, the debt total, and the running timer. A fourth claimant would " +
+        'make the app loud; a missing one means one of those three lost its face.',
+    ).toBe(3);
 
     // Nothing has earned the serif yet — the referee's collection message is designed but not
     // yet built. A second serif string deletes the signal the first one carries.

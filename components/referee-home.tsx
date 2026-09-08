@@ -267,11 +267,6 @@ export function RefereeHome() {
     };
   }, [router, reloadToken]);
 
-  async function signOut() {
-    await createClient().auth.signOut();
-    router.replace('/referee/login');
-  }
-
   /**
    * Mark Collected (FR-21) — the only way a debt is ever discharged. `mark_penalty_collected()`
    * is the sole judge (AD-1): this sends one RPC call and reads back whatever it decided.
@@ -501,17 +496,11 @@ export function RefereeHome() {
             already has a reason — because he was there, or because the author told him — and the
             day is named on the next screen by him rather than offered to him by this one.
 
-            Rendered unconditionally, above Sign out and below everything that is genuinely
-            pending: it is not a pending item and must not read as one. */}
+            Rendered unconditionally and below everything that is genuinely pending: it is
+            not a pending item and must not read as one. */}
         <div className="actions">
           <button type="button" onClick={() => router.push('/referee/day')}>
             {REFEREE_HOME_COPY.lookUpDay}
-          </button>
-        </div>
-
-        <div className="actions">
-          <button type="button" onClick={() => void signOut()}>
-            {REFEREE_HOME_COPY.signOut}
           </button>
         </div>
       </section>
