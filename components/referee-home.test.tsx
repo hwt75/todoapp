@@ -232,7 +232,10 @@ describe('the referee home surface', () => {
 
     expect(document.querySelector('[aria-modal]')).toBeNull();
     expect(document.querySelectorAll('dialog')).toHaveLength(0);
-    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+    // Sign out moved to the brand bar in the referee layout, so the plain-button check is
+    // made against the control this screen still owns. `components/referee-session.test.tsx`
+    // makes the same assertion about the one that left.
+    expect(screen.getByRole('button', { name: 'Look up a day' })).toBeInTheDocument();
   });
 });
 
@@ -642,14 +645,14 @@ describe('the gone-quiet state (Story 5.3, FR-18)', () => {
     const message = await screen.findByText(/hasn't opened this/);
     expect(message).toHaveTextContent('4 days');
     expect(message.textContent).not.toMatch(/₫/);
-    // Only the screen's two standing controls exist when nothing else is pending or owed — the
+    // Only the screen's one standing control exists when nothing else is pending or owed — the
     // gone-quiet state itself renders no button of its own. "Look up a day" (Story 6.7) is a
     // door the referee may take, not a queue item: it is here whatever the state of anything
-    // else, names no day and carries no count.
-    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
-      'Look up a day',
-      'Sign out',
-    ]);
+    // else, names no day and carries no count. Sign out is no longer in this list because it
+    // now lives in the brand bar, one level up in `app/referee/layout.tsx` — which is also
+    // what makes this assertion sharper than it was: every button on this screen is now a
+    // referee-facing action rather than session chrome sharing the count.
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Look up a day']);
   });
 
   it('clears once the episode is satisfied — the RLS read simply returns nothing', async () => {

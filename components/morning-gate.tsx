@@ -110,7 +110,7 @@ export function MorningGate({
         <h1>Yesterday</h1>
       </header>
 
-      <div className="card card-pad stack">
+      <div className="card card-pad stack declaration">
         <p>{questionFor(commitment, day)}</p>
 
         {owing.length > 1 && <p className="row-muted">{owing.length - 1} more after this one.</p>}

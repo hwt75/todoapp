@@ -32,24 +32,27 @@ function designValue(name: string, mode: 'light' | 'dark'): string | undefined {
   return designColors[mode === 'dark' ? `${name}-dark` : name];
 }
 
-const STATE_FAMILIES = ['held', 'urgent', 'failed'] as const;
-const MODE_STABLE_FILLS = ['action-fill', 'action-ink', 'destructive-fill', 'destructive-ink'];
+// Four now, not three. `neutral` was a borrowed surface tone until the 2026-09-08
+// redesign declared it a family in its own right — which means it gets held to the same
+// contrast floor as the other three rather than being assumed fine because it is grey.
+const STATE_FAMILIES = ['held', 'urgent', 'failed', 'neutral'] as const;
 
-// Every light-mode colour token not already covered by a state family (tint/ink, tested
-// on its own below) or a mode-stable fill (deliberately absent from dark, tested on its
-// own below) is expected to carry its own dark counterpart — derived rather than a
-// hand-maintained list, so a token added later is covered without anyone remembering to
-// add it here.
+// Every light-mode colour token not already covered by a state family (tint/ink, tested on
+// its own below) is expected to carry its own dark counterpart — derived rather than a
+// hand-maintained list, so a token added later is covered without anyone remembering to add
+// it here.
+//
+// Nothing is exempt from this any more. The action fill used to be, on the grounds that a
+// fill carrying its own background is mode-stable by construction; on a cream page and a
+// warm near-black that stopped being true, so the fill is declared twice and measured twice.
 const DARK_COUNTERPART_TOKENS = Object.keys(light).filter(
   (name) =>
     light[name].startsWith('#') &&
-    !STATE_FAMILIES.some((family) => name === `${family}-tint` || name === `${family}-ink`) &&
-    !MODE_STABLE_FILLS.includes(name),
+    !STATE_FAMILIES.some((family) => name === `${family}-tint` || name === `${family}-ink`),
 );
 
-const FILL_INK_PAIRS = MODE_STABLE_FILLS.filter((name) => name.endsWith('-ink')).map(
-  (ink) => [ink, ink.replace(/-ink$/, '-fill')] as const,
-);
+/** The one fill and its ink, held to the text floor in both modes. */
+const FILL_INK_PAIRS = [['action-ink', 'action-fill']] as const;
 
 describe('token parity with DESIGN.md', () => {
   // DESIGN.md is the source of truth and a human-owned artifact. Nothing mechanical keeps
@@ -117,11 +120,23 @@ describe('dark mode is a declared set, not an inversion', () => {
     expect(dark[name], `${name} has no dark counterpart`).toBeDefined();
   });
 
-  // The fills carry their own background, which is what makes them mode-stable and lets
-  // a coloured area read as pressable in either mode. A dark variant would break that,
-  // so its absence is the requirement — not an omission to be tidied up later.
-  it.each(MODE_STABLE_FILLS)('%s has no dark variant', (name) => {
-    expect(dark[name], `${name} must not be redefined in dark mode`).toBeUndefined();
+  // There is one fill, and it is the only thing in the product that inverts rather than
+  // merely re-tinting: dark ink on a dark-mode fill, light ink on a light-mode one. Stating
+  // it here is what stops a future edit from "simplifying" the pair back to a single value
+  // and quietly losing contrast in whichever mode it was not chosen for.
+  it('the action fill is declared in both modes, not shared', () => {
+    expect(dark['action-fill'], 'action-fill has no dark counterpart').toBeDefined();
+    expect(dark['action-ink'], 'action-ink has no dark counterpart').toBeDefined();
+    expect(dark['action-fill']).not.toBe(light['action-fill']);
+    expect(dark['action-ink']).not.toBe(light['action-ink']);
+  });
+
+  it('has no destructive fill at all', () => {
+    // Deleting a commitment is an outlined control in the failed family. A fill here would
+    // be a second primary action wearing red, which is the thing the outline exists to
+    // prevent — see DESIGN.md's `button-destructive`.
+    expect(light['destructive-fill'], 'the destructive fill was reintroduced').toBeUndefined();
+    expect(light['destructive-ink'], 'the destructive ink was reintroduced').toBeUndefined();
   });
 });
 
@@ -141,9 +156,17 @@ describe('contrast clears WCAG AA', () => {
     expect(ratio, `${family} (${mode}) is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(TEXT_AA);
   });
 
-  it.each(FILL_INK_PAIRS)('%s on %s', (ink, fill) => {
-    const ratio = contrastRatio(light[ink], light[fill]);
-    expect(ratio, `${ink}/${fill} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(TEXT_AA);
+  it.each(
+    FILL_INK_PAIRS.flatMap(([ink, fill]) => [
+      [ink, fill, 'light' as const],
+      [ink, fill, 'dark' as const],
+    ]),
+  )('%s on %s in %s mode', (ink, fill, mode) => {
+    const tokens = mode === 'dark' ? dark : light;
+    const ratio = contrastRatio(tokens[ink], tokens[fill]);
+    expect(ratio, `${ink}/${fill} (${mode}) is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(
+      TEXT_AA,
+    );
   });
 
   it.each([
@@ -190,11 +213,27 @@ describe('the metadata escape hatch stays honest', () => {
 });
 
 describe('structural rules the stylesheet cannot state about itself', () => {
-  it('declares no shadow anywhere', () => {
-    // Elevation is hairlines and one tonal step. Depth would be decoration, and
-    // decoration is a cost on a screen the user is already reluctant to open.
+  it('spends its one shadow exactly twice', () => {
+    // Elevation is hairlines and one tonal step, plus a single shadow that marks a layer
+    // above the page — the tab bar, and the blocking morning declaration. Both are literally
+    // on a layer above the page. A third would be depth used for importance, which is
+    // decoration, and decoration is a cost on a screen the user is already reluctant to open.
     expect(CSS).not.toMatch(/box-shadow/);
-    expect(GLOBALS).not.toMatch(/box-shadow/);
+
+    const declared = CSS.match(/--shadow-[\w-]+\s*:/g) ?? [];
+    expect(declared, 'there is one shadow token, not a set').toHaveLength(1);
+
+    const uses = GLOBALS.match(/box-shadow\s*:/g) ?? [];
+    expect(
+      uses.length,
+      'the shadow belongs to the tab bar and the blocking declaration. A third claimant is ' +
+        'depth spent on importance rather than on layering; a missing one means one of those ' +
+        'two lost its lift and now sits flat on the page it is supposed to be above.',
+    ).toBe(2);
+
+    // Named rather than counted alone, so a shadow that moved to some other element still fails.
+    expect(GLOBALS).toMatch(/\.tabbar\s*\{[^}]*box-shadow/);
+    expect(GLOBALS).toMatch(/\.declaration\s*\{[^}]*box-shadow/);
   });
 
   it('reserves the pill radius — nothing pressable uses it', () => {
@@ -204,17 +243,32 @@ describe('structural rules the stylesheet cannot state about itself', () => {
     expect(buttonBlock).not.toMatch(/radius-pill/);
   });
 
-  it('uses hairlines at 0.5px, not 1px borders', () => {
-    expect(light.hairline).toBe('0.5px');
+  it('gives the urgent label its own silhouette', () => {
+    // Urgent and failed must be separable before the words are read, and hue alone was not
+    // doing it. The urgent label is the one label that is not a pill: outlined, 6px corners.
+    // If this ever collapses back to `--radius-pill`, the second half of that separation is
+    // gone and only the hue difference is left carrying it.
+    expect(light['radius-urgent']).toBe('6px');
+    const urgent = /\.pill-urgent\s*\{[^}]*\}/.exec(GLOBALS)?.[0] ?? '';
+    expect(urgent, '.pill-urgent is missing').not.toBe('');
+    expect(urgent).toMatch(/radius-urgent/);
+    expect(urgent).not.toMatch(/radius-pill/);
+    expect(urgent, 'urgent is outlined, not filled').toMatch(/background:\s*transparent/);
+  });
+
+  it('uses hairlines at 1px in the warm border tone, not 0.5px', () => {
+    // Same lightness against the page as the old 0.5px black (1.25:1), but a list of rows
+    // stops reading as a spreadsheet — and 0.5px in this colour was not reliably drawn.
+    expect(light.hairline).toBe('1px');
   });
 
   it('spends the rationed type roles no faster than the budget allows', () => {
     // `figure` may be claimed by exactly two elements in the finished product — the debt
-    // total and Epic 3's focus timer — and `quoted` by exactly one string, in the referee's
+    // total and Epic 3's focus timer — and `quote` by exactly one string, in the referee's
     // collection message. The rule is a budget, not a ban, and this is what stops the third
     // claimant arriving unnoticed.
     expect(light['type-figure'], 'the figure role must be defined').toBeDefined();
-    expect(light['font-quoted'], 'the quoted role must be defined').toBeDefined();
+    expect(light['font-quote'], 'the quoted role must be defined').toBeDefined();
 
     // The pattern used to carry a stray literal backspace where a `\b` was meant, so it matched
     // nothing and the budget it exists to police was never counted at all. It now matches the
@@ -231,9 +285,21 @@ describe('structural rules the stylesheet cannot state about itself', () => {
         'renamed and the budget is being counted against something that is no longer there.',
     ).toBe(2);
 
-    // Nothing has earned the serif yet. A second serif string deletes the signal the first
-    // one carries.
-    expect(GLOBALS).not.toMatch(/font-quoted/);
+    // The display face is rationed the same way and to the same two elements, and it is the
+    // separate assertion because a size and a face can drift apart: `--type-figure` on a body
+    // face is not the debt block, and Caprasimo at label size is not a figure. Both claims
+    // must be both things.
+    const displayUses = GLOBALS.match(/var\(\s*--font-display\s*[,)]/g) ?? [];
+    expect(
+      displayUses.length,
+      'Caprasimo is the display voice and belongs to three things: the wordmark on the ' +
+        "referee's brand bar, the debt total, and the running timer. A fourth claimant would " +
+        'make the app loud; a missing one means one of those three lost its face.',
+    ).toBe(3);
+
+    // Nothing has earned the serif yet — the referee's collection message is designed but not
+    // yet built. A second serif string deletes the signal the first one carries.
+    expect(GLOBALS).not.toMatch(/font-quote/);
   });
 
   it('keeps literal colours out of the base stylesheet', () => {

@@ -7,87 +7,120 @@
  * is a human-owned artifact: this one implements it and must not extend it. The test
  * suite parses both and fails on drift, naming the token and both values.
  *
+ * This is the 2026-09-08 redesign, handed off in `design_handoff_todoapp/`. The ground
+ * moved from white to a warm cream, hairlines from 0.5px black to 1px warm, the radius
+ * from 8/12 to 16 with a 28px outer frame, and the type from the system face to three
+ * Google faces with one rationed role each. The four state meanings did not move: they
+ * are the part of this design that carries information rather than tone.
+ *
  * Dark mode is a declared set, not an inversion. Every surface, text and state family
  * carries its own dark counterpart because an inverted warm palette goes muddy, and
  * because the state families have to keep meaning the same thing in the dark.
  */
 
 :root {
-  /* Surfaces. The page is white and so is a card: what separates them is a hairline, not
-     a tone. That is the same elevation system this product always had — hairlines doing
-     the layering work shadows would do elsewhere — with the one tonal step now spent in a
-     single place instead of two. `--surface-sunken` is that step, and it is what a quota
-     track, a row hover, a disabled control and the utility band at the foot of Today are
-     drawn in. There are still no shadows anywhere in this product.
+  /* Surfaces. The page is a warm cream and a card sits one shade lighter than it, with a
+     1px warm hairline between them — the hairline is still what does the layering work
+     shadows would do elsewhere, but it is now visible enough to draw a real edge. The
+     ground is the one thing present on every screen, and warmth is the cheapest way to
+     make opening it easier for someone whose failure mode is not opening it.
 
-     Dark mode keeps base and card apart, because a hairline at 0.5px is doing much less
-     work against #1c1c1e than it is against white. */
-  --surface-base: #ffffff;
-  --surface-card: #ffffff;
-  --surface-sunken: #f7f6f2;
+     `--surface-sunken` is the one tonal step: a quota track, a row hover, a disabled
+     control, the current tab, and the utility band at the foot of Today. */
+  --surface-base: #f5ead8;
+  --surface-card: #f9f4ed;
+  --surface-sunken: #eee7db;
 
   /* Text */
-  --text-primary: #2c2c2a;
-  --text-secondary: #5f5e5a;
-  --text-muted: #888780;
+  --text-primary: #201e1d;
+  --text-secondary: #645c50;
+  --text-muted: #736a5c;
 
-  /* Borders — hairlines do the layering work that shadows would elsewhere. */
-  --border: #dcdad2;
-  --border-strong: #b4b2a9;
+  /* Borders. 1px, and warm rather than a grey with the alpha turned down: the same
+     lightness against the page (1.25:1) but a list of rows stops reading as a table. */
+  --border: #dcd3c4;
+  --border-strong: #c0b6a5;
 
   /* State families. Four, each with exactly one meaning — a colour that means two
      things means nothing. Held is the only one that reads as good, so it stays scarce.
      Urgent is explicitly not failure: "sort this out" and "you lost this" demand
-     opposite responses and must be distinguishable at a glance. */
-  --held-tint: #eaf3de;
-  --held-ink: #3b6d11;
-  --urgent-tint: #faeeda;
-  --urgent-ink: #854f0b;
-  --failed-tint: #fcebeb;
-  --failed-ink: #a32d2d;
+     opposite responses and must be distinguishable at a glance.
 
-  /* Button fills sit one step darker than their tint families, so a coloured area
-     reads as pressable rather than labelling before its text is read. They carry
-     their own background, which is why they are mode-stable and appear once only —
-     a dark counterpart for either would break that and is a test failure. */
-  --action-fill: #97c459;
-  --action-ink: #173404;
-  --destructive-fill: #f09595;
-  --destructive-ink: #501313;
+     Neutral is a declared family now rather than a borrowed surface tone. It carries
+     everything else, including a commitment that simply has not happened yet — which
+     must never be coloured for being early. */
+  --held-tint: #e1eecc;
+  --held-ink: #3d472b;
+  --urgent-tint: #fbeacd;
+  --urgent-ink: #8a5a0a;
+  --failed-tint: #f7dcda;
+  --failed-ink: #8e2f2b;
+  --neutral-tint: #eee7db;
+  --neutral-ink: #645c50;
 
-  /* Shape. Pill is reserved to status pills — nothing pressable is ever pill-shaped,
-     because that silhouette is what separates a state label from a control. */
-  --radius-default: 8px;
-  --radius-card: 12px;
+  /* The one button fill. It is no longer mode-stable: a single fill that works on cream
+     and on a warm near-black does not exist, and faking one costs contrast in whichever
+     mode loses. Both pairs are measured — 6.46:1 light, 8.94:1 dark.
+
+     There is no destructive fill any more. Deleting a commitment is an outlined control
+     in the failed family: the one destructive action in the product should look like a
+     warning, not like a second primary action wearing red. */
+  --action-fill: #8c491a;
+  --action-ink: #fff8ef;
+
+  /* Shape. Pill is reserved to status labels — nothing pressable is ever pill-shaped,
+     because that silhouette is what separates a state label from a control. Urgent is
+     the one label that opts out of it: an outlined 6px-cornered label reads as different
+     from a filled pill before its colour has been judged, which is the whole point.
+
+     Controls and cards share 16px; 28px is the outer frame, spent only on the blocking
+     declaration. */
+  --radius-default: 16px;
+  --radius-card: 16px;
+  --radius-frame: 28px;
   --radius-pill: 9999px;
+  --radius-urgent: 6px;
 
-  /* Spacing */
+  /* Spacing — the system's 1.10x scale. There is no `5` or `7`: the scale is the scale,
+     and a step invented between two of its members is how a rhythm stops being one. */
   --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  /* Added with the shell: the only place it is used is the extra room above and below the
-     column on a window wide enough to have room to spare. */
-  --space-6: 24px;
-  --space-card-pad: 16px;
-  --space-row-pad: 11px;
+  --space-2: 9px;
+  --space-3: 13px;
+  --space-4: 18px;
+  --space-6: 26px;
+  --space-8: 35px;
+  --space-card-pad: 18px;
+  --space-row-pad-y: 11px;
+  --space-row-pad-x: 16px;
 
-  /* Type. The platform owns the ramp: the system face, two weights, nothing bold and
-     nothing uppercase. Sizes are in rem so the user's own text-size setting scales
-     them instead of being overridden.
+  /* Type. Three faces, each with one job.
 
-     The ramp is fluid rather than fixed, and the floor of every `clamp()` is the iOS size
-     DESIGN.md names — so a phone gets exactly the sizes that were specified and nothing
-     grows until there is a viewport wide enough to have asked for it. `vw` sits inside a
-     `calc` alongside a `rem` term rather than standing alone, which is what keeps the
-     user's own text-size setting able to move these at all. */
-  --font-system:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-quoted: ui-serif, Georgia, Cambria, 'Times New Roman', serif;
+     Caprasimo is the display voice and is rationed to two elements in the finished
+     product — the debt total and the running focus timer. It is deliberately not used
+     for titles: a display face on every screen head would make a ledger read as a poster.
+
+     Figtree carries everything else, at 400 for body, 500 for labels and 600 for titles.
+
+     Lora italic is reserved to exactly one string, the referee's collection message —
+     the sentence a person is expected to say out loud. Nothing else in either surface is
+     serif, because a second serif string deletes the signal the first one carries.
+
+     Sizes are fluid and in rem so the user's own text-size setting scales them. The floor
+     of every `clamp()` is the phone size the handoff names, so a phone gets exactly the
+     sizes specified and nothing grows until a viewport is wide enough to have asked.
+
+     The three faces are supplied by `next/font/google` in
+     `app/layout.tsx`, which self-hosts the faces at build time so nothing is fetched from
+     a third party at runtime and nothing reflows when it arrives. Each falls back to a
+     real stack, so a face that fails to load leaves a readable screen rather than a
+     default-serif one. */
+  --font-display: var(--font-caprasimo), Georgia, serif;
+  --font-body: var(--font-figtree), system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-quote: var(--font-lora), Georgia, serif;
 
   --weight-regular: 400;
   --weight-medium: 500;
+  --weight-semibold: 600;
 
   --type-screen-title: clamp(1.0625rem, 0.9rem + 0.6vw, 1.3125rem);
   --type-body: clamp(0.9375rem, 0.87rem + 0.25vw, 1rem);
@@ -96,11 +129,19 @@
      close the gap that makes it read as a caption. */
   --type-caption: 0.6875rem;
   --type-figure: clamp(2.125rem, 1.85rem + 1vw, 2.75rem);
-  --type-figure-tracking: -0.5px;
+  --type-quote: clamp(1.0625rem, 0.98rem + 0.3vw, 1.125rem);
 
-  /* Hairline. 0.5px rather than 1px on purpose — at 1px a list of rows starts reading
-     as a table, and this is meant to be quiet. */
-  --hairline: 0.5px;
+  --tracking-title: -0.01em;
+  --tracking-figure: -0.02em;
+
+  /* Hairline. 1px now, not 0.5px: the tone is what keeps a list quiet, and a 0.5px line
+     in this warm colour is not reliably drawn at all. */
+  --hairline: 1px;
+
+  /* Elevation. Exactly one shadow exists, and it marks a layer above the page rather than
+     importance: the tab bar floating over a scrolling screen, and the blocking morning
+     declaration sitting over an app with nothing else on it. */
+  --shadow-layer: 0 3px 10px rgba(46, 43, 37, 0.1);
 
   /* Motion. The first duration this product names — nothing else in it transitions or
      animates. Only the quota bar (Story 3.2) reads this, and only when Reduce Motion is off;
@@ -109,28 +150,36 @@
   --motion-duration: 200ms;
 }
 
+/* Dark mode. Declared, not inverted: a warm near-black with its own four state tints,
+   each measured above 7:1.
+
+   Driven by the OS setting and nothing else. The handoff's own preview pages carry a
+   Light/dark toggle because a reviewer needs to see both on one desk; the product does
+   not, and adding one would be a setting that changes nothing but how the app looks —
+   which is the kind of thing this product spends its restraint budget refusing. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --surface-base: #1c1c1e;
-    --surface-card: #2c2c2e;
-    --surface-sunken: #242426;
+    --surface-base: #17140f;
+    --surface-card: #211c16;
+    --surface-sunken: #262019;
 
-    --text-primary: #f2f2f0;
-    --text-secondary: #a0a09a;
-    --text-muted: #6e6e68;
+    --text-primary: #f2ece1;
+    --text-secondary: #b6ab9b;
+    --text-muted: #8a8072;
 
-    --border: #3a3a3c;
-    --border-strong: #545456;
+    --border: #37302a;
+    --border-strong: #4c4339;
 
-    --held-tint: #173404;
-    --held-ink: #c0dd97;
-    --urgent-tint: #412402;
-    --urgent-ink: #fac775;
-    --failed-tint: #501313;
-    --failed-ink: #f7c1c1;
+    --held-tint: #272e1b;
+    --held-ink: #ccdbb2;
+    --urgent-tint: #33260f;
+    --urgent-ink: #edc47a;
+    --failed-tint: #3a1a17;
+    --failed-ink: #efaba4;
+    --neutral-tint: #262019;
+    --neutral-ink: #b6ab9b;
 
-    /* --action-fill, --action-ink, --destructive-fill and --destructive-ink are
-       deliberately absent. They are mode-stable by construction; redefining them here
-       would be the defect, not the omission. */
+    --action-fill: #f6a06b;
+    --action-ink: #1b1207;
   }
 }

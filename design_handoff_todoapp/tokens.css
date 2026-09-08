@@ -1,0 +1,78 @@
+/* todoapp — design tokens
+   Light and dark are DECLARED palettes, not inversions.
+   Contrast ratios are measured (WCAG 2.1) and printed next to each pair. */
+
+:root {
+  /* ground */
+  --pg:  #f5ead8;  /* page */
+  --cd:  #f9f4ed;  /* card */
+  --sk:  #eee7db;  /* one tonal step / sunken */
+  --hl:  #dcd3c4;  /* hairline border, 1px */
+  --st:  #c0b6a5;  /* strong border */
+
+  /* ink */
+  --ink:  #201e1d; /* 13.95:1 on page */
+  --ink2: #645c50; /* 5.53:1  */
+  --ink3: #736a5c; /* 4.47:1  */
+
+  /* the four state meanings — one meaning each */
+  --held-tint: #e1eecc; --held-ink: #3d472b; /* 8.11:1 — filled pill */
+  --urg-tint:  #fbeacd; --urg-ink:  #8a5a0a; /* 5.00:1 — OUTLINED, 6px corners */
+  --fail-tint: #f7dcda; --fail-ink: #8e2f2b; /* 6.25:1 — filled pill */
+  --neu-tint:  #eee7db; --neu-ink:  #645c50; /* 5.36:1 — filled pill */
+
+  /* action */
+  --act-fill: #8c491a; --act-ink: #fff8ef;   /* 6.46:1 */
+
+  --lock: #2b2118; /* lock-screen ground for notification frames */
+}
+
+[data-theme="dark"] {
+  --pg:  #17140f;
+  --cd:  #211c16;
+  --sk:  #262019;
+  --hl:  #37302a;
+  --st:  #4c4339;
+
+  --ink:  #f2ece1; /* 15.62:1 */
+  --ink2: #b6ab9b; /* 8.12:1  */
+  --ink3: #8a8072; /* 4.73:1  */
+
+  --held-tint: #272e1b; --held-ink: #ccdbb2; /* 9.61:1 */
+  --urg-tint:  #33260f; --urg-ink:  #edc47a; /* 8.97:1 */
+  --fail-tint: #3a1a17; --fail-ink: #efaba4; /* 8.23:1 */
+  --neu-tint:  #262019; --neu-ink:  #b6ab9b; /* 7.13:1 */
+
+  --act-fill: #f6a06b; --act-ink: #1b1207;   /* 8.94:1 */
+
+  --lock: #0b0906;
+}
+
+/* type */
+:root {
+  --font-display: "Caprasimo", serif;   /* wordmark + the two large figures ONLY */
+  --font-body: "Figtree", system-ui, sans-serif;
+  --font-quote: "Lora", Georgia, serif; /* the referee's collection message ONLY */
+}
+
+/* spacing (1.10x scale) */
+:root {
+  --space-1: 4px; --space-2: 9px; --space-3: 13px;
+  --space-4: 18px; --space-6: 26px; --space-8: 35px;
+  --card-padding: 18px; --row-padding-y: 11px; --row-padding-x: 16px;
+}
+
+/* shape */
+:root {
+  --radius-control: 16px;
+  --radius-card: 16px;
+  --radius-frame: 28px;
+  --radius-label: 999px;   /* every status label except urgent */
+  --radius-urgent: 6px;    /* urgent labels only — silhouette differentiator */
+  --hairline: 1px;
+}
+
+/* elevation — exactly two shadows exist in the product */
+:root {
+  --shadow-layer: 0 3px 10px rgba(46,43,37,0.10); /* tab bar, blocking declaration */
+}

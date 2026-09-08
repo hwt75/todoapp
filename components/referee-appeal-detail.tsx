@@ -293,7 +293,7 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
                 <div className="actions">
                   <button
                     type="button"
-                    className="action"
+                    className="verdict-uphold"
                     disabled={ruling.kind === 'ruling'}
                     aria-busy={ruling.kind === 'ruling'}
                     onClick={() => void rule(true)}
@@ -304,6 +304,7 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
                   </button>
                   <button
                     type="button"
+                    className="verdict-deny"
                     disabled={ruling.kind === 'ruling'}
                     aria-busy={ruling.kind === 'ruling'}
                     onClick={() => void rule(false)}

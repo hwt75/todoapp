@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600&family=Lora:ital@1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_ds/organic-d76a8a32-d512-4ae4-8cc0-d0cd42e4bd69/styles.css">
+<script src="_ds/organic-d76a8a32-d512-4ae4-8cc0-d0cd42e4bd69/_ds_bundle.js"></script>
+<style>
+:root{
+--pg:var(--color-bg);--cd:var(--color-neutral-100);--sk:var(--color-neutral-200);--hl:var(--color-neutral-300);--st:var(--color-neutral-400);
+--ink:var(--color-text);--ink2:var(--color-neutral-700);--ink3:#736a5c;
+--heldT:var(--color-accent-2-200);--heldI:var(--color-accent-2-800);--urgT:#fbeacd;--urgI:#8a5a0a;
+--failT:#f7dcda;--failI:#8e2f2b;--neuT:var(--color-neutral-200);--neuI:var(--color-neutral-700);
+--actF:var(--color-accent-700);--actI:#fff8ef;--board:#e7dcc8;--lock:#2b2118;
+}
+[data-mode="dark"]{
+--pg:#17140f;--cd:#211c16;--sk:#262019;--hl:#37302a;--st:#4c4339;
+--ink:#f2ece1;--ink2:#b6ab9b;--ink3:#8a8072;
+--heldT:var(--color-accent-2-900);--heldI:var(--color-accent-2-300);--urgT:#33260f;--urgI:#edc47a;
+--failT:#3a1a17;--failI:#efaba4;--neuT:#262019;--neuI:#b6ab9b;
+--actF:var(--color-accent-400);--actI:#1b1207;--board:#100e0a;--lock:#0b0906;
+}
+body{margin:0;font-family:"Figtree",system-ui,sans-serif;background:var(--board);color:var(--ink)}
+a{color:var(--actF)}
+a:hover{color:var(--failI)}
+</style>
+</helmet>
+<div data-mode="{{ mode }}" style="background:var(--board);min-height:100vh;padding:40px 24px 96px;font-family:'Figtree',system-ui,sans-serif;color:var(--ink)">
+
+  <div style="max-width:1200px;margin:0 auto 36px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:14px">
+      <img src="assets/logo.png" alt="" style="width:48px;height:48px;border-radius:12px;object-fit:cover">
+      <div>
+      <div style="font-family:'Caprasimo',serif;font-size:28px;line-height:1;letter-spacing:-0.02em">todoapp</div>
+      <div style="font-size:13px;color:var(--ink3);margin-top:8px">Doer surface · iPhone PWA · 390 × 844 · key states, remaining states noted in captions</div>
+      </div>
+    </div>
+    <button onClick="{{ toggle }}" style="font-size:13px;font-family:'Figtree',system-ui,sans-serif;min-height:44px;padding:0 16px;border-radius:16px;border:1px solid var(--hl);background:var(--cd);color:var(--ink2);cursor:pointer" style-hover="background:var(--sk)">Light / dark</button>
+  </div>
+
+  <div style="max-width:1200px;margin:0 auto;display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start">
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">1 · Sign in — default</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>7:41</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:26px 22px;display:flex;flex-direction:column;justify-content:center;gap:26px">
+          <div style="display:flex;flex-direction:column;gap:13px">
+            <img src="assets/logo.png" alt="todoapp" style="width:88px;height:88px;border-radius:20px;object-fit:cover">
+            <div style="font-family:'Caprasimo',serif;font-size:34px;line-height:1;letter-spacing:-0.025em">todoapp</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:13px">
+            <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:13px;font-weight:500;color:var(--ink2)">Email</span><span style="min-height:48px;display:flex;align-items:center;padding:0 16px;border:1px solid var(--st);border-radius:16px;background:var(--cd);font-size:16px;color:var(--ink)">hoang@mail.com</span></label>
+            <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:13px;font-weight:500;color:var(--ink2)">Password</span><span style="min-height:48px;display:flex;align-items:center;padding:0 16px;border:1px solid var(--st);border-radius:16px;background:var(--cd);font-size:16px;color:var(--ink3)">••••••••</span></label>
+          </div>
+          <button style="min-height:48px;border:0;border-radius:16px;background:var(--actF);color:var(--actI);font-size:16px;font-weight:500;font-family:'Figtree',system-ui,sans-serif;cursor:pointer">Sign in</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">1 · Sign in — error</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>7:41</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:26px 22px;display:flex;flex-direction:column;justify-content:center;gap:26px">
+          <div style="display:flex;flex-direction:column;gap:13px">
+            <img src="assets/logo.png" alt="todoapp" style="width:88px;height:88px;border-radius:20px;object-fit:cover">
+            <div style="font-family:'Caprasimo',serif;font-size:34px;line-height:1;letter-spacing:-0.025em">todoapp</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:13px">
+            <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:13px;font-weight:500;color:var(--ink2)">Email</span><span style="min-height:48px;display:flex;align-items:center;padding:0 16px;border:1px solid var(--st);border-radius:16px;background:var(--cd);font-size:16px;color:var(--ink)">hoang@mail.com</span></label>
+            <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:13px;font-weight:500;color:var(--ink2)">Password</span><span style="min-height:48px;display:flex;align-items:center;padding:0 16px;border:1.5px solid var(--failI);border-radius:16px;background:var(--cd);font-size:16px;color:var(--ink3)">••••••</span></label>
+            <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;color:var(--failI)">Failed.</span><span style="font-size:14px;color:var(--ink2);text-wrap:pretty">That email and password don't match anything here.</span></div>
+          </div>
+          <button style="min-height:48px;border:0;border-radius:16px;background:var(--actF);color:var(--actI);font-size:16px;font-weight:500;font-family:'Figtree',system-ui,sans-serif;cursor:pointer">Sign in</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">2 · Morning Declaration — one day pending (several days pending stacks the same question with “2 days waiting”)</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>7:41</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:26px 22px;display:flex;flex-direction:column;justify-content:center;gap:35px">
+          <div style="background:var(--cd);border:1px solid var(--hl);border-radius:28px;padding:26px 22px;box-shadow:0 3px 10px rgba(46,43,37,0.10);display:flex;flex-direction:column;gap:26px">
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;align-items:center;gap:11px">
+                <div style="min-width:44px;height:44px;padding:0 10px;border-radius:12px;background:var(--sk);border:1px solid var(--hl);display:flex;align-items:center;justify-content:center;font-family:'Caprasimo',serif;font-size:17px;color:var(--ink2)">d5</div>
+                <div style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Morning. Day 5 is waiting.</div>
+              </div>
+              <div style="font-size:17px;color:var(--ink2);padding-top:4px">Did last night hold?</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <button style="min-height:52px;border:1px solid var(--st);border-radius:16px;background:var(--pg);color:var(--ink);font-size:17px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--sk)">It held</button>
+              <button style="min-height:52px;border:1px solid var(--st);border-radius:16px;background:var(--pg);color:var(--ink);font-size:17px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--sk)">I slipped</button>
+            </div>
+          </div>
+          <div style="font-size:13px;color:var(--ink3);text-align:center">No money named, no default answer, no confirmation. Both controls are the same control.</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">3 · Today — normal</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>10:04</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:0 22px;display:flex;flex-direction:column;gap:18px;overflow:hidden">
+          <div style="min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Today</span>
+            <span style="font-size:13px;color:var(--ink3)">Thursday 12 March</span>
+          </div>
+          <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Morning exercise</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">12</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Gym</span><span style="font-size:13px;padding:5px 11px;border-radius:6px;color:var(--urgI);border:1.5px solid var(--urgI)">1/3 · 3 days</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Company work</span><span style="font-size:13px;color:var(--ink3)">0:50 of 3:00</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Evening study</span><span style="font-size:13px;color:var(--ink3)">Window open</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px"><span style="font-size:16px">No gambling</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">31</span></div>
+          </div>
+          <button style="min-height:48px;border:0;border-radius:16px;background:var(--actF);color:var(--actI);font-size:16px;font-weight:500;font-family:'Figtree',system-ui,sans-serif;cursor:pointer">Claim Evening study</button>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="font-size:13px;color:var(--ink2)">Company work</div>
+            <div style="height:6px;border-radius:3px;background:var(--sk);overflow:hidden"><div style="width:28%;height:6px;background:var(--ink2);border-radius:3px"></div></div>
+            <div style="font-size:11px;color:var(--ink3)">0:50 of 3:00 banked today</div>
+          </div>
+        </div>
+        <div style="padding:0 22px 22px;flex:none">
+          <div style="display:flex;background:var(--cd);border:1px solid var(--hl);border-radius:16px;overflow:hidden;box-shadow:0 3px 10px rgba(46,43,37,0.10)">
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;font-weight:600;color:var(--ink);background:var(--sk);border-right:1px solid var(--hl)">Today</div>
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;color:var(--ink2);border-right:1px solid var(--hl)">Ledger</div>
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;color:var(--ink2)">Settings</div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--ink3);text-wrap:pretty">Nothing owed, so the debt block renders nothing at all. No row is tinted; only labels are. The declared row's control appears in the morning only.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">3 · Today — everything held</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>21:18</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:0 22px;display:flex;flex-direction:column;gap:18px">
+          <div style="min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Today</span><span style="font-size:13px;color:var(--ink3)">Thursday 12 March</span></div>
+          <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Morning exercise</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">13</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Gym</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">2/3 · 3 days</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Company work</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">3:00</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Evening study</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">8</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px"><span style="font-size:16px">No gambling</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">32</span></div>
+          </div>
+          <div style="font-size:16px;color:var(--ink2);padding:0 2px">Evening study — claimed for today.</div>
+          <div style="display:flex;align-items:center;gap:12px;border:1px solid var(--hl);border-radius:16px;padding:11px 16px;background:var(--cd)">
+            <div style="width:44px;height:44px;border-radius:12px;background:var(--sk);border:1px solid var(--hl);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--ink3);flex:none">photo</div>
+            <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">Proof</div><div style="font-size:11px;color:var(--ink3);text-wrap:pretty">Proof saved.</div></div>
+          </div>
+        </div>
+        <div style="padding:0 22px 22px;flex:none">
+          <div style="display:flex;background:var(--cd);border:1px solid var(--hl);border-radius:16px;overflow:hidden;box-shadow:0 3px 10px rgba(46,43,37,0.10)">
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;font-weight:600;color:var(--ink);background:var(--sk);border-right:1px solid var(--hl)">Today</div>
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;color:var(--ink2);border-right:1px solid var(--hl)">Ledger</div>
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;color:var(--ink2)">Settings</div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--ink3)">It says so once. No celebration, no tinted background.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">3 · Today — day already failed, claim window open, one check revoked</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>19:02</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:0 22px;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+          <div style="min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Today</span><span style="font-size:13px;color:var(--ink3)">Saturday 14 March</span></div>
+          <div style="border-radius:16px;background:var(--failT);padding:18px;display:flex;flex-direction:column;gap:3px">
+            <div style="font-size:13px;color:var(--failI)">Owed</div>
+            <div style="font-family:'Caprasimo',serif;font-size:44px;line-height:1.05;letter-spacing:-0.02em;color:var(--failI);font-variant-numeric:tabular-nums">1,500,000</div>
+            <div style="font-size:13px;color:var(--failI)">Three days. Nam has been told.</div>
+          </div>
+          <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Morning exercise</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">12</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Gym</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--failT);color:var(--failI);border:1px solid var(--failI)">Missed</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Company work</span><span style="font-size:13px;color:var(--ink3)">1:20 of 3:00</span></div>
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)">
+              <span style="font-size:16px;flex:1;min-width:0">Evening study<span style="display:block;font-size:11px;color:var(--ink3);text-wrap:pretty">Location permission was turned off. You'll be asked each morning instead.</span></span>
+              <span style="font-size:13px;padding:5px 11px;border-radius:6px;color:var(--urgI);border:1.5px solid var(--urgI);flex:none">Check off</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px"><span style="font-size:16px">No gambling</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">31</span></div>
+          </div>
+          <button style="min-height:48px;border:0;border-radius:16px;background:var(--actF);color:var(--actI);font-size:16px;font-weight:500;font-family:'Figtree',system-ui,sans-serif;cursor:pointer">Claim Evening study</button>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--hl);border-radius:16px;padding:11px 16px;background:var(--cd);min-height:44px">
+            <div style="flex:1;min-width:0"><div style="font-size:15px">Spend a Grace Day</div><div style="font-size:11px;color:var(--ink3)">2 remaining this month</div></div>
+            <span style="font-size:13px;color:var(--ink2);text-decoration:underline;text-underline-offset:3px">Spend</span>
+          </div>
+        </div>
+        <div style="padding:0 22px 22px;flex:none">
+          <div style="display:flex;background:var(--cd);border:1px solid var(--hl);border-radius:16px;overflow:hidden;box-shadow:0 3px 10px rgba(46,43,37,0.10)">
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;font-weight:600;color:var(--ink);background:var(--sk);border-right:1px solid var(--hl)">Today</div>
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;color:var(--ink2);border-right:1px solid var(--hl)">Ledger</div>
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;color:var(--ink2)">Settings</div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--ink3);text-wrap:pretty">The worst day in the product: one tinted field, one tinted label. Rows stay neutral. After spending, the row reads “Grace Day spent. This day clears within the hour.”</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">3 · Today — empty</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>7:52</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:0 22px;display:flex;flex-direction:column;gap:18px">
+          <div style="min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Today</span><span style="font-size:13px;color:var(--ink3)">Monday 9 March</span></div>
+          <div style="border:1px dashed var(--st);border-radius:16px;padding:22px 18px;font-size:16px;color:var(--ink2);text-wrap:pretty">Nothing set up yet. Add a commitment below and it will appear here tomorrow morning.</div>
+          <button style="min-height:48px;border:0;border-radius:16px;background:var(--actF);color:var(--actI);font-size:16px;font-weight:500;font-family:'Figtree',system-ui,sans-serif;cursor:pointer">Add a commitment</button>
+        </div>
+        <div style="padding:0 22px 22px;flex:none">
+          <div style="display:flex;background:var(--cd);border:1px solid var(--hl);border-radius:16px;overflow:hidden;box-shadow:0 3px 10px rgba(46,43,37,0.10)">
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;font-weight:600;color:var(--ink);background:var(--sk);border-right:1px solid var(--hl)">Today</div>
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;color:var(--ink2);border-right:1px solid var(--hl)">Ledger</div>
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;color:var(--ink2)">Settings</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">4 · Chains detail — live chain (just-reset shows the same calendar with “Chain reset. Longest stands at 31.”)</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>10:06</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:0 22px;display:flex;flex-direction:column;gap:22px">
+          <div style="min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--hl)"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Morning exercise</span><span style="font-size:15px;color:var(--ink2)">Close</span></div>
+          <div style="display:flex;gap:13px">
+            <div style="flex:1;background:var(--cd);border:1px solid var(--hl);border-radius:16px;padding:16px"><div style="font-size:13px;color:var(--ink2)">Current chain</div><div style="font-size:34px;font-weight:600;letter-spacing:-0.01em;font-variant-numeric:tabular-nums">12</div><div style="font-size:11px;color:var(--ink3)">days</div></div>
+            <div style="flex:1;background:var(--cd);border:1px solid var(--hl);border-radius:16px;padding:16px"><div style="font-size:13px;color:var(--ink2)">Longest</div><div style="font-size:34px;font-weight:600;letter-spacing:-0.01em;font-variant-numeric:tabular-nums">31</div><div style="font-size:11px;color:var(--ink3)">days</div></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:11px">
+            <div style="font-size:13px;font-weight:500;color:var(--ink2)">March</div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:7px">
+              <div style="aspect-ratio:1;border-radius:12px;background:var(--sk);border:1px solid var(--hl)"></div>
+              <div style="aspect-ratio:1;border-radius:12px;background:var(--heldT);border:1px solid var(--heldI);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--heldI)">1</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:var(--heldT);border:1px solid var(--heldI);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--heldI)">2</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:var(--failT);border:1px solid var(--failI);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--failI)">3</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:var(--sk);border:1px solid var(--st);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--ink2)">4</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:var(--heldT);border:1px solid var(--heldI);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--heldI)">5</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:var(--heldT);border:1px solid var(--heldI);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--heldI)">6</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:var(--heldT);border:1px solid var(--heldI);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--heldI)">7</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:var(--heldT);border:1px solid var(--heldI);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--heldI)">8</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:var(--heldT);border:1px solid var(--heldI);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--heldI)">9</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:var(--heldT);border:1px solid var(--heldI);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--heldI)">10</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:var(--heldT);border:1px solid var(--heldI);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--heldI)">11</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:var(--heldT);border:1.5px solid var(--ink);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--heldI)">12</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:var(--pg);border:1px dashed var(--hl)"></div>
+            </div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--ink3);padding-top:4px">
+              <span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:4px;background:var(--heldT);border:1px solid var(--heldI)"></span>Held</span>
+              <span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:4px;background:var(--failT);border:1px solid var(--failI)"></span>Missed</span>
+              <span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:4px;background:var(--sk);border:1px solid var(--st)"></span>Waived</span>
+            </div>
+          </div>
+          <button style="align-self:flex-start;min-height:44px;padding:0 16px;border:1px solid var(--failI);border-radius:16px;background:transparent;color:var(--failI);font-size:15px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--failT)">Delete commitment</button>
+          <div style="font-size:11px;color:var(--ink3);margin-top:-14px">Asks once more before it goes.</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">5 · Focus Session — running (idle shows “Start the clock”; quota met shows “3:00 of 3:00” with no control)</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>12:40</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:0 22px 22px;display:flex;flex-direction:column;gap:26px">
+          <div style="min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--hl)"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Company work</span><span style="font-size:15px;color:var(--ink2)">Close</span></div>
+          <div style="display:flex;flex-direction:column;gap:9px;padding-top:9px">
+            <div style="font-family:'Caprasimo',serif;font-size:44px;line-height:1;letter-spacing:-0.02em;font-variant-numeric:tabular-nums">0:50 of 3:00</div>
+            <div style="height:6px;border-radius:3px;background:var(--sk);overflow:hidden"><div style="width:28%;height:6px;background:var(--ink2);border-radius:3px"></div></div>
+            <div style="font-size:13px;color:var(--ink2)">Banked today</div>
+          </div>
+          <button style="min-height:48px;border:0;border-radius:16px;background:var(--actF);color:var(--actI);font-size:16px;font-weight:500;font-family:'Figtree',system-ui,sans-serif;cursor:pointer">Stop and bank it</button>
+          <div style="font-size:14px;color:var(--ink2);text-wrap:pretty">Keeps running while your phone is locked. Nothing here watches what you're doing.</div>
+          <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);padding:16px;font-size:14px;color:var(--ink2);text-wrap:pretty">A clock is already running on another commitment. Stop that one first.<div style="font-size:11px;color:var(--ink3);margin-top:6px">Shown when a second session is started.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">6 · Appeal — submitted and held (draft has the same account plus an empty Proof slot; ruled / dropped replace the held sentence with one line)</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>20:11</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:0 22px 22px;display:flex;flex-direction:column;gap:20px">
+          <div style="min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--hl)"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Appeal</span><span style="font-size:15px;color:var(--ink2)">Close</span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><span style="font-size:16px">Gym · Saturday 14 March</span><span style="font-size:13px;padding:5px 11px;border-radius:6px;color:var(--urgI);border:1.5px solid var(--urgI)">On hold</span></div>
+          <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);padding:18px;display:flex;flex-direction:column;gap:9px">
+            <div style="font-size:13px;font-weight:500;color:var(--ink2)">What the check recorded</div>
+            <div style="font-size:17px;line-height:1.45;text-wrap:pretty">Location saw you for 4 minutes. It needed 30.</div>
+          </div>
+          <div style="border-radius:16px;background:var(--urgT);padding:18px">
+            <div style="font-size:17px;line-height:1.5;font-weight:500;color:var(--urgI);text-wrap:pretty">500,000 is on hold, not charged. It stays on hold until Nam decides, or until Sunday closes — and if he doesn't get to it, it's dropped.</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <div style="font-size:13px;font-weight:500;color:var(--ink2)">Proof</div>
+            <div style="display:flex;gap:11px">
+              <div style="width:88px;height:88px;border-radius:12px;background:var(--sk);border:1px solid var(--hl);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--ink3)">photo 1</div>
+              <div style="width:88px;height:88px;border-radius:12px;background:var(--sk);border:1px solid var(--hl);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--ink3)">photo 2</div>
+            </div>
+            <div style="font-size:11px;color:var(--ink3);text-wrap:pretty">A photo taken today. It is private — only you can open it.</div>
+          </div>
+          <div style="font-size:15px;color:var(--ink2);border-top:1px solid var(--hl);padding-top:16px">Sent to Nam. Nothing more to do here.</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">7 · Ledger — populated (empty reads “No day has been judged yet.”)</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>21:20</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:0 22px;display:flex;flex-direction:column;gap:18px;overflow:hidden">
+          <div style="min-height:44px;display:flex;align-items:center;gap:12px"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Ledger</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--ink2)"><span>Six judged days</span><span style="font-variant-numeric:tabular-nums">1,500,000 outstanding</span></div>
+          <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:15px;flex:1;min-width:0">Sat 14 March<span style="display:block;font-size:11px;color:var(--ink3)">Gym · 500,000</span></span><span style="font-size:13px;padding:5px 11px;border-radius:999px;border:1px solid var(--st);color:var(--ink2);flex:none">Owed</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:15px;flex:1;min-width:0">Tue 10 March<span style="display:block;font-size:11px;color:var(--ink3)">Evening study · 500,000</span></span><span style="font-size:13px;padding:5px 11px;border-radius:999px;border:1px solid var(--st);color:var(--ink2);flex:none">Owed</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:15px;flex:1;min-width:0">Mon 9 March<span style="display:block;font-size:11px;color:var(--ink3)">Company work · 500,000</span></span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI);flex:none">Collected</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:15px;flex:1;min-width:0">Thu 5 March<span style="display:block;font-size:11px;color:var(--ink3)">Gym · grace day</span></span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI);flex:none">Waived</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:15px;flex:1;min-width:0">Sun 1 March<span style="display:block;font-size:11px;color:var(--ink3)">Gym · appeal not ruled</span></span><span style="font-size:13px;padding:5px 11px;border-radius:999px;border:1px solid var(--st);color:var(--ink2);flex:none">Dropped</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px"><span style="font-size:15px;flex:1;min-width:0">Fri 21 February<span style="display:block;font-size:11px;color:var(--ink3)">Evening study · 500,000</span></span><span style="font-size:13px;padding:5px 11px;border-radius:999px;border:1px solid var(--st);color:var(--ink2);flex:none">Expired</span></div>
+          </div>
+          <div style="font-size:11px;color:var(--ink3);text-wrap:pretty">An owed row keeps its label and stays neutral. Only Collected and Waived take a tint — the resolved outcomes.</div>
+        </div>
+        <div style="padding:0 22px 22px;flex:none">
+          <div style="display:flex;background:var(--cd);border:1px solid var(--hl);border-radius:16px;overflow:hidden;box-shadow:0 3px 10px rgba(46,43,37,0.10)">
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;color:var(--ink2);border-right:1px solid var(--hl)">Today</div>
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;font-weight:600;color:var(--ink);background:var(--sk);border-right:1px solid var(--hl)">Ledger</div>
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;color:var(--ink2)">Settings</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">8 · Task setup — money and a machine check both on (new: money off, no warning)</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>22:05</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:0 22px 22px;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+          <div style="min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--hl)"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Gym</span><span style="font-size:15px;color:var(--ink2)">Close</span></div>
+          <label style="display:flex;flex-direction:column;gap:5px"><span style="font-size:13px;font-weight:500;color:var(--ink2)">Name</span><span style="min-height:48px;display:flex;align-items:center;padding:0 16px;border:1px solid var(--st);border-radius:16px;background:var(--cd);font-size:16px">Gym</span></label>
+          <div style="display:flex;flex-direction:column;gap:7px">
+            <span style="font-size:13px;font-weight:500;color:var(--ink2)">Kind</span>
+            <div style="display:flex;border:1px solid var(--st);border-radius:16px;overflow:hidden;background:var(--cd)">
+              <div style="flex:1;text-align:center;padding:13px 0;font-size:14px;font-weight:600;background:var(--sk);border-right:1px solid var(--hl)">Do it</div>
+              <div style="flex:1;text-align:center;padding:13px 0;font-size:14px;color:var(--ink2);border-right:1px solid var(--hl)">Avoid it</div>
+              <div style="flex:1;text-align:center;padding:13px 0;font-size:14px;color:var(--ink2)">Put hours in</div>
+            </div>
+          </div>
+          <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);overflow:hidden">
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;min-height:44px;border-bottom:1px solid var(--hl)">
+              <div style="flex:1;min-width:0"><div style="font-size:15px">Money</div><div style="font-size:12px;color:var(--ink2)">500,000 for a missed day. Nam collects it.</div></div>
+              <div style="width:48px;height:28px;border-radius:999px;background:var(--actF);position:relative;flex:none"><div style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:999px;background:var(--actI)"></div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;min-height:44px;border-bottom:1px solid var(--hl)">
+              <div style="flex:1;min-width:0"><div style="font-size:15px">Location check</div><div style="font-size:12px;color:var(--ink2)">30 minutes inside the gym counts the day.</div></div>
+              <div style="width:48px;height:28px;border-radius:999px;background:var(--actF);position:relative;flex:none"><div style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:999px;background:var(--actI)"></div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;min-height:44px;opacity:0.45">
+              <div style="flex:1;min-width:0"><div style="font-size:15px">Screen-time check</div><div style="font-size:12px;color:var(--ink2)">Only means something for “Avoid it”.</div></div>
+              <div style="width:48px;height:28px;border-radius:999px;background:var(--sk);border:1px solid var(--st);position:relative;flex:none"><div style="position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:999px;background:var(--cd);border:1px solid var(--st)"></div></div>
+            </div>
+          </div>
+          <div style="border-radius:16px;background:var(--urgT);padding:18px">
+            <div style="font-size:16px;line-height:1.5;color:var(--urgI);text-wrap:pretty">Money and a machine check are both on. The check's ruling stands on the day, and an appeal to Nam is the only way to overturn it.</div>
+          </div>
+          <div style="font-size:13px;color:var(--ink3);text-wrap:pretty">For an unverifiable kind: “Nothing can check this one. You'll be asked each morning, and your answer is the record.”</div>
+          <button style="min-height:48px;border:0;border-radius:16px;background:var(--actF);color:var(--actI);font-size:16px;font-weight:500;font-family:'Figtree',system-ui,sans-serif;cursor:pointer;margin-top:auto">Save commitment</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">9 · Week close</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>23:58</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:0 22px 22px;display:flex;flex-direction:column;gap:20px">
+          <div style="min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--hl)"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Week close</span><span style="font-size:13px;color:var(--ink3)">9–15 March</span></div>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);padding:16px;display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><span style="font-size:16px">Gym</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">3 of 3</span></div>
+              <div style="height:6px;border-radius:3px;background:var(--sk);overflow:hidden"><div style="width:100%;height:6px;background:var(--heldI);border-radius:3px"></div></div>
+              <div style="font-size:14px;color:var(--ink2)">Met, on the last day available.</div>
+            </div>
+            <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);padding:16px;display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><span style="font-size:16px">Company work</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--failT);color:var(--failI);border:1px solid var(--failI)">11:20 of 15:00</span></div>
+              <div style="height:6px;border-radius:3px;background:var(--sk);overflow:hidden"><div style="width:75%;height:6px;background:var(--ink2);border-radius:3px"></div></div>
+              <div style="font-size:14px;color:var(--ink2)">Short by 3:40. That day is in the Ledger.</div>
+            </div>
+            <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);padding:16px;display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><span style="font-size:16px">Evening study</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">5 of 5</span></div>
+              <div style="height:6px;border-radius:3px;background:var(--sk);overflow:hidden"><div style="width:100%;height:6px;background:var(--heldI);border-radius:3px"></div></div>
+              <div style="font-size:14px;color:var(--ink2)">Met with two days spare.</div>
+            </div>
+          </div>
+          <button style="margin-top:auto;min-height:48px;border:1px solid var(--st);border-radius:16px;background:var(--cd);color:var(--ink);font-size:16px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer">Close the week</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">10 · Monthly report</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>8:30</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:0 22px 22px;display:flex;flex-direction:column;gap:20px">
+          <div style="min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--hl)"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">February</span><span style="font-size:15px;color:var(--ink2)">Close</span></div>
+          <div style="display:flex;flex-direction:column;gap:11px">
+            <div style="font-size:13px;font-weight:500;color:var(--ink2)">Chains at month end</div>
+            <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);overflow:hidden">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:15px">Morning exercise</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">12</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:15px">No gambling</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">31</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;min-height:44px"><span style="font-size:15px">Evening study</span><span style="font-size:13px;color:var(--ink3)">Reset on 21 Feb</span></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:13px">
+            <div style="flex:1;border:1px solid var(--hl);border-radius:16px;background:var(--cd);padding:16px"><div style="font-size:13px;color:var(--ink2)">Incurred</div><div style="font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-0.01em">2,500,000</div></div>
+            <div style="flex:1;border:1px solid var(--hl);border-radius:16px;background:var(--cd);padding:16px"><div style="font-size:13px;color:var(--ink2)">Collected</div><div style="font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-0.01em">500,000</div></div>
+          </div>
+          <div style="font-size:13px;color:var(--ink3);margin-top:-9px;text-wrap:pretty">Two figures, never one. They are meant to be compared.</div>
+          <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:15px">Median days to return</span><span style="font-size:15px;font-variant-numeric:tabular-nums">1</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;min-height:44px"><span style="font-size:15px">Silences over two days</span><span style="font-size:15px;font-variant-numeric:tabular-nums">2</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">11 · Settings — healthy, referee just paired (denied / not installed swap the two top rows for their urgent versions)</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>8:12</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:0 22px;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+          <div style="min-height:44px;display:flex;align-items:center;gap:12px"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Settings</span></div>
+          <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><div style="flex:1"><div style="font-size:15px">Morning hour</div><div style="font-size:12px;color:var(--ink2)">The question arrives then.</div></div><span style="font-size:15px;font-variant-numeric:tabular-nums">07:30</span></div>
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><div style="flex:1;min-width:0"><div style="font-size:15px">Notifications</div><div style="font-size:12px;color:var(--ink2);text-wrap:pretty">The morning question and the evening summary arrive on your lock screen.</div></div><div style="width:48px;height:28px;border-radius:999px;background:var(--actF);position:relative;flex:none"><div style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:999px;background:var(--actI)"></div></div></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;min-height:44px"><div style="flex:1;min-width:0"><div style="font-size:15px">Home screen</div><div style="font-size:12px;color:var(--ink2);text-wrap:pretty">Launched from the home screen, which is the only way iOS delivers push at all.</div></div><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI);flex:none">Installed</span></div>
+          </div>
+          <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><div style="flex:1"><div style="font-size:15px">Referee</div><div style="font-size:12px;color:var(--ink2)">Nam · paired this morning</div></div><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">Paired</span></div>
+            <div style="padding:16px;display:flex;flex-direction:column;gap:7px;background:var(--sk)">
+              <div style="font-size:13px;color:var(--ink2)">His one-time password. Shown once, here, now.</div>
+              <div style="font-size:26px;font-weight:600;letter-spacing:0.06em;font-variant-numeric:tabular-nums">4K7Q-92DM</div>
+              <div style="font-size:11px;color:var(--ink3)">Leaving this screen removes it for good.</div>
+            </div>
+          </div>
+          <div style="border:1px solid var(--hl);border-radius:16px;background:var(--cd);overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;min-height:44px"><div style="flex:1"><div style="font-size:15px">Grace days</div><div style="font-size:12px;color:var(--ink2)">Two left this month.</div></div><span style="font-size:15px;font-variant-numeric:tabular-nums">2 of 3</span></div>
+          </div>
+        </div>
+        <div style="padding:0 22px 22px;flex:none">
+          <div style="display:flex;background:var(--cd);border:1px solid var(--hl);border-radius:16px;overflow:hidden;box-shadow:0 3px 10px rgba(46,43,37,0.10)">
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;color:var(--ink2);border-right:1px solid var(--hl)">Today</div>
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;color:var(--ink2);border-right:1px solid var(--hl)">Ledger</div>
+            <div style="flex:1;text-align:center;padding:13px 0;font-size:13px;font-weight:600;color:var(--ink);background:var(--sk)">Settings</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">12 · Silence intervention — replaces everything, delivered once</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--pg);overflow:hidden;display:flex;flex-direction:column">
+        <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:600;color:var(--ink2);flex:none"><span>9:04</span><span>▮▮▮</span></div>
+        <div style="flex:1;padding:26px 22px;display:flex;flex-direction:column;justify-content:center;gap:26px">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Two quiet days</div>
+            <div style="font-size:17px;line-height:1.55;color:var(--ink);text-wrap:pretty">Two quiet days. This is the part where it usually ends. It doesn't have to. Do one thing today — TryHackMe, twenty minutes.</div>
+          </div>
+          <button style="align-self:flex-start;min-height:44px;padding:0 18px;border:1px solid var(--st);border-radius:16px;background:var(--cd);color:var(--ink);font-size:16px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--sk)">Start the clock</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--ink3)">No debt figure, no tint, no tab bar, one small action.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">13 · Lock screen — Morning Declaration (re-delivers until answered)</div>
+      <div style="width:390px;height:844px;border-radius:40px;border:1px solid var(--st);background:var(--lock);overflow:hidden;display:flex;flex-direction:column;padding:26px 18px;gap:26px">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:0 8px;font-size:13px;font-weight:600;color:#e8dcc7"><span>7:30</span><span>▮▮▮</span></div>
+        <div style="text-align:center;color:#e8dcc7;display:flex;flex-direction:column;gap:2px">
+          <div style="font-size:16px">Thursday 12 March</div>
+          <div style="font-size:70px;font-weight:500;line-height:1;letter-spacing:-0.02em;font-variant-numeric:tabular-nums">7:30</div>
+        </div>
+        <div style="background:rgba(245,234,216,0.16);border:1px solid rgba(245,234,216,0.14);border-radius:20px;padding:14px;display:flex;gap:12px;align-items:flex-start">
+          <img src="assets/logo.png" alt="todoapp" style="width:38px;height:38px;border-radius:10px;flex:none;object-fit:cover">
+          <div style="flex:1;min-width:0;color:#f6ecd9">
+            <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;opacity:0.85"><span>todoapp</span><span>7:30</span></div>
+            <div style="font-size:16px;font-weight:600;margin-top:3px">Morning. Day 5 is waiting.</div>
+            <div style="font-size:16px;line-height:1.4">Did last night hold?</div>
+            <div style="margin-top:11px;display:inline-flex;align-items:center;min-height:32px;padding:0 14px;border-radius:999px;background:rgba(245,234,216,0.22);font-size:14px">Answer</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:390px">
+      <div style="font-size:12px;color:var(--ink3)">13 · The other four templates, on the lock screen ground</div>
+      <div style="width:390px;border-radius:40px;border:1px solid var(--st);background:var(--lock);overflow:hidden;display:flex;flex-direction:column;padding:26px 18px;gap:13px">
+        <div style="background:rgba(245,234,216,0.16);border:1px solid rgba(245,234,216,0.14);border-radius:20px;padding:14px;display:flex;gap:12px;align-items:flex-start">
+          <img src="assets/logo.png" alt="todoapp" style="width:38px;height:38px;border-radius:10px;flex:none;object-fit:cover">
+          <div style="flex:1;min-width:0;color:#f6ecd9">
+            <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;opacity:0.85"><span>todoapp</span><span>12:40</span></div>
+            <div style="font-size:16px;font-weight:600;margin-top:3px">Focus prompt</div>
+            <div style="font-size:16px;line-height:1.4">Company work, 0:50 of 3:00, as of 12:40.</div>
+            <div style="margin-top:11px;display:inline-flex;align-items:center;min-height:32px;padding:0 14px;border-radius:999px;background:rgba(245,234,216,0.22);font-size:14px">Start the clock</div>
+          </div>
+        </div>
+        <div style="background:rgba(245,234,216,0.16);border:1px solid rgba(245,234,216,0.14);border-radius:20px;padding:14px;display:flex;gap:12px;align-items:flex-start">
+          <img src="assets/logo.png" alt="todoapp" style="width:38px;height:38px;border-radius:10px;flex:none;object-fit:cover">
+          <div style="flex:1;min-width:0;color:#f6ecd9">
+            <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;opacity:0.85"><span>todoapp</span><span>Sat 07:30</span></div>
+            <div style="font-size:16px;font-weight:600;margin-top:3px">Weekly quota</div>
+            <div style="font-size:16px;line-height:1.4">Gym, 1 of 3, 1 day left this week, as of Saturday 07:30.</div>
+            <div style="margin-top:11px;display:inline-flex;align-items:center;min-height:32px;padding:0 14px;border-radius:999px;background:rgba(245,234,216,0.22);font-size:14px">Open Gym</div>
+          </div>
+        </div>
+        <div style="background:rgba(245,234,216,0.16);border:1px solid rgba(245,234,216,0.14);border-radius:20px;padding:14px;display:flex;gap:12px;align-items:flex-start">
+          <img src="assets/logo.png" alt="todoapp" style="width:38px;height:38px;border-radius:10px;flex:none;object-fit:cover">
+          <div style="flex:1;min-width:0;color:#f6ecd9">
+            <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;opacity:0.85"><span>todoapp</span><span>21:30</span></div>
+            <div style="font-size:16px;font-weight:600;margin-top:3px">Day summary</div>
+            <div style="font-size:16px;line-height:1.4">One of five today. That's 500,000. Morning exercise held though — day 12. Start there tomorrow.</div>
+          </div>
+        </div>
+        <div style="background:rgba(245,234,216,0.16);border:1px solid rgba(245,234,216,0.14);border-radius:20px;padding:14px;display:flex;gap:12px;align-items:flex-start">
+          <img src="assets/logo.png" alt="todoapp" style="width:38px;height:38px;border-radius:10px;flex:none;object-fit:cover">
+          <div style="flex:1;min-width:0;color:#f6ecd9">
+            <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;opacity:0.85"><span>todoapp</span><span>21:30</span></div>
+            <div style="font-size:16px;font-weight:600;margin-top:3px">Day summary</div>
+            <div style="font-size:16px;line-height:1.4">Four of five today. Gym is still 1 of 3 with two days left. Tomorrow morning is the easy one to take.</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#c6b79e;padding:4px 4px 8px;text-wrap:pretty">Bodies are self-dated so a stale copy can be told from a new one, and no notification carries more than one action.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="max-width:1200px;margin:36px auto 0;display:flex;gap:16px;flex-wrap:wrap;font-size:14px">
+    <a href="Style page.dc.html">Style page</a>
+    <a href="Referee surface.dc.html">Referee surface — screens 14–17</a>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  state = { dark: false };
+  renderVals() {
+    return {
+      mode: this.state.dark ? "dark" : "light",
+      toggle: () => this.setState(s => ({ dark: !s.dark })),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

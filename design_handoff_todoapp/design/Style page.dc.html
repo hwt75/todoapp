@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600&family=Lora:ital@1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_ds/organic-d76a8a32-d512-4ae4-8cc0-d0cd42e4bd69/styles.css">
+<script src="_ds/organic-d76a8a32-d512-4ae4-8cc0-d0cd42e4bd69/_ds_bundle.js"></script>
+<style>
+:root{
+--pg:var(--color-bg);--cd:var(--color-neutral-100);--sk:var(--color-neutral-200);--hl:var(--color-neutral-300);--st:var(--color-neutral-400);
+--ink:var(--color-text);--ink2:var(--color-neutral-700);--ink3:#736a5c;
+--heldT:var(--color-accent-2-200);--heldI:var(--color-accent-2-800);
+--urgT:#fbeacd;--urgI:#8a5a0a;
+--failT:#f7dcda;--failI:#8e2f2b;
+--neuT:var(--color-neutral-200);--neuI:var(--color-neutral-700);
+--actF:var(--color-accent-700);--actI:#fff8ef;
+--board:#e7dcc8;
+}
+[data-mode="dark"]{
+--pg:#17140f;--cd:#211c16;--sk:#262019;--hl:#37302a;--st:#4c4339;
+--ink:#f2ece1;--ink2:#b6ab9b;--ink3:#8a8072;
+--heldT:var(--color-accent-2-900);--heldI:var(--color-accent-2-300);
+--urgT:#33260f;--urgI:#edc47a;
+--failT:#3a1a17;--failI:#efaba4;
+--neuT:#262019;--neuI:#b6ab9b;
+--actF:var(--color-accent-400);--actI:#1b1207;
+--board:#100e0a;
+}
+body{margin:0;font-family:"Figtree",system-ui,sans-serif;background:var(--board);color:var(--ink)}
+a{color:var(--actF)}
+a:hover{color:var(--failI)}
+</style>
+</helmet>
+<div data-mode="{{ mode }}" style="background:var(--board);min-height:100vh;padding:40px 24px 96px;font-family:'Figtree',system-ui,sans-serif;color:var(--ink)">
+  <div style="max-width:544px;margin:0 auto;display:flex;flex-direction:column;gap:40px">
+
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <img src="assets/logo.png" alt="" style="width:52px;height:52px;border-radius:13px;object-fit:cover">
+        <div>
+        <div style="font-family:'Caprasimo',serif;font-size:34px;line-height:1;letter-spacing:-0.02em;color:var(--ink)">todoapp</div>
+        <div style="font-size:13px;color:var(--ink3);margin-top:8px">Style page · palette, type, shape, components</div>
+        </div>
+      </div>
+      <button onClick="{{ toggle }}" style="font-size:13px;font-family:'Figtree',system-ui,sans-serif;min-height:44px;padding:0 16px;border-radius:16px;border:1px solid var(--hl);background:var(--cd);color:var(--ink2);cursor:pointer" style-hover="background:var(--sk)">Light / dark</button>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:13px;letter-spacing:0.06em;color:var(--ink3)">WORDMARK</div>
+      <div style="background:var(--cd);border:1px solid var(--hl);border-radius:16px;padding:28px 20px;display:flex;flex-direction:column;gap:24px">
+        <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+          <img src="assets/logo.png" alt="todoapp" style="width:96px;height:96px;border-radius:22px;object-fit:cover">
+          <div style="font-family:'Caprasimo',serif;font-size:44px;line-height:1;letter-spacing:-0.025em">todoapp</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <img src="assets/logo.png" alt="" style="width:30px;height:30px;border-radius:8px;object-fit:cover">
+          <div style="font-family:'Caprasimo',serif;font-size:20px;line-height:1;letter-spacing:-0.02em">todoapp</div>
+        </div>
+        <div style="font-size:14px;color:var(--ink2);text-wrap:pretty">The supplied mark is the logo, used as given. Beside it the name stays lowercase in Caprasimo at −0.025em tracking; the mark can also stand alone.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:13px;letter-spacing:0.06em;color:var(--ink3)">APP ICON</div>
+      <div style="background:var(--cd);border:1px solid var(--hl);border-radius:16px;padding:20px;display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:center">
+          <img src="assets/logo.png" alt="todoapp app icon" style="width:120px;height:120px;border-radius:28px;object-fit:cover">
+          <div style="font-size:11px;color:var(--ink3)">120 pt</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:center">
+          <img src="assets/logo.png" alt="" style="width:60px;height:60px;border-radius:14px;object-fit:cover">
+          <div style="font-size:11px;color:var(--ink3)">60 pt</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:center">
+          <img src="assets/logo.png" alt="" style="width:30px;height:30px;border-radius:8px;object-fit:cover">
+          <div style="font-size:11px;color:var(--ink3)">30 pt</div>
+        </div>
+        <div style="flex:1;min-width:180px;font-size:14px;color:var(--ink2);text-wrap:pretty">The icon is the supplied mark, mode-stable in light and dark. At 30 pt its inner wording stops resolving — for the lock screen and the browser tab the mark reads as the ring and the check only.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:13px;letter-spacing:0.06em;color:var(--ink3)">THE FOUR STATE MEANINGS</div>
+      <div style="background:var(--cd);border:1px solid var(--hl);border-radius:16px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--hl)">
+          <span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">12</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:15px">Held — it held, the chain is alive</div>
+            <div style="font-size:12px;color:var(--ink3);font-variant-numeric:tabular-nums">sage · 8.11:1 light · 9.61:1 dark · filled pill</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--hl)">
+          <span style="font-size:13px;padding:5px 11px;border-radius:6px;background:transparent;color:var(--urgI);border:1.5px solid var(--urgI)">1/3 · 3 days</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:15px">Urgent — running out of room, nothing lost yet</div>
+            <div style="font-size:12px;color:var(--ink3);font-variant-numeric:tabular-nums">ochre · 5.00:1 light · 8.97:1 dark · outlined, square corners</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--hl)">
+          <span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--failT);color:var(--failI);border:1px solid var(--failI)">Owed</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:15px">Failed — missed, or money owed</div>
+            <div style="font-size:12px;color:var(--ink3);font-variant-numeric:tabular-nums">red · 6.25:1 light · 8.23:1 dark · filled pill</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 16px">
+          <span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--neuT);color:var(--neuI);border:1px solid var(--st)">Not yet</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:15px">Neutral — everything else, including not done yet</div>
+            <div style="font-size:12px;color:var(--ink3);font-variant-numeric:tabular-nums">warm grey · 5.36:1 light · 7.13:1 dark</div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:var(--ink3);text-wrap:pretty">Urgent is told from Failed twice over: a different hue, and a different silhouette — urgent is an outlined 6px-cornered label, every other label is a filled pill. Every label also carries a word or a number.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:13px;letter-spacing:0.06em;color:var(--ink3)">GROUND AND INK</div>
+      <div style="background:var(--cd);border:1px solid var(--hl);border-radius:16px;padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+        <div><div style="height:48px;border-radius:12px;background:var(--pg);border:1px solid var(--hl)"></div><div style="font-size:12px;margin-top:6px">Page</div><div style="font-size:11px;color:var(--ink3)">#f5ead8 / #17140f</div></div>
+        <div><div style="height:48px;border-radius:12px;background:var(--cd);border:1px solid var(--hl)"></div><div style="font-size:12px;margin-top:6px">Card</div><div style="font-size:11px;color:var(--ink3)">neutral-100 / #211c16</div></div>
+        <div><div style="height:48px;border-radius:12px;background:var(--sk)"></div><div style="font-size:12px;margin-top:6px">One tonal step</div><div style="font-size:11px;color:var(--ink3)">#eee7db / #262019</div></div>
+        <div><div style="height:48px;border-radius:12px;background:var(--ink)"></div><div style="font-size:12px;margin-top:6px">Text · 13.95:1 / 15.62:1</div><div style="font-size:11px;color:var(--ink3)">#201e1d / #f2ece1</div></div>
+        <div><div style="height:48px;border-radius:12px;background:var(--ink2)"></div><div style="font-size:12px;margin-top:6px">Secondary · 5.53:1 / 8.12:1</div><div style="font-size:11px;color:var(--ink3)">#645c50 / #b6ab9b</div></div>
+        <div><div style="height:48px;border-radius:12px;background:var(--ink3)"></div><div style="font-size:12px;margin-top:6px">Muted · 4.47:1 / 4.73:1</div><div style="font-size:11px;color:var(--ink3)">#736a5c / #8a8072</div></div>
+        <div><div style="height:48px;border-radius:12px;background:var(--actF)"></div><div style="font-size:12px;margin-top:6px">Action fill · 6.46:1 / 8.94:1</div><div style="font-size:11px;color:var(--ink3)">accent-700 / accent-400</div></div>
+        <div><div style="height:48px;border-radius:12px;background:var(--hl)"></div><div style="font-size:12px;margin-top:6px">Hairline (1px)</div><div style="font-size:11px;color:var(--ink3)">#dcd3c4 / #37302a</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:13px;letter-spacing:0.06em;color:var(--ink3)">TYPE RAMP</div>
+      <div style="background:var(--cd);border:1px solid var(--hl);border-radius:16px;padding:20px 16px;display:flex;flex-direction:column;gap:18px">
+        <div><div style="font-family:'Caprasimo',serif;font-size:44px;line-height:1;letter-spacing:-0.02em;font-variant-numeric:tabular-nums">1,500,000</div><div style="font-size:11px;color:var(--ink3);margin-top:6px">Figure · Caprasimo 34→44px · debt total and running timer only</div></div>
+        <div><div style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Today</div><div style="font-size:11px;color:var(--ink3);margin-top:4px">Screen title · Figtree 600 · 17→21px</div></div>
+        <div><div style="font-size:16px">Morning exercise held. Day 12.</div><div style="font-size:11px;color:var(--ink3);margin-top:4px">Body · Figtree 400 · 15→16px</div></div>
+        <div><div style="font-size:13px;font-weight:500;color:var(--ink2)">Grace days remaining</div><div style="font-size:11px;color:var(--ink3);margin-top:4px">Label · Figtree 500 · 13→14px</div></div>
+        <div><div style="font-size:11px;color:var(--ink3)">A photo taken today. It is private — only you can open it.</div><div style="font-size:11px;color:var(--ink3);margin-top:4px">Caption · 11px</div></div>
+        <div style="border-top:1px solid var(--hl);padding-top:16px"><div style="font-family:'Lora',Georgia,serif;font-style:italic;font-size:17px;line-height:1.5;text-wrap:pretty">todoapp says you owe 500,000 for Tuesday. I'm just the one collecting it. When are you free?</div><div style="font-size:11px;color:var(--ink3);margin-top:6px">The one serif · Lora italic · the referee's collection message and nothing else</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:13px;letter-spacing:0.06em;color:var(--ink3)">SPACING AND SHAPE</div>
+      <div style="background:var(--cd);border:1px solid var(--hl);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;align-items:flex-end;gap:8px">
+          <div style="width:4px;height:16px;background:var(--st);border-radius:2px"></div>
+          <div style="width:8px;height:24px;background:var(--st);border-radius:2px"></div>
+          <div style="width:13px;height:32px;background:var(--st);border-radius:2px"></div>
+          <div style="width:18px;height:40px;background:var(--st);border-radius:2px"></div>
+          <div style="width:26px;height:48px;background:var(--st);border-radius:2px"></div>
+          <div style="width:35px;height:56px;background:var(--st);border-radius:2px"></div>
+          <div style="font-size:12px;color:var(--ink3);padding-left:8px">4 · 9 · 13 · 18 · 26 · 35 (the system's 1.10× scale). Card padding 18, row padding 11/16.</div>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+          <div style="width:88px;height:44px;border-radius:16px;background:var(--sk);border:1px solid var(--hl);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--ink2)">16 control</div>
+          <div style="width:88px;height:44px;border-radius:16px;background:var(--sk);border:1px solid var(--hl);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--ink2)">16 card</div>
+          <div style="width:88px;height:44px;border-radius:28px;background:var(--sk);border:1px solid var(--hl);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--ink2)">28 frame</div>
+          <div style="padding:6px 12px;border-radius:999px;background:var(--sk);border:1px solid var(--st);font-size:12px;color:var(--ink2)">999 label</div>
+        </div>
+        <div style="font-size:13px;color:var(--ink3);text-wrap:pretty">Borders are 1px in the warm hairline tone, not 0.5px black — the warmth keeps a list of rows from reading as a table. One shadow only, and only under the tab bar and the blocking declaration.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:13px;letter-spacing:0.06em;color:var(--ink3)">COMPONENTS</div>
+      <div style="background:var(--cd);border:1px solid var(--hl);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:18px">
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:12px;color:var(--ink3)">List frame · row · status label</div>
+          <div style="border:1px solid var(--hl);border-radius:16px;overflow:hidden;background:var(--pg)">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Morning exercise</span><span style="font-size:13px;padding:5px 11px;border-radius:999px;background:var(--heldT);color:var(--heldI);border:1px solid var(--heldI)">12</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:16px">Gym</span><span style="font-size:13px;padding:5px 11px;border-radius:6px;color:var(--urgI);border:1.5px solid var(--urgI)">1/3 · 3 days</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;min-height:44px"><span style="font-size:16px">Company work</span><span style="font-size:13px;color:var(--ink3)">Not yet</span></div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:12px;color:var(--ink3)">Debt figure block · the only large tinted area</div>
+          <div style="border-radius:16px;background:var(--failT);padding:18px;display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:13px;color:var(--failI)">Owed</div>
+            <div style="font-family:'Caprasimo',serif;font-size:44px;line-height:1.05;letter-spacing:-0.02em;color:var(--failI);font-variant-numeric:tabular-nums">1,500,000</div>
+            <div style="font-size:13px;color:var(--failI)">Three days. Nam has been told.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:12px;color:var(--ink3)">Primary action · neutral self-declaration pair · destructive · quiet nav</div>
+          <button style="min-height:44px;border:0;border-radius:16px;background:var(--actF);color:var(--actI);font-size:16px;font-weight:500;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="filter:brightness(0.94)">Claim Evening study</button>
+          <div style="display:flex;gap:12px">
+            <button style="flex:1;min-height:44px;border:1px solid var(--st);border-radius:16px;background:var(--cd);color:var(--ink);font-size:16px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--sk)">It held</button>
+            <button style="flex:1;min-height:44px;border:1px solid var(--st);border-radius:16px;background:var(--cd);color:var(--ink);font-size:16px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--sk)">I slipped</button>
+          </div>
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <button style="min-height:44px;border:1px solid var(--failI);border-radius:16px;background:transparent;color:var(--failI);font-size:15px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--failT)">Delete commitment</button>
+            <button style="min-height:44px;border:0;border-radius:16px;background:transparent;color:var(--ink2);font-size:15px;font-family:'Figtree',system-ui,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer" style-hover="color:var(--ink)">Look up a day</button>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:12px;color:var(--ink3)">Quota track · photo attachment · toggle row with consequence · inline error · loading</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--ink2)"><span>Gym</span><span style="font-variant-numeric:tabular-nums">1 of 3</span></div>
+            <div style="height:6px;border-radius:3px;background:var(--sk);display:flex;gap:3px;overflow:hidden"><div style="width:33%;background:var(--urgI);border-radius:3px"></div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;border:1px solid var(--hl);border-radius:16px;padding:11px 16px;background:var(--pg)">
+            <div style="width:44px;height:44px;border-radius:12px;background:var(--sk);border:1px solid var(--hl);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--ink3)">photo</div>
+            <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">Proof</div><div style="font-size:11px;color:var(--ink3)">A photo taken today. It is private — only you can open it.</div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;border:1px solid var(--hl);border-radius:16px;padding:12px 16px;background:var(--pg)">
+            <div style="flex:1;min-width:0"><div style="font-size:15px">Notifications</div><div style="font-size:12px;color:var(--ink2);text-wrap:pretty">The morning question and the evening summary arrive on your lock screen.</div></div>
+            <div style="width:48px;height:28px;border-radius:999px;background:var(--actF);position:relative;flex:none"><div style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:999px;background:var(--actI)"></div></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;border-left:0;padding:2px 0"><div style="font-size:15px;color:var(--failI)">Failed.</div><div style="font-size:13px;color:var(--ink2)">That email and password don't match anything here.</div></div>
+          <div style="font-size:15px;color:var(--ink3)">Working…</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:12px;color:var(--ink3)">Screen head (44px) · tab bar · collection card · empty state</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;min-height:44px;border-bottom:1px solid var(--hl)"><span style="font-size:21px;font-weight:600;letter-spacing:-0.01em">Ledger</span><button style="min-height:44px;padding:0 4px;border:0;background:transparent;color:var(--ink2);font-size:15px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer">Close</button></div>
+          <div style="display:flex;background:var(--cd);border:1px solid var(--hl);border-radius:16px;overflow:hidden">
+            <div style="flex:1;text-align:center;padding:11px 0;font-size:13px;font-weight:600;color:var(--ink);background:var(--sk);border-right:1px solid var(--hl)">Today</div>
+            <div style="flex:1;text-align:center;padding:11px 0;font-size:13px;color:var(--ink2);border-right:1px solid var(--hl)">Ledger</div>
+            <div style="flex:1;text-align:center;padding:11px 0;font-size:13px;color:var(--ink2)">Settings</div>
+          </div>
+          <div style="border:1px solid var(--hl);border-radius:16px;padding:18px;background:var(--pg);display:flex;flex-direction:column;gap:12px">
+            <div style="font-family:'Lora',Georgia,serif;font-style:italic;font-size:17px;line-height:1.5;text-wrap:pretty">todoapp says you owe 500,000 for Tuesday. I'm just the one collecting it. When are you free?</div>
+            <button style="align-self:flex-start;min-height:44px;padding:0 16px;border:1px solid var(--st);border-radius:16px;background:var(--cd);color:var(--ink);font-size:15px;font-family:'Figtree',system-ui,sans-serif;cursor:pointer" style-hover="background:var(--sk)">Copy message</button>
+          </div>
+          <div style="border:1px dashed var(--st);border-radius:16px;padding:18px;font-size:15px;color:var(--ink2);text-wrap:pretty">Nothing set up yet. Add a commitment below and it will appear here tomorrow morning.</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:13px;letter-spacing:0.06em;color:var(--ink3)">RATIONALE FOR WHAT CHANGED</div>
+      <div style="background:var(--cd);border:1px solid var(--hl);border-radius:16px;padding:18px;font-size:14px;line-height:1.65;color:var(--ink2);display:flex;flex-direction:column;gap:8px">
+        <div>1. White page became a warm cream. The ground is the one thing on every screen; warmth is the cheapest way to make opening it easier.</div>
+        <div>2. Hairlines went from 0.5px black to 1px warm. Same lightness on the page (1.25:1), but they stop reading as a spreadsheet.</div>
+        <div>3. Urgent moved from a warm tan to ochre and lost its fill, keeping only an outline and 6px corners. Hue alone was not enough separation from Failed.</div>
+        <div>4. Two shadows exist: under the tab bar and under the blocking declaration. Both mark a layer above the page, not importance.</div>
+        <div>5. Caprasimo is used for exactly three things — the wordmark, the debt figure, the timer. It is the display voice; using it for titles would make the app loud.</div>
+        <div>6. Titles are Figtree 600, not the display face. Sentence case kept.</div>
+        <div>7. Radius went 8/12 to 16 with a 28px outer frame, per the system. Status labels stay fully round and are now the only fully round thing.</div>
+        <div>8. Nothing animates. The quota track is a static fill; the timer is a text update.</div>
+        <div>9. Dark mode is declared, not inverted: a warm near-black at #17140f with its own four state tints, each measured above 7:1.</div>
+        <div>10. The logo and app icon are the mark you supplied, used as given. It is cooler and glossier than the rest of the system, so it appears only as a mark — never as a fill, a tint or a state colour inside a screen.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:14px">
+      <a href="Doer surface.dc.html">Doer surface — screens 1–13</a>
+      <a href="Referee surface.dc.html">Referee surface — screens 14–17</a>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  state = { dark: false };
+  renderVals() {
+    return {
+      mode: this.state.dark ? "dark" : "light",
+      toggle: () => this.setState(s => ({ dark: !s.dark })),
+    };
+  }
+}
+
+</script>
+</body>
+</html>
