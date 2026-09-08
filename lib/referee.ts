@@ -492,6 +492,12 @@ export interface RefereeDayRow {
    *  when the window shuts. */
   objectionDeadline: string;
   alreadyObjected: boolean;
+  /** Storage paths of the photos this day's claim for this commitment was proved with (epic 6
+   *  retrospective item 43). Declaration-parented only — a commitment-day photo (6.8) is the
+   *  author's own record and never reaches him. Paths, not URLs: signing is the screen's job and
+   *  happens in one call for the whole day, never one round trip per photo. Empty for a day with
+   *  no proof, never null, so nothing has to test for two shapes of "none". */
+  evidencePaths: string[];
 }
 
 /**
@@ -540,6 +546,23 @@ export const REFEREE_DAY_COPY = {
   nothing: 'Nothing has been settled for that date.',
   outcome: (outcome: CommitmentOutcome): string =>
     outcome === 'held' ? 'Held' : outcome === 'missed' ? 'Missed' : 'Unanswered',
+
+  /** Epic 6 retrospective item 43. The photo the claim was proved with, on the row it belongs
+   *  to. Numbered rather than described, for the reason `REFEREE_APPEAL_DETAIL_COPY.evidenceAlt`
+   *  gives: nothing here knows what is in the picture, and a caption that pretends to would be a
+   *  claim the product cannot make. Nothing renders at all for a row with no photo — a day that
+   *  never needed proof must not read as a day missing it. */
+  proofAlt: (index: number, total: number): string =>
+    total === 1 ? 'The photo this day was proved with' : `Proof photo ${index} of ${total}`,
+
+  /** A photo that would not sign is reported, never dropped: he must not be shown three photos
+   *  and told nothing about the fourth, on a screen where he is deciding whether a day held.
+   *  Story 6.9's rule, and the same shape as the appeal viewer's own failure count. */
+  proofLoadFailed: (count: number): string =>
+    count === 1
+      ? 'One photo on this day could not be opened.'
+      : `${count} photos on this day could not be opened.`,
+
   /** The window, in his own terms. He is never asked to act before it closes; it simply says
    *  when the day stops being his to question. */
   window: (deadline: string): string => `You can object until ${formatWindowClose(deadline)}.`,

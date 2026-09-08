@@ -278,7 +278,19 @@ export function photosOn(read: KeptPhotoRead, commitmentId: string, day: string)
  */
 export const EVIDENCE_COPY = {
   label: 'Proof',
-  hint: 'A photo taken today. It is private — only you can open it.',
+  /** Epic 6 retrospective, A2 (HIGH) — this used to read "It is private — only you can open
+   *  it", and it was false. `evidence: referee reads his own doer's`
+   *  (`20260907160000:141`) grants the referee every evidence row of his doer's whose
+   *  `commitment_id is null`, which is exactly this one: a claim's proof is parented to the
+   *  declaration. The retrospective's disposition was that one of the two had to change, the
+   *  copy or the policy. The policy is what makes him able to rule at all, so the copy is
+   *  what moved.
+   *
+   *  It names him rather than saying "not private", because the difference the author cares
+   *  about is *who* — a referee he chose is not the same as an audience. Story 6.8's
+   *  commitment-day photos stay out of the referee's reach entirely and are not what this
+   *  sentence is about; it appears only under a claim's `Proof` control. */
+  hint: 'A photo taken today. Only you and your referee can open it.',
   uploading: 'Sending…',
   saved: 'Proof saved.',
   failed: 'Proof not saved.',

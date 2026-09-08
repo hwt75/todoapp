@@ -94,6 +94,25 @@ beforeEach(() => {
   tables.length = 0;
 });
 
+describe('EVIDENCE_COPY.hint', () => {
+  // Epic 6 retrospective, A2 (HIGH), and the test that item asked for. The sentence used to
+  // say "It is private -- only you can open it" while
+  // `evidence: referee reads his own doer's` (20260907160000:141) granted the referee every
+  // one of these rows. Nothing tested the copy, so nothing noticed. These assertions are
+  // about the promise, not the wording: they fail if the exclusivity claim comes back, and
+  // they fail if the referee stops being named.
+  it('does not claim the author is the only reader', () => {
+    // Narrow on purpose: "Only you and your referee" is the true sentence and contains
+    // "only you". What must never come back is the exclusivity claim itself.
+    expect(EVIDENCE_COPY.hint).not.toMatch(/only you can (open|see|read)/i);
+    expect(EVIDENCE_COPY.hint).not.toMatch(/private/i);
+  });
+
+  it('names the referee as the other reader', () => {
+    expect(EVIDENCE_COPY.hint).toMatch(/referee/i);
+  });
+});
+
 describe('evidenceObjectPath', () => {
   it('leads with the appeal id — what the storage.objects policy reads', () => {
     const path = evidenceObjectPath('appeal-1', 'evidence-1', 'photo.jpg');

@@ -418,8 +418,12 @@ action_items:
     action: "Reconcile the referee reach with what the app promises about claim photos
       - change the policy or change the sentence, and cover it with a test."
     owner: "hwt75"
-    status: open
-    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-07.md"
+    status: in-progress
+    ref: "_bmad-output/implementation-artifacts/spec-epic-6-retro-item-43-the-referee-can-see-what-the-day-was-proved-with.md"
+    note: "Both halves implemented and verified locally. The sentence changed and is covered
+      by a test; the policy was kept, deliberately. The viewer is at review, not done:
+      migration 20260908170000 is not on the remote project and nobody has seen the screen
+      in a browser."
   - id: "epic-6-retro-item-44-move-apply_grace_days-onto-frozen-settle"
     epic: 6
     action: "Move apply_grace_days() onto frozen settlement rows, the last correction

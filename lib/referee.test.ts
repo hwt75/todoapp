@@ -234,6 +234,9 @@ const heldRow: RefereeDayRow = {
   outcome: 'held',
   objectionDeadline: '2026-09-05T03:00:00Z',
   alreadyObjected: false,
+  // Retro item 43. Not read by `objectionIsOffered` at all, and deliberately: whether a day may
+  // still be questioned has nothing to do with whether it was photographed.
+  evidencePaths: [],
 };
 
 describe('objectionIsOffered (Story 6.7)', () => {

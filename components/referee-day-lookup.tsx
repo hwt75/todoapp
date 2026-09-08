@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { CommitmentOutcome } from '@/lib/chain';
+import { EVIDENCE_BUCKET, EVIDENCE_URL_TTL_SECONDS } from '@/lib/evidence';
 import {
   OBJECTION_REASON_MAX,
   REFEREE_DAY_COPY,
@@ -18,7 +19,9 @@ type View = { kind: 'loading' } | { kind: 'ready' } | { kind: 'failed'; reason: 
 type Found =
   | { kind: 'idle' }
   | { kind: 'looking' }
-  | { kind: 'found'; day: string; rows: RefereeDayRow[] }
+  /** `proofUrls` is keyed by storage path. A path present in a row's `evidencePaths` but absent
+   *  here is a photo that would not sign — counted and reported on its row, never dropped. */
+  | { kind: 'found'; day: string; rows: RefereeDayRow[]; proofUrls: Map<string, string> }
   | { kind: 'failed'; reason: string };
 
 /** One commitment's own objection status, keyed by `settlementId-commitmentId` — a refusal on one
@@ -169,11 +172,33 @@ export function RefereeDayLookup() {
           outcome: row.outcome as CommitmentOutcome,
           objectionDeadline: row.objection_deadline as string,
           alreadyObjected: Boolean(row.already_objected),
+          evidencePaths: (row.evidence_paths as string[] | null) ?? [],
         });
       }
     }
 
-    setFound({ kind: 'found', day, rows });
+    // One signing call for the whole day, not one per photo -- the lesson `readKeptPhotos`
+    // already learned (lib/evidence.ts): a day with ten photos was ten round trips deep.
+    // `createSignedUrls` reports failure per item, which is the per-photo failure this screen
+    // needs in order to report a count rather than silently showing a shorter list.
+    const paths = rows.flatMap((row) => row.evidencePaths);
+    const urls = new Map<string, string>();
+
+    if (paths.length > 0) {
+      const { data: signed } = await supabase.storage
+        .from(EVIDENCE_BUCKET)
+        .createSignedUrls(paths, EVIDENCE_URL_TTL_SECONDS);
+
+      for (const item of signed ?? []) {
+        if (item.path && item.signedUrl && !item.error) urls.set(item.path, item.signedUrl);
+      }
+    }
+
+    // A signing call that failed outright leaves `urls` empty, which reports every photo as
+    // unopenable -- never a screen that says the day was never proved. The lookup itself is not
+    // failed by it: the outcomes and the objection window are what he came for, and they are
+    // already in hand.
+    setFound({ kind: 'found', day, rows, proofUrls: urls });
   }
 
   /**
@@ -283,6 +308,40 @@ export function RefereeDayLookup() {
                         <div className="row-muted">
                           {REFEREE_DAY_COPY.outcome(row.outcome)} · {found.day}
                         </div>
+
+                        {/* Epic 6 retrospective item 43 — what the day was proved with, on the
+                            row it belongs to and above the objection control, because it is
+                            evidence for the decision rather than a consequence of it.
+
+                            Nothing renders for a row with no photo: a day that never needed
+                            proof must not read as a day missing it. */}
+                        {(() => {
+                          const signed = row.evidencePaths
+                            .map((path) => ({ path, url: found.proofUrls.get(path) }))
+                            .filter((item): item is { path: string; url: string } =>
+                              Boolean(item.url),
+                            );
+                          const unopenable = row.evidencePaths.length - signed.length;
+
+                          return (
+                            <>
+                              {signed.map((item, index) => (
+                                // A signed URL into a private bucket, not an asset next/image's
+                                // own optimiser is set up to fetch.
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  key={item.path}
+                                  className="kept-photo"
+                                  src={item.url}
+                                  alt={REFEREE_DAY_COPY.proofAlt(index + 1, signed.length)}
+                                />
+                              ))}
+                              {unopenable > 0 && (
+                                <p role="status">{REFEREE_DAY_COPY.proofLoadFailed(unopenable)}</p>
+                              )}
+                            </>
+                          );
+                        })()}
 
                         {row.outcome !== 'held' && <p>{REFEREE_DAY_COPY.notHeld}</p>}
 
