@@ -169,11 +169,30 @@ bisects.
   DOM rather than eyeballed: the brand bar spans the viewport with no horizontal overflow, and the
   content column stays 544px and centred beneath it.
 
+CI on PR #2, all green: `check` (lint, suite, build), `db-tests`, and the Vercel build. The
+Supabase preview branch was skipped, correctly — this story carries no migration.
+
 **Not verified, and not claimable from here:** PWA installation, the new app icon as iOS renders it
 on a home screen, and push delivery. All three need the deployed HTTPS app on a real device
 (AGENTS.md, Verification). The icon is the one worth attention — it changed from a flat placeholder
 fill to the supplied mark, and the handoff itself notes that at 30pt the mark's inner wording stops
 resolving.
+
+The Vercel preview deployment was reachable but sits behind Vercel Deployment Protection, so even
+the browser-level checks could not be repeated against the deployed build — only against the local
+dev server. **This story was marked `done` without those three device checks having been run.**
+Story 6.6 closed the other way round (`c9361a0`, "the device checks pass"), so this is a departure
+from how the previous epic closed, and it is written here rather than left to be discovered.
+
+## Status
+
+`done` on 2026-09-08, on the maintainer's instruction, after PR #2 merged as `97394c3` — a merge
+commit, so all four commits survive and the history still bisects.
+
+The spec above remains `awaiting-approval`. A merged story with an unapproved spec is not a
+contradiction so much as an accurate record: the maintainer accepted the code, and has not yet
+read the intent that was written after it. Marking the frontmatter `approved` would be forging an
+approval nobody gave, which is the one thing that would make this file worse than useless.
 
 ## Commits
 
