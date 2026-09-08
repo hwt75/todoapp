@@ -163,6 +163,32 @@ begin
       v_paths;
   end if;
 
+  -- 2b. A swept photo is not offered to him at all (20260908180000). The row survives, because
+  --     commitments_owing() reads it to decide the day held -- but naming a path whose bytes are
+  --     gone would put a photo on his screen that cannot load, and the screen would call that a
+  --     failure rather than what it is.
+  perform set_config('role', 'postgres', true);
+  update public.evidence set swept_at = now() where id = v_ev;
+  perform set_config('request.jwt.claims',
+                     json_build_object('sub', v_ref, 'role', 'authenticated',
+                                       'app_role', 'referee')::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  select evidence_paths into v_paths
+    from public.referee_day_lookup(v_s) where commitment_name = 'Gym';
+
+  if v_paths is null or array_length(v_paths, 1) is not null then
+    raise exception
+      'A photo whose bytes were swept must not be named to the referee. Got: %', v_paths;
+  end if;
+
+  perform set_config('role', 'postgres', true);
+  update public.evidence set swept_at = null where id = v_ev;
+  perform set_config('request.jwt.claims',
+                     json_build_object('sub', v_ref, 'role', 'authenticated',
+                                       'app_role', 'referee')::text, true);
+  perform set_config('role', 'authenticated', true);
+
   -- 3. His raw reach did not widen. The join moved inside a security definer function precisely so
   --    that this stays true: he still has no route to the author''s claim rows themselves.
   select count(*) into v_seen from public.declaration;

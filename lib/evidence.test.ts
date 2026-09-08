@@ -80,8 +80,8 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 /** One `evidence` row as the reader asks for it. */
-function row(id: string, day: string, path: string) {
-  return { id, commitment_id: 'c1', for_day: day, storage_path: path };
+function row(id: string, day: string, path: string, sweptAt: string | null = null) {
+  return { id, commitment_id: 'c1', for_day: day, storage_path: path, swept_at: sweptAt };
 }
 
 beforeEach(() => {
@@ -155,10 +155,16 @@ describe('fileCapturedOn / isEvidenceDated', () => {
 
 describe('readKeptPhotos', () => {
   it('asks nothing at all when no day, or no commitment, was named', async () => {
-    expect(await readKeptPhotos(['c1'], [])).toEqual({ photos: [], unsigned: 0, failed: null });
+    expect(await readKeptPhotos(['c1'], [])).toEqual({
+      photos: [],
+      unsigned: 0,
+      cleared: 0,
+      failed: null,
+    });
     expect(await readKeptPhotos([], ['2026-09-03'])).toEqual({
       photos: [],
       unsigned: 0,
+      cleared: 0,
       failed: null,
     });
 
@@ -170,7 +176,7 @@ describe('readKeptPhotos', () => {
   it('reads no photos as a real state rather than a failure', async () => {
     const read = await readKeptPhotos(['c1'], ['2026-09-03']);
 
-    expect(read).toEqual({ photos: [], unsigned: 0, failed: null });
+    expect(read).toEqual({ photos: [], unsigned: 0, cleared: 0, failed: null });
     // Nothing to sign is no signing call at all.
     expect(signCalls).toHaveLength(0);
   });
@@ -183,7 +189,7 @@ describe('readKeptPhotos', () => {
     // about, to the person whose whole trust in this product is that it says only what it can
     // support.
     expect(tables).toEqual(['evidence']);
-    expect(selected).toBe('id,commitment_id,for_day,storage_path');
+    expect(selected).toBe('id,commitment_id,for_day,storage_path,swept_at');
     expect(filters).toEqual([
       ['commitment_id', ['c1', 'c2']],
       ['for_day', ['2026-09-02', '2026-09-03']],
@@ -302,6 +308,60 @@ describe('readKeptPhotos', () => {
     expect(read.failed).toBeNull();
   });
 
+  it('leaves a swept photo out of the list and counts it as cleared, not as a failure', async () => {
+    // Retention (20260908180000). The bytes are gone; the row is still there because
+    // `commitments_owing()` reads its existence to decide whether the day held. To the author
+    // these are different facts from a photo that would not load, and only one of them is worth
+    // a retry.
+    evidenceByDays['*'] = {
+      data: [
+        row('e1', '2026-09-03', 'c1/e1.jpg'),
+        row('e2', '2026-09-03', 'c1/e2.jpg', '2026-10-05T00:00:00Z'),
+      ],
+      error: null,
+    };
+
+    const read = await readKeptPhotos(['c1'], ['2026-09-03']);
+
+    expect(read.photos).toHaveLength(1);
+    expect(read.cleared).toBe(1);
+    expect(read.unsigned).toBe(0);
+    // Never handed to the signer: signing a path whose object is gone would report it as
+    // something that might work later.
+    expect(signCalls[0].paths).toEqual(['c1/e1.jpg']);
+    // And the one that survives is numbered against the photos actually on screen.
+    expect(read.photos[0].alt).toBe(EVIDENCE_COPY.photoAlt(1, 1));
+  });
+
+  it('still reports the count when every photo on the day has been swept', async () => {
+    // The path that would otherwise return the shared "nothing kept" object and lose the number.
+    // A day whose photos were cleared is not the same answer as a day he never photographed.
+    evidenceByDays['*'] = {
+      data: [row('e1', '2026-09-03', 'c1/e1.jpg', '2026-10-05T00:00:00Z')],
+      error: null,
+    };
+
+    const read = await readKeptPhotos(['c1'], ['2026-09-03']);
+
+    expect(read).toEqual({ photos: [], unsigned: 0, cleared: 1, failed: null });
+    expect(signCalls).toHaveLength(0);
+  });
+
+  it('treats a row with no swept_at field at all as not swept', async () => {
+    // `!= null` rather than `!== null`. If a caller's select ever drops the column, the safe
+    // failure is showing the photo and counting a real miss as unloadable — not silently
+    // reporting every photo in the product as cleared.
+    evidenceByDays['*'] = {
+      data: [{ id: 'e1', commitment_id: 'c1', for_day: '2026-09-03', storage_path: 'c1/e1.jpg' }],
+      error: null,
+    };
+
+    const read = await readKeptPhotos(['c1'], ['2026-09-03']);
+
+    expect(read.cleared).toBe(0);
+    expect(read.photos).toHaveLength(1);
+  });
+
   it('says the row read failed rather than reporting an empty history', async () => {
     evidenceByDays['*'] = { data: null, error: { message: 'permission denied' } };
 
@@ -310,7 +370,7 @@ describe('readKeptPhotos', () => {
     // A failed read and a day with no photo look identical on screen unless this is carried
     // separately, and one of them means his own record is unreachable. The server's own words
     // come with it: a refusal and a dead connection are different problems.
-    expect(read).toEqual({ photos: [], unsigned: 0, failed: 'permission denied' });
+    expect(read).toEqual({ photos: [], unsigned: 0, cleared: 0, failed: 'permission denied' });
     expect(signCalls).toHaveLength(0);
   });
 
@@ -329,7 +389,7 @@ describe('readKeptPhotos', () => {
 
     // Half a history presented as the whole of it is the one answer this surface must never
     // give — it would say he kept nothing on days it simply never managed to ask about.
-    expect(read).toEqual({ photos: [], unsigned: 0, failed: 'permission denied' });
+    expect(read).toEqual({ photos: [], unsigned: 0, cleared: 0, failed: 'permission denied' });
   });
 
   it('stops signing once its caller has gone', async () => {
@@ -339,7 +399,7 @@ describe('readKeptPhotos', () => {
 
     // A screen already left must not go on spending his connection, and its answer is nothing
     // rather than something the caller would apply to a screen that no longer exists.
-    expect(read).toEqual({ photos: [], unsigned: 0, failed: null });
+    expect(read).toEqual({ photos: [], unsigned: 0, cleared: 0, failed: null });
     expect(signCalls).toHaveLength(0);
   });
 });

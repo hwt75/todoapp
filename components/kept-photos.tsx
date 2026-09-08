@@ -22,6 +22,9 @@ export interface KeptPhotoView {
    * unloadable. One number because it is one fact to the person looking at the screen.
    */
   unloadable: number;
+  /** How many were swept after the retention period. Kept apart from `unloadable`: one may work
+   *  on a retry and the other never will. */
+  cleared: number;
   /** The read itself failed, with the server's own words. Null when it did not. */
   failed: string | null;
   onUnloadable: (photoId: string) => void;
@@ -65,6 +68,7 @@ export function useKeptPhotos(read: KeptPhotoRead | null): KeptPhotoView {
         ? []
         : photosOn(read, commitmentId, day).filter((photo) => !ids.includes(photo.id)),
     unloadable: (read?.unsigned ?? 0) + ids.length,
+    cleared: read?.cleared ?? 0,
     failed: read?.failed ?? null,
     onUnloadable,
   };
@@ -112,6 +116,10 @@ export function KeptPhotoNote({ view }: { view: KeptPhotoView }) {
       {view.unloadable > 0 && (
         <p className="row-muted">{EVIDENCE_COPY.photosFailed(view.unloadable)}</p>
       )}
+      {/* Said whether or not anything else is wrong, and in its own sentence: a photo that was
+          cleared and a photo that would not load are different facts, and the second invites a
+          retry the first has no answer to. */}
+      {view.cleared > 0 && <p className="row-muted">{EVIDENCE_COPY.photosCleared(view.cleared)}</p>}
       {/* The server's own reason, not only that there was one. A refused read and a dead
           connection are different problems and only one of them is worth retrying. */}
       {view.failed !== null && (

@@ -287,7 +287,7 @@ describe('the photos a commitment carries', () => {
       ['commitment_id', ['c1']],
       ['for_day', ['2026-08-18']],
     ]);
-    expect(evidence[0].columns).toBe('id,commitment_id,for_day,storage_path');
+    expect(evidence[0].columns).toBe('id,commitment_id,for_day,storage_path,swept_at');
   });
 
   it('reads nothing at all when there is no judged day to ask about', async () => {
