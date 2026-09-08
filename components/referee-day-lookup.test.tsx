@@ -26,6 +26,10 @@ let profileResult: unknown = { data: { role: 'referee' }, error: null };
 let settlementResult: unknown = { data: [{ id: 's1' }], error: null };
 let lookupResult: unknown = { data: [], error: null };
 let objectResult: unknown = { data: null, error: null };
+/** Retro item 43. `createSignedUrls` reports per item, so a failure is an entry with no
+ *  `signedUrl` rather than a shorter list — the shape the screen counts unopenable photos from. */
+let signedUrlsResult: unknown = { data: [], error: null };
+const createSignedUrls = vi.fn();
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
@@ -48,6 +52,14 @@ vi.mock('@/lib/supabase/client', () => ({
       if (name === 'referee_day_lookup') return Promise.resolve(lookupResult);
       return Promise.resolve(objectResult);
     },
+    storage: {
+      from: () => ({
+        createSignedUrls: (paths: string[], ttl: number) => {
+          createSignedUrls(paths, ttl);
+          return Promise.resolve(signedUrlsResult);
+        },
+      }),
+    },
   }),
 }));
 
@@ -69,8 +81,14 @@ function heldRow(overrides: Record<string, unknown> = {}) {
     outcome: 'held',
     objection_deadline: OPEN,
     already_objected: false,
+    evidence_paths: [],
     ...overrides,
   };
+}
+
+/** What `createSignedUrls` returns for paths that sign cleanly. */
+function signed(...paths: string[]) {
+  return { data: paths.map((p) => ({ path: p, signedUrl: `https://signed/${p}` })), error: null };
 }
 
 beforeEach(() => {
@@ -79,6 +97,7 @@ beforeEach(() => {
   settlementResult = { data: [{ id: 's1' }], error: null };
   lookupResult = { data: [], error: null };
   objectResult = { data: null, error: null };
+  signedUrlsResult = { data: [], error: null };
 });
 
 afterEach(() => {
@@ -184,6 +203,87 @@ describe('what the day recorded, and whether it can be objected to', () => {
 
     await screen.findByText('Pill');
     expect(screen.getByRole('button', { name: /Object to Pill/ })).toBeDisabled();
+  });
+});
+
+describe('what the day was proved with (epic 6 retrospective, item 43)', () => {
+  it('shows the photo the claim was proved with', async () => {
+    lookupResult = { data: [heldRow({ evidence_paths: ['d1/e1.jpg'] })], error: null };
+    signedUrlsResult = signed('d1/e1.jpg');
+    await lookUp();
+
+    const photo = await screen.findByAltText('The photo this day was proved with');
+    expect(photo).toHaveAttribute('src', 'https://signed/d1/e1.jpg');
+  });
+
+  it('numbers them when there is more than one', async () => {
+    lookupResult = {
+      data: [heldRow({ evidence_paths: ['d1/a.jpg', 'd1/b.jpg'] })],
+      error: null,
+    };
+    signedUrlsResult = signed('d1/a.jpg', 'd1/b.jpg');
+    await lookUp();
+
+    expect(await screen.findByAltText('Proof photo 1 of 2')).toBeInTheDocument();
+    expect(screen.getByAltText('Proof photo 2 of 2')).toBeInTheDocument();
+  });
+
+  it('renders nothing at all for a day with no proof', async () => {
+    // A day that never needed a photo must not read as a day missing one — no placeholder, no
+    // empty frame, and no signing call either.
+    lookupResult = { data: [heldRow()], error: null };
+    await lookUp();
+
+    expect(await screen.findByText('Pill')).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(createSignedUrls).not.toHaveBeenCalled();
+  });
+
+  it('signs every photo on the day in one call, never one per photo', async () => {
+    // The lesson `readKeptPhotos` already learned: a ten-photo day was ten round trips.
+    lookupResult = {
+      data: [
+        heldRow({ evidence_paths: ['d1/a.jpg'] }),
+        heldRow({ commitment_id: 'c2', commitment_name: 'Gym', evidence_paths: ['d2/b.jpg'] }),
+      ],
+      error: null,
+    };
+    signedUrlsResult = signed('d1/a.jpg', 'd2/b.jpg');
+    await lookUp();
+
+    await screen.findByText('Gym');
+    expect(createSignedUrls).toHaveBeenCalledTimes(1);
+    expect(createSignedUrls).toHaveBeenCalledWith(['d1/a.jpg', 'd2/b.jpg'], 3600);
+  });
+
+  it('reports a photo that would not sign, and still shows the ones that did', async () => {
+    lookupResult = {
+      data: [heldRow({ evidence_paths: ['d1/a.jpg', 'd1/broken.jpg'] })],
+      error: null,
+    };
+    signedUrlsResult = {
+      data: [
+        { path: 'd1/a.jpg', signedUrl: 'https://signed/d1/a.jpg' },
+        { path: 'd1/broken.jpg', signedUrl: null, error: 'not found' },
+      ],
+      error: null,
+    };
+    await lookUp();
+
+    expect(await screen.findByAltText('The photo this day was proved with')).toBeInTheDocument();
+    expect(screen.getByText('One photo on this day could not be opened.')).toBeInTheDocument();
+  });
+
+  it('does not fail the lookup when signing fails outright', async () => {
+    // The outcomes and the objection window are what he came for and are already in hand. A
+    // screen that failed here would tell him nothing about a day it had already read.
+    lookupResult = { data: [heldRow({ evidence_paths: ['d1/a.jpg'] })], error: null };
+    signedUrlsResult = { data: null, error: { message: 'storage down' } };
+    await lookUp();
+
+    expect(await screen.findByText('Pill')).toBeInTheDocument();
+    expect(screen.getByText('One photo on this day could not be opened.')).toBeInTheDocument();
+    expect(screen.queryByText(/storage down/)).not.toBeInTheDocument();
   });
 });
 
