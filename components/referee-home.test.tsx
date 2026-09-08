@@ -269,10 +269,12 @@ describe('the owed penalties list (Story 4.7)', () => {
     render(<RefereeHome />);
 
     expect(await screen.findByText('Owed penalties')).toBeInTheDocument();
-    expect(screen.getByText('500.000₫ — TryHackMe')).toBeInTheDocument();
+    // Story 7.2 — the amount is the card's own figure and stands alone; the commitments and
+    // the day are the sub-line under it.
+    expect(screen.getByText('500.000₫')).toBeInTheDocument();
     // formatOwedDay, not formatDeadline — an owed Penalty persists indefinitely, so the day
     // carries its year, unlike the appeals list's own bare "Aug 18" above.
-    expect(screen.getByText('Aug 18, 2026')).toBeInTheDocument();
+    expect(screen.getByText('TryHackMe · Aug 18, 2026')).toBeInTheDocument();
   });
 
   it('dedupes commitment names — two settlement_commitment rows naming the same commitment render once', async () => {
@@ -286,7 +288,7 @@ describe('the owed penalties list (Story 4.7)', () => {
     };
     render(<RefereeHome />);
 
-    expect(await screen.findByText('500.000₫ — Reading')).toBeInTheDocument();
+    expect(await screen.findByText('Reading · Aug 18, 2026')).toBeInTheDocument();
   });
 
   it('names every missed commitment, joined — never just the first', async () => {
@@ -300,7 +302,7 @@ describe('the owed penalties list (Story 4.7)', () => {
     };
     render(<RefereeHome />);
 
-    expect(await screen.findByText('500.000₫ — Gym, TryHackMe')).toBeInTheDocument();
+    expect(await screen.findByText('Gym, TryHackMe · Aug 18, 2026')).toBeInTheDocument();
   });
 
   it('orders the list oldest first', async () => {
@@ -326,8 +328,8 @@ describe('the owed penalties list (Story 4.7)', () => {
     render(<RefereeHome />);
 
     await screen.findByText('Owed penalties');
-    const days = screen.getAllByText(/^Aug \d+, 2026$/).map((el) => el.textContent);
-    expect(days).toEqual(['Aug 15, 2026', 'Aug 20, 2026']);
+    const days = screen.getAllByText(/^A commitment · Aug \d+, 2026$/).map((el) => el.textContent);
+    expect(days).toEqual(['A commitment · Aug 15, 2026', 'A commitment · Aug 20, 2026']);
   });
 
   it('excludes a Held Penalty — invisible on the list until it is ruled on', async () => {
@@ -336,6 +338,110 @@ describe('the owed penalties list (Story 4.7)', () => {
 
     await screen.findByText(/appeal pending/);
     expect(screen.queryByText('Owed penalties')).not.toBeInTheDocument();
+  });
+
+  it('shows the pre-written message, and shows exactly what it copies', async () => {
+    // Story 7.2 — the point of the card. Story 4.7 put this string on the clipboard and
+    // nowhere else, so the first human to read it was the doer, in a chat app, after the
+    // referee had already pasted it blind.
+    penaltyResult = { data: [owedRow], error: null };
+    render(<RefereeHome />);
+
+    const message = await screen.findByText(
+      "todoapp says you owe 500.000₫ for Aug 18, 2026. I'm just the one collecting it. When are you free?",
+    );
+    expect(message).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Copy collection message for A commitment, Aug 18, 2026',
+      }),
+    );
+
+    // The assertion that matters is the identity, not either string on its own: a card that
+    // displays one sentence and copies another would be worse than the invisible version,
+    // because it would be trusted.
+    await vi.waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(message.textContent),
+    );
+  });
+
+  it('renders the message as the one serif string, never as an editable field', async () => {
+    // Displayed, never editable — Story 4.7's Never boundary, and the reason the message can
+    // be trusted to attribute the demand to the app rather than to the referee. `.collection-
+    // message` is also the sole `--font-quote` claimant; `lib/design-tokens.test.ts` asserts
+    // that budget from the stylesheet's side, and this asserts the class is actually worn.
+    penaltyResult = { data: [owedRow], error: null };
+    const { container } = render(<RefereeHome />);
+
+    const message = await screen.findByText(/I'm just the one collecting it/);
+    expect(message).toHaveClass('collection-message');
+    expect(container.querySelector('textarea')).toBeNull();
+    expect(container.querySelector('.collection-card input')).toBeNull();
+  });
+
+  it('keeps the message readable when the clipboard fails — the fallback it never had', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+    });
+    penaltyResult = { data: [owedRow], error: null };
+    render(<RefereeHome />);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Copy collection message for A commitment, Aug 18, 2026',
+      }),
+    );
+
+    expect(await screen.findByText('Could not copy the message.')).toBeInTheDocument();
+    // He can still read it off the screen and say it. Under the clipboard-only version a
+    // denied permission left him with nothing at all.
+    expect(screen.getByText(/I'm just the one collecting it/)).toBeInTheDocument();
+  });
+
+  it('labels each card Owed, and names the card after the debt it carries', async () => {
+    penaltyResult = { data: [owedRow], error: null };
+    missedCommitmentsResult = {
+      data: [{ settlement_id: 'settlement-1', commitment_name: 'TryHackMe' }],
+      error: null,
+    };
+    render(<RefereeHome />);
+
+    // The state carries a word, never a colour alone — and stays neutral, because `Owed` is
+    // money not yet collected rather than a resolved outcome.
+    expect(await screen.findByText('Owed')).toHaveClass('pill', 'pill-neutral');
+
+    // One named thing, so the sentence never arrives detached from the sum it names.
+    expect(
+      screen.getByRole('article', { name: '500.000₫ owed — TryHackMe, Aug 18, 2026' }),
+    ).toBeInTheDocument();
+  });
+
+  it('gives each debt its own message, naming its own amount and day', async () => {
+    penaltyResult = {
+      data: [
+        owedRow,
+        {
+          ...owedRow,
+          id: 'penalty-older',
+          amount_dong: 1_000_000,
+          period: '2026-08-15',
+          settlement_id: 's-older',
+          created_at: '2026-08-15T00:00:00Z',
+        },
+      ],
+      error: null,
+    };
+    render(<RefereeHome />);
+
+    await screen.findByText('Owed penalties');
+    expect(
+      screen.getByText(/^todoapp says you owe 1\.000\.000₫ for Aug 15, 2026\./),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/^todoapp says you owe 500\.000₫ for Aug 18, 2026\./),
+    ).toBeInTheDocument();
   });
 
   it('copies the pre-written message unchanged onto the clipboard', async () => {
@@ -543,12 +649,12 @@ describe('the owed penalties list (Story 4.7)', () => {
     // falls back to a generic label, an honest reflection of what a week-kind Penalty
     // actually has to name, rather than a fabricated commitment list. The week's own period
     // still renders as the day (with its year), same as any other row.
-    expect(await screen.findByText('500.000₫ — A commitment')).toBeInTheDocument();
-    expect(screen.getByText('Aug 17, 2026')).toBeInTheDocument();
+    expect(await screen.findByText('500.000₫')).toBeInTheDocument();
+    expect(screen.getByText('A commitment · Aug 17, 2026')).toBeInTheDocument();
 
     // A week-kind settlement id is never even asked about — referee_missed_commitments()
     // is never called at all when nothing day-kind is owed.
-    await screen.findByText('500.000₫ — A commitment');
+    await screen.findByText('A commitment · Aug 17, 2026');
     expect(rpc).not.toHaveBeenCalledWith('referee_missed_commitments', expect.anything());
 
     // And it is just as collectible as any day-kind row.
@@ -577,8 +683,8 @@ describe('the owed penalties list (Story 4.7)', () => {
 
     await screen.findByText('Owed penalties');
     // Both rows render...
-    expect(screen.getByText('Aug 17, 2026')).toBeInTheDocument();
-    expect(screen.getByText('Aug 18, 2026')).toBeInTheDocument();
+    expect(screen.getByText('A commitment · Aug 17, 2026')).toBeInTheDocument();
+    expect(screen.getByText('A commitment · Aug 18, 2026')).toBeInTheDocument();
 
     // ...but the function is only ever asked about the day-kind settlement, never the
     // week-kind one (which has no per-commitment rows to find anyway).

@@ -799,6 +799,75 @@ button:disabled {
   }
 }
 
+/* ------------------------------------------------- the collection card */
+
+/* Story 7.2 — the referee's owed penalties, one card each rather than one row each.
+
+   A row was the wrong container the moment the message became visible: the sentence he is
+   meant to say out loud is prose, and prose on the same baseline as a sum and two buttons
+   reads as a caption. Each debt gets its own frame, and the frame is divided once — what is
+   owed above the hairline, what to say about it below.
+
+   Not tinted, and deliberately. `Owed` is money not yet collected, which is a state and not
+   an outcome; the debt block on Today stays the only large coloured area in the product. */
+.collection-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.collection-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* The sum and its label share a baseline, so a long amount and a short one still line up
+   against the label at the end of the row. */
+.collection-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+/* Screen-title size, not the frame's own 26px, and not the display face: the handoff draws a
+   size no token defines, and `--type-figure` belongs to the debt total and the running timer.
+   Recorded as a deviation in this story's spec rather than taken quietly.
+
+   Tabular numerals are kept from the frame and are the part that matters in a stack of cards:
+   three debts of different magnitudes still align down the column. */
+.collection-amount {
+  font-size: var(--type-screen-title);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-title);
+  font-variant-numeric: tabular-nums;
+}
+
+.collection-said {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border-top: var(--hairline) solid var(--border);
+  padding-top: var(--space-4);
+}
+
+/* The one serif string in either surface, and the only claimant of `--font-quote` — the
+   budget is asserted in both directions by `lib/design-tokens.test.ts`, so a second claimant
+   fails and so does its disappearance.
+
+   It marks this text as something a person says out loud rather than interface chrome, which
+   is the whole reason the face was reserved. It is displayed and never editable: what is
+   drawn here and what `Copy message` puts on the clipboard are one string from one call. */
+.collection-message {
+  font-family: var(--font-quote);
+  font-style: italic;
+  font-size: var(--type-quote);
+  line-height: 1.5;
+  /* Prose, so it may not be clipped at any text size. */
+  overflow-wrap: anywhere;
+}
+
 /* ---------------------------------------------------------------- forms */
 
 /* Text inputs. Outline only, like every neutral control — a filled input would be reading as

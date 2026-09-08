@@ -303,23 +303,27 @@ export function RefereeHome() {
   }
 
   /**
-   * The copy control. Places `collectionMessage`'s own pre-written text on the clipboard
-   * unchanged — no compose field, no editable message (Never boundary). This is the first
-   * `navigator.clipboard` use in this codebase: an unsupported browser, a denied permission
-   * and an insecure context all surface here the same way, as a status message rather than
-   * silence (matching the failure-surfacing bar Story 4.6 set for evidence loading).
+   * The copy control. Places the pre-written text on the clipboard unchanged — no compose
+   * field, no editable message (Never boundary). This is the first `navigator.clipboard` use
+   * in this codebase: an unsupported browser, a denied permission and an insecure context all
+   * surface here the same way, as a status message rather than silence (matching the
+   * failure-surfacing bar Story 4.6 set for evidence loading).
+   *
+   * **`text` is passed in rather than built here.** Story 7.2 put the message on the screen,
+   * so it is now rendered *and* copied, and this signature is what makes those two the same
+   * string rather than two calls that merely agree today. A card showing one sentence and
+   * copying another would be worse than the invisible version it replaced, because it would
+   * be trusted.
    */
-  async function copyMessage(penalty: OwedPenaltyRow) {
-    const text = collectionMessage(penalty.amountDong, new Date(penalty.forDay));
-
+  async function copyMessage(penaltyId: string, text: string) {
     try {
       if (!navigator.clipboard?.writeText) {
         throw new Error('Clipboard API unavailable');
       }
       await navigator.clipboard.writeText(text);
-      setCopyStatus((status) => ({ ...status, [penalty.id]: 'copied' }));
+      setCopyStatus((status) => ({ ...status, [penaltyId]: 'copied' }));
     } catch {
-      setCopyStatus((status) => ({ ...status, [penalty.id]: 'failed' }));
+      setCopyStatus((status) => ({ ...status, [penaltyId]: 'failed' }));
     }
   }
 
@@ -408,14 +412,18 @@ export function RefereeHome() {
           </section>
         )}
 
-        {/* The real list (Story 4.7): amount, day, and every commitment missed, each with a
-            pre-written copy-to-clipboard message and a Mark Collected control — no per-item
-            detail route (Never boundary: unlike an Appeal, a Penalty needs nothing beyond
-            what already fits on its list row). */}
+        {/* The real list (Story 4.7), as the collection card the handoff draws (Story 7.2):
+            amount, day, and every commitment missed above a hairline; the pre-written message
+            and its two controls below it. Still no per-item detail route (Never boundary:
+            unlike an Appeal, a Penalty needs nothing beyond what fits on its own card).
+
+            A card each, not a row each. The row was the wrong container the moment the message
+            became visible — it is prose, and prose on the same baseline as a sum and two
+            buttons reads as a caption of them rather than the thing he is meant to say. */}
         {view.kind === 'ready' && view.owedPenalties.length > 0 && (
           <section aria-label={OWED_PENALTIES_COPY.heading}>
             <h2>{OWED_PENALTIES_COPY.heading}</h2>
-            <div className="card">
+            <div className="collection-cards">
               {view.owedPenalties.map((penalty) => {
                 // formatOwedDay, not formatDeadline: an owed Penalty persists indefinitely
                 // (this story's own "never written off automatically"), so the year has to be
@@ -426,23 +434,77 @@ export function RefereeHome() {
                   penalty.missedCommitments.length > 0
                     ? penalty.missedCommitments.join(', ')
                     : 'A commitment';
+                const amount = formatDong(penalty.amountDong);
+                // Built once, then both rendered and handed to the clipboard. One string, one
+                // call — see `copyMessage` above for why that is structural here rather than a
+                // coincidence the two sites are currently keeping.
+                const message = collectionMessage(penalty.amountDong, new Date(penalty.forDay));
                 const rowMark = markStatus[penalty.id] ?? 'idle';
                 const rowCopy = copyStatus[penalty.id] ?? 'idle';
 
                 return (
-                  <div className="row" key={penalty.id}>
-                    <div className="row-main">
-                      <div className="row-name">
-                        {formatDong(penalty.amountDong)} — {missed}
+                  <article
+                    className="card card-pad collection-card"
+                    key={penalty.id}
+                    // Named, so the card is one thing rather than four loose facts: the
+                    // sentence below says a sum out loud, and a screen-reader user must not
+                    // reach it having never been told which debt it belongs to.
+                    aria-label={OWED_PENALTIES_COPY.cardLabel(amount, missed, day)}
+                  >
+                    <div className="collection-head">
+                      <div>
+                        <div className="collection-amount">{amount}</div>
+                        {/* Not aria-hidden: the day and the commitments are what identify
+                            this debt, not decoration — a screen-reader user needs them too. */}
+                        <div className="row-muted">
+                          {missed} · {day}
+                        </div>
                       </div>
-                      {/* Not aria-hidden: the day is part of what identifies this row, not
-                        decoration — a screen-reader user needs it too. */}
-                      <div className="row-muted">{day}</div>
+                      {/* Neutral and never tinted, and carrying its own word rather than
+                          leaving the state to a colour. */}
+                      <span className="pill pill-neutral">{OWED_PENALTIES_COPY.owedLabel}</span>
+                    </div>
 
-                      {/* What just happened to this row, under the row it happened to. These
-                          used to be direct children of the row itself, which put a sentence on
-                          the same baseline as two buttons and shoved them out of line the
-                          moment either one spoke. */}
+                    <div className="collection-said">
+                      {/* The one serif string in the product. Displayed, never editable — no
+                          compose field, no per-card override (Story 4.7's Never boundary). It
+                          is also the fallback the clipboard-only version never had: if the
+                          copy fails, he can still read it off the screen. */}
+                      <p className="collection-message">{message}</p>
+
+                      <div className="actions">
+                        <button
+                          type="button"
+                          // The day alone is not enough to distinguish cards — this list is
+                          // not scoped to one doer account (RLS grants the referee every
+                          // account's own Penalties, Story 4.5), so two different accounts can
+                          // each owe a same-day Penalty. Commitment name(s) plus day, mirroring
+                          // how the appeals list above disambiguates its own "Open" buttons.
+                          aria-label={`Copy collection message for ${missed}, ${day}`}
+                          onClick={() => void copyMessage(penalty.id, message)}
+                        >
+                          {OWED_PENALTIES_COPY.copy}
+                        </button>
+
+                        <button
+                          type="button"
+                          // Neutral, not the primary fill the frame draws on it: the number of
+                          // cards is the number of debts, and `button-action` is one per screen
+                          // at most. Recorded as a deviation in this story's spec.
+                          aria-label={`Mark collected for ${missed}, ${day}`}
+                          disabled={rowMark === 'busy'}
+                          aria-busy={rowMark === 'busy'}
+                          onClick={() => void markCollected(penalty.id)}
+                        >
+                          {rowMark === 'busy'
+                            ? OWED_PENALTIES_COPY.marking
+                            : OWED_PENALTIES_COPY.markCollected}
+                        </button>
+                      </div>
+
+                      {/* What just happened to this card, under the controls it happened to.
+                          A refused Mark Collected keeps the card exactly where it is, with its
+                          reason attached — Story 4.7's own invariant, unchanged. */}
                       {rowCopy === 'copied' && <p role="status">{OWED_PENALTIES_COPY.copied}</p>}
                       {rowCopy === 'failed' && (
                         <p role="status">{OWED_PENALTIES_COPY.copyFailed}</p>
@@ -453,34 +515,7 @@ export function RefereeHome() {
                         </p>
                       )}
                     </div>
-
-                    <div className="actions">
-                      <button
-                        type="button"
-                        // The day alone is not enough to distinguish rows — this list is not
-                        // scoped to one doer account (RLS grants the referee every account's
-                        // own Penalties, Story 4.5), so two different accounts can each owe a
-                        // same-day Penalty. Commitment name(s) plus day, mirroring how the
-                        // appeals list above disambiguates its own "Open" buttons.
-                        aria-label={`Copy collection message for ${missed}, ${day}`}
-                        onClick={() => void copyMessage(penalty)}
-                      >
-                        {OWED_PENALTIES_COPY.copy}
-                      </button>
-
-                      <button
-                        type="button"
-                        aria-label={`Mark collected for ${missed}, ${day}`}
-                        disabled={rowMark === 'busy'}
-                        aria-busy={rowMark === 'busy'}
-                        onClick={() => void markCollected(penalty.id)}
-                      >
-                        {rowMark === 'busy'
-                          ? OWED_PENALTIES_COPY.marking
-                          : OWED_PENALTIES_COPY.markCollected}
-                      </button>
-                    </div>
-                  </div>
+                  </article>
                 );
               })}
             </div>
