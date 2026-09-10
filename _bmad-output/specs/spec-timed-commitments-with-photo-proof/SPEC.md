@@ -39,6 +39,7 @@ This spec closes both: a commitment may carry a time of day and a window around 
 - **CAP-5**
   - **intent:** A submitted photo holds the day by default; the referee reviews nothing on a schedule and instead may object to a specific day's proof.
   - **success:** With no referee action at all, every proven day settles as held. A referee objection on one day opens a case against that day and nothing else; no queue, no approval step, and no notification that demands the referee act.
+  - **amended 2026-09-10:** narrowed to commitments the author has **not** marked for his referee's sign-off, which remains the default. A marked commitment is governed by `../spec-commitments-the-referee-signs-off/SPEC.md`, where the referee does get a list and does act — but where his silence still holds the day, so the property this capability exists to protect is preserved rather than spent.
 
 - **CAP-6**
   - **intent:** The author is reminded at the time he chose, close enough to it that the time means what it says.
@@ -73,6 +74,7 @@ This spec closes both: a commitment may carry a time of day and a window around 
 
 - **Monthly repeat.** No month-close layer exists in this product and none is built here. `daily` and `weekly_quota` are unchanged; the author's original request for a monthly cadence is deliberately not served.
 - **A referee approval queue.** The referee is never given a list of photos to work through. Any design that requires the referee to act for a day to hold is out of scope.
+  - **amended 2026-09-10:** narrowed to unmarked commitments. The reason this was written stands and is kept on the record: ~90 photos a month on an unpaid friend degrades to approve-all by week three. `../spec-commitments-the-referee-signs-off/SPEC.md` answers it twice — the volume is the author's own choice, one commitment at a time, rather than every proven day; and degrading to approve-all is precisely what silence-approves makes harmless, since a referee who stops engaging produces the outcome this spec already produces. What remains out of scope everywhere, including there, is any design that makes his inaction cost the author.
 - **Multiple times per day for one commitment.** One time, one window, one photo per commitment per day.
 - **Timing an "avoid it" commitment.** There is no moment of doing to photograph.
 - **Timing an hours-quota commitment.** It is judged by measured minutes and is already outside the declaration path entirely.
