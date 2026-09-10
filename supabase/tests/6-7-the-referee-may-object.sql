@@ -57,6 +57,14 @@ grant select on table public.profile, public.commitment, public.settlement, publ
   to authenticated;
 grant select, insert on table public.grace_day, public.appeal to authenticated;
 
+-- The bucket the fixture's photos belong to. It is `config.toml` configuration created by the CLI
+-- through the storage API, not by a migration, so a database started with `-x storage-api` --
+-- which is how CI starts it -- has the schema but not the row. Staged here so the file still runs
+-- against any database, and it rolls back with everything else.
+insert into storage.buckets (id, name)
+values ('appeal-evidence', 'appeal-evidence')
+on conflict (id) do nothing;
+
 do $$
 declare
   -- One account per scenario.
@@ -322,6 +330,13 @@ begin
             ((v_claimrow.for_day + 1)::timestamp + interval '10 hours 14 minutes')
               at time zone 'Asia/Ho_Chi_Minh')
     returning id into v_claim;
+
+    -- The photograph, uploaded before the row that points at it. `evidence_object_must_exist()`
+    -- (20260910090000) is a trigger of its own, so the `evidence_derive_owner` this loop
+    -- switches off to plant photos for days that have ended does not switch it off too: a
+    -- proved day in this fixture is proved by an object that is really there.
+    insert into storage.objects (bucket_id, name, owner)
+    values ('appeal-evidence', v_claim::text || '/pill.jpg', v_claimrow.owner_id);
 
     insert into public.evidence (declaration_id, owner_id, storage_path, captured_on)
     values (v_claim, v_claimrow.owner_id, v_claim::text || '/pill.jpg', v_claimrow.for_day);

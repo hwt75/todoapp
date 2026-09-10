@@ -51,6 +51,14 @@ grant insert, update, delete on table
   public.appeal, public.evidence, public.penalty, public.settlement, public.commitment
   to authenticated;
 
+-- The bucket this file's evidence objects belong to. It is `config.toml` configuration created by
+-- the CLI through the storage API, not by a migration, so a database started with
+-- `-x storage-api` -- which is how CI starts it -- has the schema but not the row. Staged here so
+-- the file still runs against any database, and it rolls back with everything else.
+insert into storage.buckets (id, name)
+values ('appeal-evidence', 'appeal-evidence')
+on conflict (id) do nothing;
+
 do $$
 declare
   -- Account A: the appeal side. One machine-filed miss, appealed -- a `held` Penalty,
@@ -169,6 +177,15 @@ begin
       'appeal_hold_penalty() must fire the same way for a postgres-role insert as it does '
       'for a client one; triggers do not consult the caller''s own role.', v_state);
   end if;
+
+  -- The objects behind both of this file's evidence rows: the one filed here, and the one the
+  -- referee session is refused at step 6c. `evidence_object_must_exist()` (20260910090000)
+  -- refuses a row naming an object that is not there, and step 6c asserts `insufficient_privilege`
+  -- specifically -- so without the object it would not merely fail, it would fail for a reason
+  -- that step is not about.
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_appeal_a::text || '/proof.jpg', v_doer_a),
+         ('appeal-evidence', v_appeal_a::text || '/second.jpg', v_doer_a);
 
   insert into public.evidence (appeal_id, storage_path, captured_on)
   values (v_appeal_a, v_appeal_a::text || '/proof.jpg', v_day_a)

@@ -37,6 +37,14 @@ grant select on table public.profile, public.commitment, public.declaration to a
 grant insert on table public.declaration, public.evidence to authenticated;
 grant select on table public.evidence to authenticated;
 
+-- The bucket every photo below belongs to. It is `config.toml` configuration created by the CLI
+-- through the storage API, not by a migration, so a database started with `-x storage-api` --
+-- which is how CI starts it -- has the schema but not the row. Staged here so the file still runs
+-- against any database, and it rolls back with everything else.
+insert into storage.buckets (id, name)
+values ('appeal-evidence', 'appeal-evidence')
+on conflict (id) do nothing;
+
 do $$
 declare
   -- One account per scenario.
@@ -189,6 +197,16 @@ begin
             at time zone 'Asia/Ho_Chi_Minh')
   returning id into v_c_claim;
 
+  -- The photograph itself, uploaded before the row that points at it -- the order the client
+  -- writes in, and since `20260910090000` the order the database insists on. Note the trigger
+  -- switched off below is `evidence_derive_owner` alone: `evidence_object_must_exist()` is a
+  -- separate trigger precisely so that a fixture's convenience cannot also turn off the rule
+  -- that a claimed day must have a real photo behind it. Before that migration these three
+  -- fixtures held their days on metadata rows with nothing behind them at all, which is the
+  -- retrospective's finding A1.
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_c_claim::text || '/pill.jpg', v_c);
+
   alter table public.evidence disable trigger evidence_derive_owner;
   insert into public.evidence (declaration_id, owner_id, storage_path, captured_on)
   values (v_c_claim, v_c, v_c_claim::text || '/pill.jpg', v_yesterday);
@@ -242,6 +260,9 @@ begin
       'A day whose claim is still waiting for its photo settled before midnight. The window '
       'to prove it had not closed.';
   end if;
+
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_claim::text || '/pill.jpg', v_a);
 
   perform set_config('role', 'authenticated', true);
   insert into public.evidence (declaration_id, owner_id, storage_path, captured_on)
@@ -538,6 +559,9 @@ begin
 
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_f, 'role', 'authenticated')::text, true);
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_f_claim::text || '/call.jpg', v_f);
+
   perform set_config('role', 'authenticated', true);
   insert into public.evidence (declaration_id, owner_id, storage_path, captured_on)
   values (v_f_claim, v_f, v_f_claim::text || '/call.jpg', v_today);

@@ -251,6 +251,12 @@ describe('evidence, optional and never blocking', () => {
     });
 
     expect(await screen.findByText(/The appeal itself still stands/)).toBeInTheDocument();
+
+    // And no row was filed for a photo that never reached Storage. Since migration
+    // `20260910090000` the database refuses an evidence row whose object does not exist, so the
+    // order these two writes happen in is load-bearing rather than merely tidy — and the copy
+    // alone cannot prove it, because the insert-failure branch below says the same sentence.
+    expect(lastEvidenceInsert).toBeNull();
   });
 
   it('says the appeal still stands when the metadata insert fails after a good upload', async () => {

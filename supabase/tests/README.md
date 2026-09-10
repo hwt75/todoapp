@@ -81,6 +81,33 @@ and refuse with that explanation rather than failing somewhere confusing later
 (`6-4-midnight-decides-the-day.sql:103` is the current example). A file that never reaches an
 override path — most of Epic 6's — does not need the guard and does not carry one.
 
+## A fixture that writes `evidence` also writes its photograph
+
+Since `20260910090000_a_row_with_no_photo_behind_it.sql`, `public.evidence` refuses any insert
+whose `storage_path` names no object in the `appeal-evidence` bucket — the rule that closes the
+Epic 6 retrospective's finding A1, where one REST insert with a fabricated path settled a day
+clean. Two consequences for every file here that touches the table:
+
+- **Stage the bucket.** It is `config.toml` configuration created by the CLI through the storage
+  API, not by a migration, so a database started with `-x storage-api` — which is how CI starts it
+  — has the schema but not the row:
+
+  ```sql
+  insert into storage.buckets (id, name)
+  values ('appeal-evidence', 'appeal-evidence')
+  on conflict (id) do nothing;
+  ```
+
+- **Upload before you file**, in the order the client really writes: `insert into storage.objects
+(bucket_id, name, owner)`, then the `evidence` row that names it. Stage the object as `postgres`
+  unless the bucket's own upload policy is what the step is about (that is `6-8`'s subject).
+
+**Including the rows you expect to be refused.** A BEFORE ROW trigger runs ahead of every CHECK
+constraint, so a malformed fixture with no object is turned away by the missing photograph rather
+than by the rule it exists to prove — and a `when others` matrix passes just as green either way.
+Give those rows their objects too, and assert the rule that refused them:
+`get stacked diagnostics ... constraint_name`, as `6-8` step 2 and `4-4` step 6 do.
+
 ## What is here
 
 | File                                                | Covers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |

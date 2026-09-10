@@ -28,6 +28,14 @@
 
 begin;
 
+-- The bucket the evidence objects in step 5c belong to. It is `config.toml` configuration created
+-- by the CLI through the storage API, not by a migration, so a database started with
+-- `-x storage-api` -- which is how CI starts it -- has the schema but not the row. Staged here so
+-- the file still runs against any database, and it rolls back with everything else.
+insert into storage.buckets (id, name)
+values ('appeal-evidence', 'appeal-evidence')
+on conflict (id) do nothing;
+
 -- The environment's part, made explicit rather than assumed. Rolled back with everything else.
 grant select on table public.profile, public.commitment, public.declaration,
                    public.settlement, public.settlement_commitment,
@@ -306,6 +314,17 @@ begin
       raise exception using message =
         '`appeal: read own` did not let the owning account read back its own appeal.';
     end if;
+
+    -- Both objects, uploaded before either row is filed. `evidence_object_must_exist()`
+    -- (20260910090000) refuses a row naming an object that is not there, and the planted one
+    -- below has to be refused by RLS for claiming another account's appeal -- not by the new
+    -- gate for a missing photograph it was never about. As postgres, because the bucket's own
+    -- upload policy would refuse v_b's object for the right reason at the wrong moment.
+    perform set_config('role', 'postgres', true);
+    insert into storage.objects (bucket_id, name, owner)
+    values ('appeal-evidence', v_appeal::text || '/one.jpg', v_a),
+           ('appeal-evidence', v_appeal::text || '/planted.jpg', v_a);
+    perform set_config('role', 'authenticated', true);
 
     insert into public.evidence (appeal_id, storage_path, captured_on)
     values (v_appeal, v_appeal::text || '/one.jpg', v_day)

@@ -13,6 +13,14 @@
 
 begin;
 
+-- The bucket both photos below belong to. It is `config.toml` configuration created by the CLI
+-- through the storage API, not by a migration, so a database started with `-x storage-api` --
+-- which is how CI starts it -- has the schema but not the row. Staged here so the file still runs
+-- against any database, and it rolls back with everything else.
+insert into storage.buckets (id, name)
+values ('appeal-evidence', 'appeal-evidence')
+on conflict (id) do nothing;
+
 grant select on table public.profile, public.commitment, public.evidence, public.settlement,
                       public.declaration to authenticated;
 
@@ -37,6 +45,7 @@ declare
   v_ev      uuid := gen_random_uuid();
   v_ev2     uuid := gen_random_uuid();
 
+  v_path    text;
   v_paths   text[];
   v_rows    integer;
   v_seen    integer;
@@ -92,12 +101,19 @@ begin
     values (v_owner, v_c, gen_random_uuid(), 'held', now(), true)
     returning id, for_day into v_decl, v_day;
 
+    -- The object first, then the row -- since `20260910090000` an evidence row must name a photo
+    -- that was really uploaded. Staged as postgres, because who may upload into the folder is
+    -- `6-8`'s subject, not this file's.
+    v_path := v_decl::text || '/' || case v_case when 'mine' then v_ev else v_ev2 end::text
+                          || '/proof.jpg';
+
+    perform set_config('role', 'postgres', true);
+    insert into storage.objects (bucket_id, name, owner)
+    values ('appeal-evidence', v_path, v_owner);
+    perform set_config('role', 'authenticated', true);
+
     insert into public.evidence (id, declaration_id, storage_path, captured_on)
-    values (case v_case when 'mine' then v_ev else v_ev2 end,
-            v_decl,
-            v_decl::text || '/' || case v_case when 'mine' then v_ev else v_ev2 end::text
-                        || '/proof.jpg',
-            v_day);
+    values (case v_case when 'mine' then v_ev else v_ev2 end, v_decl, v_path, v_day);
 
     perform set_config('role', 'postgres', true);
 
@@ -119,8 +135,13 @@ begin
 
     -- Story 6.8: a photo the author keeps against the commitment itself. It answers for no verdict
     -- and both referee evidence policies exclude it. It must not appear here either.
+    v_path := v_c2::text || '/' || gen_random_uuid()::text || '/kept.jpg';
+
+    insert into storage.objects (bucket_id, name, owner)
+    values ('appeal-evidence', v_path, v_owner);
+
     insert into public.evidence (commitment_id, storage_path, for_day, captured_on)
-    values (v_c2, v_c2::text || '/' || gen_random_uuid()::text || '/kept.jpg', v_day, v_day);
+    values (v_c2, v_path, v_day, v_day);
   end loop;
 
   -- ---------------------------------------------------------------- as the referee
