@@ -266,7 +266,7 @@ sixty-character unbroken name, one carrying a `Copied.` line — through the rea
   message computes to.
 
 Checks on the final state: `npm test` 1394 passed across 52 files (four new here);
-`components/referee-home` 40, `lib/design-tokens` 44, `lib/referee` — all green;
+`components/referee-home` 39, `lib/design-tokens` 44, `lib/referee` — all green;
 `npm run lint` and `npm run format:check` clean. No migration, so no SQL suite.
 
 ## Status
