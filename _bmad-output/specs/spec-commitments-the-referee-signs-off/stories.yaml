@@ -1,0 +1,140 @@
+- id: "8-1"
+  title: A commitment can ask for the referee's signature
+  description: >-
+    Adds the sign-off flag to a commitment with the history that lets it be read
+    as of any past day, refuses it where it cannot mean anything, and says on the
+    setup surface that the referee's silence still holds the day. Serves CAP-1;
+    nothing reads the flag yet.
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    This flag decides money, which is what separates it from requires_photo
+    (20260903120000), whose own migration says "the photo decides nothing" and
+    which therefore needed no history. Toggling this one off after a refusal, or
+    on after a clean day, must not re-judge a day already answered - so it needs a
+    log and a requires_referee_approval_as_of() reader in the shape
+    carries_penalty_as_of() and due_time_as_of() already have. Epic 6
+    retrospective item 50 is the standing instruction here: when a rule gains a
+    one-door abstraction, every reader moves through it in the same change; three
+    defects on 2026-09-07 were that single shape. Four refusals belong on the
+    commitment itself, mirrored in lib/commitment.ts so the form can refuse a bad
+    draft without a round trip, exactly as the cadence-target rules do: kind must
+    be `do`, never alongside auto_check_kind, the photograph requirement comes
+    with it, and it cannot be set with no referee paired. The setup copy is
+    load-bearing, not decoration - it is the only place the author learns that his
+    friend forgetting costs him nothing, and CAP-8's copy constraint applies to it
+    too: information, not a task.
+
+- id: "8-2"
+  title: The referee's decision, and what a refusal costs
+  description: >-
+    Records a sign-off or a refusal against one commitment-day, fails the refused
+    commitment inside the day's own settlement, and takes flagged commitments out
+    of the objection path. Serves CAP-3, CAP-4 and CAP-5; no surface in this story.
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Highest-risk slice in the epic and deliberately isolated - no UI, no
+    notification, no storage policy. The decision is a new table, not
+    public.objection: that one is bound to superseded_settlement and has no
+    meaning before a settlement exists. Keep its care though - referee_id on
+    delete restrict so a statement about someone else's money is never silently
+    anonymised, the reason stored verbatim and never paraphrased, the day and
+    commitment stored rather than derived from a chain that moves on afterwards.
+    The refusal RPC reuses object_to_day()'s landing guards: it refuses wherever
+    it would leave the author a broken chain no Grace Day can reach - a commitment
+    carrying no penalty, a Weekly Quota, a penalty in any state but owed. Those
+    reasons did not change because the timing did. commitments_owing() gains one
+    clause, not a state: a flagged commitment with a photograph is held exactly as
+    today unless a refusal exists for that commitment and day. Nothing waits on a
+    person, so settle_day()'s deadline logic is untouched. CAP-4's proof is a
+    negative and it is the assertion that matters most in this story - a day
+    nobody decided must settle byte-identically to the unflagged case, chain and
+    penalty included. Finally, a flagged commitment must be unreachable by
+    object_to_day(), enforced in SQL and asserted there; two mechanisms for one
+    job is how they come to disagree.
+
+- id: "8-3"
+  title: The photograph reaches the referee
+  description: >-
+    Lets the paired referee open the photograph behind a flagged commitment-day,
+    and no other. Serves CAP-2.
+  spec_checkpoint: true
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Ordered before the surface on purpose: he cannot decide on what he cannot see.
+    Today the table policy reads `role_from_token() = 'referee' and commitment_id
+    is null and owner_id = <his paired doer>`, so a claim-parented photograph is
+    already reachable and a commitment-day one deliberately is not (Story 6.8).
+    Which of the two a flagged commitment uses depends on whether it carries a
+    due_time - the SPEC assumption says both must reach him when the flag is on,
+    so the commitment-day arm is the one that needs widening, for flagged
+    commitments only. There is a copy consequence and it must not be skipped: the
+    hint under the author's photo control says "It is private - only you can open
+    it", and that sentence has to stop being said for a flagged commitment. Epic 6
+    retrospective finding A2 (item 43) is the same defect one step back - the app
+    promising a privacy the policy did not keep - and this story is the consent
+    answer to it, which only holds if the sentence changes with the policy.
+    Storage objects and the evidence table both carry a referee policy; widen both
+    or neither, or a photograph becomes listable and unopenable.
+
+- id: "8-4"
+  title: What is waiting for him today
+  description: >-
+    Gives the referee a list of the flagged commitment-days waiting on him now,
+    with the two controls that answer them. Serves CAP-6.
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    This list is the deliberate reversal of the old spec's "referee approval
+    queue" non-goal, and the reason that reversal is affordable has to survive the
+    implementation: nothing here may nag, count, or imply a duty. Today only, his
+    paired doer only, and no history - a security definer function scoped to
+    paired_doer_id(), in the shape referee_day_lookup() established, never an RLS
+    grant on the underlying tables (granting the referee select on
+    settlement_commitment is the 20260825100000 incident). No badge, no count of
+    what he has already done, and no empty state that reads as a queue drained -
+    components/referee-day-lookup.tsx says why at length and is the model. Each
+    row's status is keyed by its own id so a refusal on one never bleeds into
+    another, the same shape referee-home.tsx's Mark Collected statuses use. The
+    refuse control asks for the reason before it will submit, and says the refusal
+    is final, because it is.
+
+- id: "8-5"
+  title: The author is told he was refused
+  description: >-
+    Sends the author one message naming the commitment, the day and the referee's
+    reason verbatim. Serves CAP-7.
+  spec_checkpoint: true
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Split from 8-2 rather than folded into it: Story 6-7 folded work of that size
+    into one slice and produced the 1,579-line single-block test file the Epic 6
+    retrospective named (G2). The effect still belongs to the refusal's own
+    transaction through the outbox - AD-3, and the way object_to_day() already
+    does it - so this story adds the message and its body, not a second write
+    path. Exactly one message per refusal, none for an approval and none for a
+    silence, and the reason travels verbatim: an app that paraphrases the
+    referee's words is an app taking a side. Epic 6 retrospective item 48 is open
+    about days that fail with nobody told; this is the half of it this epic can
+    close.
+
+- id: "8-6"
+  title: Today says the day is waiting on his friend
+  description: >-
+    Shows the author, on a flagged row that has its photograph and no decision
+    yet, that his referee has not answered - and stops once one lands or midnight
+    passes. Serves CAP-8.
+  spec_checkpoint: true
+  done_checkpoint: false
+  invoke_dev_with: >-
+    The copy is the whole story and it is genuinely hard. This was an open
+    question in the SPEC precisely because a row that says "waiting" invites the
+    author to go chase his friend, which is the opposite of what silence-approves
+    exists for. hwt75 decided on 2026-09-10 to show it anyway, and the constraint
+    that came with the decision is binding: the words must carry that the day is
+    already safe without a decision. It is information about his friend, not a
+    task for him. Read EXPERIENCE.md before writing a single string. The state is
+    derived from what already exists - a photograph, no decision row, before
+    midnight - so nothing new is stored for it, and an unflagged row must render
+    exactly as it does today.

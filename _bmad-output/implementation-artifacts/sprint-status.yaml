@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 09-10-2026 11:20
+last_updated: 09-10-2026 12:40
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -96,6 +96,20 @@ development_status:
   7-1-a-surface-i-am-less-reluctant-to-open: done
   7-2-a-message-meant-to-be-said-out-loud: review
   epic-7-retrospective: optional
+
+  # Epic 8 is defined by _bmad-output/specs/spec-commitments-the-referee-signs-off/SPEC.md,
+  # the pattern Epic 6 set: the SPEC folder is the epic. Approved as a scope change in
+  # planning-artifacts/sprint-change-proposal-2026-09-10.md. The six stories below are that
+  # spec's own stories.yaml, in its execution order; hwt75 set a done_checkpoint on 8-1, 8-2
+  # and 8-4 at breakdown time.
+  epic-8: backlog
+  8-1-a-commitment-can-ask-for-the-referee-s-signature: backlog
+  8-2-the-referee-s-decision-and-what-a-refusal-costs: backlog
+  8-3-the-photograph-reaches-the-referee: backlog
+  8-4-what-is-waiting-for-him-today: backlog
+  8-5-the-author-is-told-he-was-refused: backlog
+  8-6-today-says-the-day-is-waiting-on-his-friend: backlog
+  epic-8-retrospective: optional
 action_items:
   - id: "epic-1-retro-item-1-record-whether-a-research-spike-may-skip"
     epic: 1
