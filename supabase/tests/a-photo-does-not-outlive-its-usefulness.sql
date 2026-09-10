@@ -15,6 +15,14 @@
 
 begin;
 
+-- The bucket both photos below belong to. It is `config.toml` configuration created by the CLI
+-- through the storage API, not by a migration, so a database started with `-x storage-api` --
+-- which is how CI starts it -- has the schema but not the row. Staged here so the file still runs
+-- against any database, and it rolls back with everything else.
+insert into storage.buckets (id, name)
+values ('appeal-evidence', 'appeal-evidence')
+on conflict (id) do nothing;
+
 do $$
 declare
   v_doer    uuid := gen_random_uuid();
@@ -61,6 +69,14 @@ begin
   values (v_doer, v_c, gen_random_uuid(), 'held', now(), true)
   returning id, for_day into v_decl, v_day;
 
+  -- The object first: since `20260910090000` an evidence row must name a photo that was really
+  -- uploaded. Filed as postgres, ahead of the row the doer session then files -- what this file
+  -- is about is what happens to the bytes at thirty days, not who may put them there.
+  perform set_config('role', 'postgres', true);
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_decl::text || '/' || v_ev::text || '/proof.jpg', v_doer);
+  perform set_config('role', 'authenticated', true);
+
   insert into public.evidence (id, declaration_id, storage_path, captured_on)
   values (v_ev, v_decl, v_decl::text || '/' || v_ev::text || '/proof.jpg', v_day);
 
@@ -95,6 +111,9 @@ begin
   end if;
 
   -- A second, still-fresh photo must not be swept alongside it.
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_decl::text || '/' || v_fresh::text || '/fresh.jpg', v_doer);
+
   insert into public.evidence (id, declaration_id, storage_path, captured_on)
   values (v_fresh, v_decl, v_decl::text || '/' || v_fresh::text || '/fresh.jpg', v_day);
 

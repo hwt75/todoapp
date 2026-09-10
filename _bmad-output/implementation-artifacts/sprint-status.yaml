@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 09-08-2026 17:10
+last_updated: 09-10-2026 11:20
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -411,8 +411,14 @@ action_items:
       regression the suite is missing: one REST insert with a fabricated storage_path
       settles a day clean today."
     owner: "hwt75"
-    status: open
-    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-07.md"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/spec-epic-6-retro-item-42-a-row-with-no-photo-behind-it.md"
+    note: "Migration 20260910090000 adds a before-insert trigger of its own; the missing regression
+      is supabase/tests/a-row-with-no-photo-behind-it.sql, and thirteen fixture files now upload the
+      photograph their rows claim. The whole SQL suite (after a from-scratch db reset), npm test,
+      lint and format:check pass, and CI's db-tests job is green on PR #7. Pushed to the remote
+      project on 2026-09-10 alongside the two migrations that had been sitting local-only since
+      09-08; migrations:check now reports all 76 matching."
   - id: "epic-6-retro-item-43-reconcile-the-referee-reach-with-what-th"
     epic: 6
     action: "Reconcile the referee reach with what the app promises about claim photos
@@ -421,9 +427,12 @@ action_items:
     status: in-progress
     ref: "_bmad-output/implementation-artifacts/spec-epic-6-retro-item-43-the-referee-can-see-what-the-day-was-proved-with.md"
     note: "Both halves implemented and verified locally. The sentence changed and is covered
-      by a test; the policy was kept, deliberately. The viewer is at review, not done:
-      migration 20260908170000 is not on the remote project and nobody has seen the screen
-      in a browser."
+      by a test; the policy was kept, deliberately. Migration 20260908170000 reached the remote
+      project on 2026-09-10. Until then the deployed client selected a column the live database
+      did not have (evidence.swept_at, from 20260908180000, unpushed for the same two days), and
+      referee-appeal-detail.tsx treats a failed evidence read as a failed screen -- so the
+      referee's appeal detail, Approve and Reject controls included, had been rendering as an
+      error line. Still not done: nobody has seen the viewer in a browser."
   - id: "epic-6-retro-item-44-move-apply_grace_days-onto-frozen-settle"
     epic: 6
     action: "Move apply_grace_days() onto frozen settlement rows, the last correction

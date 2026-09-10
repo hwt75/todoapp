@@ -33,6 +33,14 @@ begin;
 grant select on table public.profile to authenticated;
 grant select, insert on table public.appeal, public.evidence to authenticated;
 
+-- The bucket step 6's objects belong to. It is `config.toml` configuration created by the CLI
+-- through the storage API, not by a migration, so a database started with `-x storage-api` --
+-- which is how CI starts it -- has the schema but not the row. Staged here so the file still runs
+-- against any database, and it rolls back with everything else.
+insert into storage.buckets (id, name)
+values ('appeal-evidence', 'appeal-evidence')
+on conflict (id) do nothing;
+
 do $$
 declare
   -- Account 1: one Failed Day, three commitments -- two machine-filed misses sharing that
@@ -83,6 +91,8 @@ declare
   v_refused    boolean;
   v_message    text;
   v_voided     integer;
+  v_stray      text; -- step 6's object outside the appeal's own folder
+  v_stray_by   text; -- and the constraint that must be the one to refuse it
 
   -- Account 5's own working variables.
   v_day5          date;
@@ -490,18 +500,59 @@ begin
   -- captured_on is set to v_day (the appeal's own for_day) on both inserts below so the
   -- Epic 4 retrospective's captured_on guard (2026-08-27, finding A3) never fires here —
   -- this step is about storage_path's own check constraint, not that one.
+  --
+  -- Both objects exist before either row is filed. `evidence_object_must_exist()`
+  -- (20260910090000) is a BEFORE ROW trigger and so runs ahead of the table's CHECK
+  -- constraints: without the real object, the mismatched path below would be refused for the
+  -- photograph it lacks rather than for the folder it points at, and this step would pass
+  -- while proving nothing. The appeal's evidence is filed as the doer, so the object is
+  -- staged as postgres and the session put back.
+  v_stray := gen_random_uuid()::text || '/not-this-appeals-folder.jpg';
+
+  perform set_config('role', 'postgres', true);
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_stray, v_user1),
+         ('appeal-evidence', v_appeal1::text || '/proof.jpg', v_user1);
+  perform set_config('role', 'authenticated', true);
+
   v_refused := false;
+  v_stray_by := null;
   begin
     insert into public.evidence (appeal_id, storage_path, captured_on)
-    values (v_appeal1, gen_random_uuid()::text || '/not-this-appeals-folder.jpg', v_day);
+    values (v_appeal1, v_stray, v_day);
   exception when others then
     v_refused := true;
+    get stacked diagnostics v_stray_by = constraint_name;
   end;
 
-  if not v_refused then
-    raise exception using message =
-      'evidence accepted a storage_path outside its own appeal_id''s folder -- the '
-      'check constraint on storage_path did not fire.';
+  if not v_refused or v_stray_by is distinct from 'evidence_storage_path_leads_with_its_parent'
+  then
+    raise exception using message = format(
+      'A storage_path outside its own appeal_id''s folder was refused by `%s`, expected the '
+      'check constraint `evidence_storage_path_leads_with_its_parent`. Naming the rule is what '
+      'keeps the staged object above from quietly becoming the thing that refuses.',
+      coalesce(v_stray_by, 'nothing at all'));
+  end if;
+
+  -- And the gate itself, on the parent kind this file is the only one able to build: an
+  -- appeal's photo passes through `evidence_object_must_exist()` exactly as a claim's does.
+  -- The path is this appeal's own, so the older check constraint has nothing to say about it
+  -- and the refusal can only be the missing object.
+  v_refused := false;
+  v_message := null;
+  begin
+    insert into public.evidence (appeal_id, storage_path, captured_on)
+    values (v_appeal1, v_appeal1::text || '/never-uploaded.jpg', v_day);
+  exception when others then
+    v_refused := true;
+    v_message := sqlerrm;
+  end;
+
+  if not v_refused or v_message not like '%appeal-evidence bucket%' then
+    raise exception using message = format(
+      'An appeal''s evidence row naming an object that does not exist was accepted (refused: '
+      '%s, said: %s). The gate applies to every parent kind.',
+      v_refused, coalesce(v_message, 'nothing'));
   end if;
 
   insert into public.evidence (appeal_id, storage_path, captured_on)
@@ -511,7 +562,8 @@ begin
 
   raise notice using message =
     'Step 6 ok: evidence.storage_path must lead with its own appeal_id -- a '
-    'mismatched path is refused, a correctly-scoped one is accepted.';
+    'mismatched path is refused, a row naming no uploaded object is refused, and a '
+    'correctly-scoped one with its photograph really there is accepted.';
 
   -- -------------------------------------------------------------------------------
   -- 7. A day that closed `expired` (a different commitment's silence), corrected to

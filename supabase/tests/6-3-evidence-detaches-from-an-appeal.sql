@@ -22,6 +22,14 @@ grant select on table public.profile, public.commitment, public.declaration to a
 grant insert on table public.declaration, public.evidence to authenticated;
 grant select on table public.evidence to authenticated;
 
+-- The bucket every object below belongs to. It is `config.toml` configuration created by the CLI
+-- through the storage API, not by a migration, so a database started with `-x storage-api` --
+-- which is how CI starts it -- has the schema but not the row. Staged here so the file still runs
+-- against any database, and it rolls back with everything else.
+insert into storage.buckets (id, name)
+values ('appeal-evidence', 'appeal-evidence')
+on conflict (id) do nothing;
+
 do $$
 declare
   v_a        uuid := gen_random_uuid();
@@ -36,7 +44,9 @@ declare
   v_owner    uuid;
   v_count    integer;
   v_refused  boolean;
+  v_message  text;
   v_case     text;
+  v_case_path text;
   v_at       timestamptz := (
     ((now() at time zone 'Asia/Ho_Chi_Minh')::date || ' 10:14')::timestamp
       at time zone 'Asia/Ho_Chi_Minh'
@@ -102,6 +112,13 @@ begin
   -- rests on `owner_id` being the parent's own (NFR4), which only holds if a client cannot
   -- claim a different one.
   -- -------------------------------------------------------------------------------
+  -- The objects first, in the order the client really writes them: the upload, then the row.
+  -- `evidence_object_must_exist()` (20260910090000) refuses a row naming an object that is not
+  -- there, which is what closes the retrospective's finding A1.
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_claim::text || '/pill.jpg', v_a),
+         ('appeal-evidence', v_claim::text || '/pill-2.jpg', v_a);
+
   perform set_config('role', 'authenticated', true);
   insert into public.evidence (declaration_id, owner_id, storage_path, captured_on)
   values (v_claim, v_b, v_claim::text || '/pill.jpg', v_day);
@@ -143,6 +160,18 @@ begin
   ]
   loop
     v_refused := false;
+
+    v_case_path := case v_case
+      when 'a path outside the claim' then gen_random_uuid()::text || '/elsewhere.jpg'
+      else v_claim::text || '/' || replace(v_case, ' ', '-') || '.jpg'
+    end;
+
+    -- Every malformed case gets its object. Without it `evidence_object_must_exist()` would
+    -- refuse all five before the rule each one names ever ran, and this loop would pass while
+    -- proving nothing about the shape of the table.
+    insert into storage.objects (bucket_id, name, owner)
+    values ('appeal-evidence', v_case_path, v_a);
+
     perform set_config('role', 'authenticated', true);
     begin
       insert into public.evidence (declaration_id, appeal_id, owner_id, storage_path, captured_on)
@@ -152,10 +181,7 @@ begin
         -- table constraint and fires before the trigger ever reads a parent.
         case v_case when 'both parents' then gen_random_uuid() end,
         v_a,
-        case v_case
-          when 'a path outside the claim' then gen_random_uuid()::text || '/elsewhere.jpg'
-          else v_claim::text || '/' || replace(v_case, ' ', '-') || '.jpg'
-        end,
+        v_case_path,
         case v_case
           when 'no capture date' then null
           when 'captured another day' then v_day - 3
@@ -163,12 +189,22 @@ begin
         end);
     exception when others then
       v_refused := true;
+      v_message := sqlerrm;
     end;
     perform set_config('role', 'postgres', true);
 
     if not v_refused then
       raise exception using message = format(
         'The database accepted evidence described as "%s".', v_case);
+    end if;
+
+    -- Refused by its own rule, and not by the object gate standing in for it. The staged object
+    -- above is what makes that true; this is what makes it stay true if the staging is ever
+    -- dropped, which is the shape of the defect the retrospective found in `6-4`.
+    if v_message like '%appeal-evidence bucket%' then
+      raise exception using message = format(
+        'Evidence described as "%s" was refused for a missing object rather than for the rule '
+        'it exists to prove. A refusal for an unintended reason proves nothing.', v_case);
     end if;
   end loop;
 
@@ -180,6 +216,9 @@ begin
   -- 3. A photo cannot be attached to another account's claim.
   -- -------------------------------------------------------------------------------
   v_refused := false;
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_hers::text || '/theirs.jpg', v_b);
+
   perform set_config('role', 'authenticated', true);
   begin
     insert into public.evidence (declaration_id, owner_id, storage_path, captured_on)
@@ -207,6 +246,9 @@ begin
   -- tap. `v_old` is a claim for yesterday; today's upload is too late for it.
   -- -------------------------------------------------------------------------------
   v_refused := false;
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_old::text || '/yesterday.jpg', v_a);
+
   perform set_config('role', 'authenticated', true);
   begin
     insert into public.evidence (declaration_id, owner_id, storage_path, captured_on)

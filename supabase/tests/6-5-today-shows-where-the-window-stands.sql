@@ -16,6 +16,14 @@ grant select on table public.profile, public.commitment, public.declaration to a
 grant insert on table public.declaration, public.evidence to authenticated;
 grant select on table public.evidence to authenticated;
 
+-- The bucket the photo below belongs to. It is `config.toml` configuration created by the CLI
+-- through the storage API, not by a migration, so a database started with `-x storage-api` --
+-- which is how CI starts it -- has the schema but not the row. Staged here so the file still runs
+-- against any database, and it rolls back with everything else.
+insert into storage.buckets (id, name)
+values ('appeal-evidence', 'appeal-evidence')
+on conflict (id) do nothing;
+
 do $$
 declare
   v_a         uuid := gen_random_uuid();
@@ -132,6 +140,15 @@ begin
     raise exception using message =
       'A claim with no photo came back proven. The photo is what holds a timed day, not the tap.';
   end if;
+
+  -- The object first, then the row: since `20260910090000` an evidence row must name a photo that
+  -- was really uploaded. Staged as postgres and the doer session put back, because who may upload
+  -- into the folder is `6-8`'s subject -- leaving it to the authenticated session would make this
+  -- fixture depend on the bucket's upload policy for a step about the view.
+  perform set_config('role', 'postgres', true);
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_claim::text || '/pill.jpg', v_a);
+  perform set_config('role', 'authenticated', true);
 
   insert into public.evidence (declaration_id, owner_id, storage_path, captured_on)
   values (v_claim, v_a, v_claim::text || '/pill.jpg', v_day);

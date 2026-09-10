@@ -22,6 +22,14 @@
 
 begin;
 
+-- The bucket step 6's evidence objects belong to. It is `config.toml` configuration created by the
+-- CLI through the storage API, not by a migration, so a database started with `-x storage-api` --
+-- which is how CI starts it -- has the schema but not the row. Staged here so the file still runs
+-- against any database, and it rolls back with everything else.
+insert into storage.buckets (id, name)
+values ('appeal-evidence', 'appeal-evidence')
+on conflict (id) do nothing;
+
 grant select on table public.profile to authenticated;
 grant select, insert on table public.appeal, public.evidence to authenticated;
 
@@ -545,6 +553,17 @@ begin
   insert into public.appeal (owner_id, commitment_id, idempotency_key, for_day)
   values (v_user6, v_c6, gen_random_uuid(), v_day6)
   returning id into v_appeal6;
+
+  -- All three objects, uploaded before any row is filed. `evidence_object_must_exist()`
+  -- (20260910090000) refuses a row naming a photo that is not there, and the two cases below
+  -- assert the message `evidence_derive_owner()` raises about the capture date -- so without the
+  -- objects they would be refused by the wrong rule and prove nothing.
+  perform set_config('role', 'postgres', true);
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_appeal6::text || '/wrong-day.jpg', v_user6),
+         ('appeal-evidence', v_appeal6::text || '/no-day.jpg', v_user6),
+         ('appeal-evidence', v_appeal6::text || '/right-day.jpg', v_user6);
+  perform set_config('role', 'authenticated', true);
 
   begin
     insert into public.evidence (appeal_id, storage_path, captured_on)

@@ -99,11 +99,13 @@ begin
     -- by `evidence_derive_owner()` -- neither would measure scoping.
     v_path := v_appeal::text || '/proof.jpg';
 
-    insert into public.evidence (appeal_id, storage_path, captured_on)
-    values (v_appeal, v_path, v_day);
-
+    -- The object first, then the row -- the order the client writes in, and since
+    -- `20260910090000` the order the database insists on.
     insert into storage.objects (bucket_id, name, owner)
     values ('appeal-evidence', v_path, v_owner);
+
+    insert into public.evidence (appeal_id, storage_path, captured_on)
+    values (v_appeal, v_path, v_day);
   end loop;
 
   -- The pairing itself: an invitation `mine` minted and this referee accepted.

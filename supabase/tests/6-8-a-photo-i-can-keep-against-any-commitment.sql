@@ -58,6 +58,7 @@ declare
   v_proven     boolean;
   v_refused    boolean;
   v_case       text;
+  v_case_path  text;
   v_state      text;
   v_constraint text;
   v_message    text;
@@ -126,6 +127,14 @@ begin
   -- rests on `owner_id` being the parent's own (NFR4), which only holds if a client cannot
   -- claim a different one.
   -- -------------------------------------------------------------------------------
+  -- Every object first, in the order the client really writes it. `evidence_object_must_exist()`
+  -- (20260910090000) refuses a row naming a photo that was never uploaded, so a fixture that
+  -- files rows alone is no longer a fixture the product would accept.
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_kept::text || '/sketch.jpg', v_a),
+         ('appeal-evidence', v_abstain::text || '/bedside.jpg', v_a),
+         ('appeal-evidence', v_kept::text || '/sketch-2.jpg', v_a);
+
   perform set_config('role', 'authenticated', true);
   insert into public.evidence (commitment_id, for_day, owner_id, storage_path, captured_on)
   values (v_kept, v_day, v_b, v_kept::text || '/sketch.jpg', v_day);
@@ -225,6 +234,21 @@ begin
       else 'A photo can only be kept on the day it belongs to'
     end;
 
+    -- Leads with whatever `coalesce(appeal_id, declaration_id, commitment_id)` will pick, so
+    -- `evidence_storage_path_leads_with_its_parent` is satisfied everywhere except the one case
+    -- that exists to violate it.
+    v_case_path := case v_case
+      when 'a path outside the commitment' then gen_random_uuid()::text || '/elsewhere.jpg'
+      when 'two parents' then v_claim::text || '/two-parents.jpg'
+      when 'for_day on an appeal' then v_claim::text || '/stray-for-day.jpg'
+      else v_kept::text || '/' || replace(v_case, ' ', '-') || '.jpg'
+    end;
+
+    -- And its object. Every case here asserts the SQLSTATE and the rule that refused it, so a
+    -- missing photograph would have `evidence_object_must_exist()` answer for all nine of them.
+    insert into storage.objects (bucket_id, name, owner)
+    values ('appeal-evidence', v_case_path, v_a);
+
     perform set_config('role', 'authenticated', true);
     begin
       insert into public.evidence
@@ -250,15 +274,7 @@ begin
           else v_day
         end,
         v_a,
-        -- Leads with whatever `coalesce(appeal_id, declaration_id, commitment_id)` will pick,
-        -- so `evidence_storage_path_leads_with_its_parent` is satisfied everywhere except the
-        -- one case that exists to violate it.
-        case v_case
-          when 'a path outside the commitment' then gen_random_uuid()::text || '/elsewhere.jpg'
-          when 'two parents' then v_claim::text || '/two-parents.jpg'
-          when 'for_day on an appeal' then v_claim::text || '/stray-for-day.jpg'
-          else v_kept::text || '/' || replace(v_case, ' ', '-') || '.jpg'
-        end,
+        v_case_path,
         case v_case
           when 'no capture date' then null
           when 'captured another day' then v_day - 3
@@ -310,9 +326,13 @@ begin
   v_refused := false;
   v_state := null;
   v_constraint := null;
+  v_case_path := gen_random_uuid()::text || '/orphan.jpg';
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_case_path, v_a);
+
   begin
     insert into public.evidence (owner_id, storage_path, captured_on)
-    values (v_a, gen_random_uuid()::text || '/orphan.jpg', v_day);
+    values (v_a, v_case_path, v_day);
   exception when others then
     v_refused := true;
     get stacked diagnostics
@@ -342,6 +362,9 @@ begin
   -- `auth.uid() = owner_id` refuses it on the way out (AD-7).
   -- -------------------------------------------------------------------------------
   v_refused := false;
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_theirs::text || '/theirs.jpg', v_b);
+
   perform set_config('role', 'authenticated', true);
   begin
     insert into public.evidence (commitment_id, for_day, owner_id, storage_path, captured_on)
@@ -373,12 +396,16 @@ begin
   -- bypasses RLS and would report success for a policy that grants nothing. The pair has to stay
   -- symmetrical: an object that can be uploaded and then not read is worse than neither.
   -- -------------------------------------------------------------------------------
+  -- A second object in the same folder, under its own name: `sketch.jpg` was uploaded in step 1,
+  -- because since `20260910090000` the evidence row filed there needs its photograph to exist
+  -- first. What this step proves is the upload policy itself, which any name in the commitment's
+  -- own folder exercises equally.
   perform set_config('role', 'authenticated', true);
   insert into storage.objects (bucket_id, name, owner)
-  values ('appeal-evidence', v_kept::text || '/sketch.jpg', v_a);
+  values ('appeal-evidence', v_kept::text || '/policy-probe.jpg', v_a);
 
   select count(*) into v_count from storage.objects
-   where bucket_id = 'appeal-evidence' and name = v_kept::text || '/sketch.jpg';
+   where bucket_id = 'appeal-evidence' and name = v_kept::text || '/policy-probe.jpg';
   perform set_config('role', 'postgres', true);
 
   if v_count <> 1 then
@@ -468,10 +495,10 @@ begin
   -- And the half that must NOT have moved: a claim's evidence is what Story 6.7 is being built
   -- to let him object to, so narrowing to appeal-only would have broken that before it began.
   perform set_config('role', 'postgres', true);
-  insert into public.evidence (declaration_id, owner_id, storage_path, captured_on)
-  values (v_claim, v_a, v_claim::text || '/proof.jpg', v_day);
   insert into storage.objects (bucket_id, name, owner)
   values ('appeal-evidence', v_claim::text || '/proof.jpg', v_a);
+  insert into public.evidence (declaration_id, owner_id, storage_path, captured_on)
+  values (v_claim, v_a, v_claim::text || '/proof.jpg', v_day);
 
   perform set_config('role', 'authenticated', true);
 
@@ -511,6 +538,9 @@ begin
 
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_a, 'role', 'authenticated')::text, true);
+
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_timed::text || '/pill.jpg', v_a);
 
   perform set_config('role', 'authenticated', true);
   insert into public.evidence (commitment_id, for_day, owner_id, storage_path, captured_on)

@@ -274,6 +274,16 @@ begin
   insert into public.appeal (owner_id, commitment_id, idempotency_key, for_day)
   values (v_user1, v_c1, gen_random_uuid(), v_day) returning id into v_appeal1;
 
+  -- The object first, as the client writes it -- `evidence_object_must_exist()`
+  -- (20260910090000) refuses a row naming an object that is not there. Staged as postgres and
+  -- the doer session put back, because the bucket's own upload policy is not what this file is
+  -- about. This is also the object step 8 reads through the referee's storage.objects policy:
+  -- one object, staged where the row that names it is filed, rather than inserted twice.
+  perform set_config('role', 'postgres', true);
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_appeal1::text || '/proof.jpg', v_user1);
+  perform set_config('role', 'authenticated', true);
+
   insert into public.evidence (appeal_id, storage_path, captured_on)
   values (v_appeal1, v_appeal1::text || '/proof.jpg', v_day) returning id into v_evidence1;
 
@@ -755,10 +765,12 @@ begin
   -- 8. Evidence read: the referee reads account 1's evidence object through the new
   --    storage.objects policy; a doer session (account 2, reading account 1's evidence)
   --    still cannot, the same as before this story.
+  --
+  --    The object itself is no longer inserted here. `evidence_object_must_exist()`
+  --    (20260910090000) requires it to exist before account 1's evidence row can be filed at
+  --    all, so it is staged in the fixture above -- one object, in the order the client really
+  --    writes it, rather than a row and its photograph appearing four hundred lines apart.
   -- -------------------------------------------------------------------------------
-  insert into storage.objects (bucket_id, name, owner)
-  values ('appeal-evidence', v_appeal1::text || '/proof.jpg', v_user1);
-
   -- A referee reads only the account he is paired to (`profile.referee_of`). This file predates
   -- that rule and drives one referee across seven accounts, so it pairs him to the account each
   -- step is about. The subject here is ruling, not pairing.
