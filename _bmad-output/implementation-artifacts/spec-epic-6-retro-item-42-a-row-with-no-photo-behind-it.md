@@ -201,7 +201,24 @@ rows in the live project that have no object behind them (the spec's own Ask Fir
 maintainer decision before it is a code one), and a trigger's English message still reaches the
 author verbatim on a Vietnamese surface — pre-existing for every refusal this table raises.
 
+**Pushed on the maintainer's instruction, 2026-09-10 — and it turned out to be three migrations,
+not one.** `20260908170000` and `20260908180000` had been sitting local-only since 09-08 while the
+client code that depends on them shipped on `main`. The deployed `referee-appeal-detail.tsx:162`
+selects `evidence.swept_at`, a column only `20260908180000` creates, and its read treats any error
+as a failed screen (`:167`) — so the referee's appeal detail, its Approve and Reject controls
+included, had been rendering as one error line for two days. `lib/evidence.ts:198` selects the same
+column, so the author's kept photos reported a failed read beside it. Found while answering a
+question about the referee's reach, by no check in this repository — `migrations:check` is only run
+when a story adds a migration, and neither of those stories was still open.
+
+`npx supabase db push --linked` applied all three; `migrations:check` now reports all 76 matching.
+**The retention sweep is live from this point**: the hourly worker removes the bytes of
+photographs older than thirty days.
+
 **Not run, and not skipped quietly:**
+
+- Nobody has opened the referee's appeal screen since the push. The column it failed on now exists,
+  which is what the code needed; that it renders is still a claim rather than an observation.
 
 - `npm run migrations:check` — it compares against the live project. `20260910090000` has not been
   pushed; that is the maintainer's call and nothing here should imply it happened.
