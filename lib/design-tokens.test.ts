@@ -312,6 +312,16 @@ describe('structural rules the stylesheet cannot state about itself', () => {
         'message. A second claimant deletes what the first one signals; none at all means ' +
         'the sentence he is meant to say out loud is dressed as interface chrome again.',
     ).toBe(1);
+
+    // And its size, separately, for the reason the figure budget gives above: a size and a
+    // face can drift apart. `--type-quote` on the body face would be a sentence dressed up
+    // without the voice; Lora at label size would be the voice without the room to speak.
+    const quoteSizeUses = GLOBALS.match(/var\(\s*--type-quote\s*[,)]/g) ?? [];
+    expect(
+      quoteSizeUses.length,
+      "The quote size belongs to the same one string as the quote face: the referee's " +
+        'collection message. A second claimant, or none, means the two have come apart.',
+    ).toBe(1);
   });
 
   it('keeps literal colours out of the base stylesheet', () => {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { ledgerPillLabel, type LedgerRow } from './ledger';
 import {
+  OWED_PENALTIES_COPY,
   REFEREE_HOME_COPY,
   collectionMessage,
   daysSinceQuiet,
@@ -169,6 +171,32 @@ describe('collectionMessage', () => {
     const a = collectionMessage(500_000, new Date('2026-08-18T00:00:00Z'));
     const b = collectionMessage(1_000_000, new Date('2026-08-18T00:00:00Z'));
     expect(a).not.toBe(b);
+  });
+});
+
+describe('OWED_PENALTIES_COPY (Story 7.2)', () => {
+  it("says Owed with the Ledger's own word — the referee and the author read the same label", () => {
+    // Deliberately not a call to ledgerPillLabel from the referee's screen (that function
+    // classifies a settlement row, and the owed list carries Penalties without one), so this
+    // is what keeps the two strings from drifting apart.
+    const owed: LedgerRow = {
+      day: '2026-08-18',
+      kind: 'day',
+      verdict: 'failed',
+      amountDong: 500_000,
+      state: 'owed',
+      missed: ['TryHackMe'],
+      appealable: [],
+      graceable: true,
+      objection: null,
+    };
+    expect(OWED_PENALTIES_COPY.owedLabel).toBe(ledgerPillLabel(owed));
+  });
+
+  it('names a card by its sum first, then what it is for — the sentence below says the sum out loud', () => {
+    expect(OWED_PENALTIES_COPY.cardLabel('500.000₫', 'TryHackMe', 'Aug 18, 2026')).toBe(
+      '500.000₫ owed — TryHackMe, Aug 18, 2026',
+    );
   });
 });
 
