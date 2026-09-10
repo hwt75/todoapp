@@ -120,17 +120,27 @@ claim rows wholesale — text, timing, everything — to solve a problem that is
   fail the lookup.
 - `npm run lint`, `npm run format:check`, `npm run build` — all clean.
 
-**Not done, and blocking `done`:**
+**Both blockers cleared 2026-09-10.**
 
-- `npm run migrations:check` reports `20260908170000` is not on the remote project. Pushing is the
-  maintainer's call, not mine.
-- **No browser pass.** The live referee account has no settled day with a claim photo to look up,
-  and manufacturing one means writing to the live account. Every claim above is from the SQL and
-  the component tests; nobody has watched a photograph appear on that screen.
+- **On the remote project.** `20260908170000` was pushed with `npx supabase db push --linked`, on
+  the maintainer's instruction, alongside the two other migrations that had been sitting local-only.
+  `migrations:check` reports all 76 matching. Note what the delay cost while it lasted: the
+  deployed client selected `evidence.swept_at`, a column `20260908180000` creates, and
+  `referee-appeal-detail.tsx` treats a failed evidence read as a failed screen — so the referee's
+  appeal detail rendered as one error line for two days. Not this story's defect, but its own
+  migration was in the same unpushed batch.
+- **Browser pass, on production.** hwt75 opened `/referee/day`, looked up 2026-09-09, and saw the
+  photograph. That is the claim no test in this repository could make.
+
+Checked read-only against production beforehand, so the browser visit was confirming rather than
+discovering: `referee_day_lookup()` returns `evidence_paths` with one real path for that day
+(`Gym`, outcome `held`, `already_objected: false`), the referee's own session signs a URL for that
+exact object, and `profile.referee_of` pairs him to the account whose day it is.
 
 ## Status
 
-`review` on 2026-09-08. Implemented and verified locally; not pushed, not looked at in a browser.
+`done` on 2026-09-10. Implemented 2026-09-08, on the remote project and seen in a browser
+2026-09-10.
 
 ## Commits
 
