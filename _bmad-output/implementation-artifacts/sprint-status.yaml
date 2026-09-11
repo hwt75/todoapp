@@ -424,15 +424,17 @@ action_items:
     action: "Reconcile the referee reach with what the app promises about claim photos
       - change the policy or change the sentence, and cover it with a test."
     owner: "hwt75"
-    status: in-progress
+    status: done
     ref: "_bmad-output/implementation-artifacts/spec-epic-6-retro-item-43-the-referee-can-see-what-the-day-was-proved-with.md"
-    note: "Both halves implemented and verified locally. The sentence changed and is covered
-      by a test; the policy was kept, deliberately. Migration 20260908170000 reached the remote
-      project on 2026-09-10. Until then the deployed client selected a column the live database
-      did not have (evidence.swept_at, from 20260908180000, unpushed for the same two days), and
-      referee-appeal-detail.tsx treats a failed evidence read as a failed screen -- so the
-      referee's appeal detail, Approve and Reject controls included, had been rendering as an
-      error line. Still not done: nobody has seen the viewer in a browser."
+    note: "The sentence changed and is covered by a test; the policy was kept, deliberately.
+      Migration 20260908170000 reached the remote project on 2026-09-10, and hwt75 opened
+      /referee/day on production the same day, looked up 2026-09-09 and saw the photograph --
+      the claim no test in this repository could make. Read-only checks beforehand confirmed
+      referee_day_lookup() returns a real evidence path for that day, that the referee's own
+      session signs a URL for that object, and that profile.referee_of pairs him to the right
+      account. What the unpushed migration cost while it lasted is recorded in the spec: the
+      deployed client selected evidence.swept_at, a column 20260908180000 creates, and the
+      referee's appeal screen rendered as one error line for two days."
   - id: "epic-6-retro-item-44-move-apply_grace_days-onto-frozen-settle"
     epic: 6
     action: "Move apply_grace_days() onto frozen settlement rows, the last correction
