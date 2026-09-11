@@ -25,7 +25,12 @@
 -- no hour of its own to be told otherwise. `now()` is constant for the whole transaction, so a
 -- single captured hour is stable across every step below — but it is still today's real hour,
 -- which is why this file refuses to run outside a window wide enough to build every slot it
--- needs.
+-- needs. That refusal is the `raise` below; the line after this paragraph is the same window
+-- said in a form CI can read, so the job skips this file outside it with a warning rather than
+-- failing a change that touches no SQL. The two must stay in step, and
+-- `lib/sql-clock-window.test.ts` is what holds them there.
+--
+-- ci-clock-window: 7-20 Asia/Ho_Chi_Minh
 --
 --   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/3-2-focus-prompt.sql
 --

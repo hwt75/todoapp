@@ -55,6 +55,40 @@ over every `.sql` file. Running them by hand, below, is still how a _new_ file g
 checked before it is committed — CI is what stops the next person from having to remember to run
 the ones that already exist.
 
+### Files that can only run at certain hours
+
+A file driving a function that reads `now()` cannot run at every hour: it builds its fixtures by
+subtracting from the real clock, so it needs headroom on both sides and refuses outright outside
+that range. `3-2-focus-prompt.sql` is the only such file today — it subtracts up to seven hours to
+build slots 0 through 4, and needs room above the prompt hour too, which leaves 07:00–20:00
+Asia/Ho_Chi_Minh.
+
+Pushes land at any hour, and before this a change touching no SQL at all went red for nothing but
+the time of day it was pushed. So a file with a window **declares it, in a line CI reads**:
+
+```sql
+-- ci-clock-window: 7-20 Asia/Ho_Chi_Minh
+```
+
+Outside it, the `db-tests` job skips that file and says so — a `::warning` on the file and a
+section in the run summary naming what did not run. The job is green on less than the full suite,
+which is only honest if the reader is told, so both of those exist to tell them. Re-running the
+job inside the window covers it; the workflow has `workflow_dispatch` for exactly that.
+
+Two things keep this from quietly buying back coverage nobody meant to spend:
+
+- `lib/sql-clock-window.test.ts` holds the marker to the `raise` the file actually carries — the
+  hours and the timezone both. Widen the guard and forget the marker (or the reverse) and `npm test`
+  fails. It also fails on a file that carries such a guard and **no** marker, which would be a red
+  job every night rather than a skip.
+- The job refuses to run at all if the runner cannot resolve the declared timezone. A shell with no
+  tzdata does not report an unknown zone — it answers in UTC without saying so, which for this
+  window is seven hours off and would skip the middle of the working day while running the file at
+  midnight.
+
+A new file needing a window adds the marker and nothing else; the loop reads it by pattern, not by
+filename.
+
 ## Where they can run — and where they cannot
 
 **Not against the author's own project.** `settle_day` refuses `p_override` whenever it meets a
