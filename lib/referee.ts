@@ -455,7 +455,8 @@ export const OWED_PENALTIES_COPY = {
   heading: 'Owed penalties',
 
   /** Story 7.2 — the state label on a collection card. The same word `lib/ledger.ts`'s own
-   *  `ledgerLabel` gives a Penalty in this state, and deliberately not a call to it: that
+   *  `ledgerPillLabel` gives a Penalty in this state (`lib/referee.test.ts` holds the two
+   *  together), and deliberately not a call to it: that
    *  function classifies a settlement row, and this list has Penalties without settlements
    *  attached. Neutral, never tinted — `Owed` is money not yet collected, which is a state
    *  and not an outcome, and only a resolved one takes a colour. */
