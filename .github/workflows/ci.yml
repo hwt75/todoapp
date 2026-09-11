@@ -80,14 +80,65 @@ jobs:
       # Every file rolls back its own transaction (`supabase/tests/README.md`), so running
       # them in one loop against one reset database is safe — nothing from an earlier file
       # persists into the next one.
+      #
+      # What they do not all share is the clock. A file driving a function that reads `now()`
+      # cannot run at every hour: it builds its fixtures by subtracting from the real clock and
+      # needs headroom on both sides, so it refuses outright outside its window.
+      # `3-2-focus-prompt.sql` is the one such file today, and pushes land at any hour — before
+      # this, a change touching no SQL at all went red for nothing but the time of day it was
+      # pushed. So a file with a window declares it, as `-- ci-clock-window: <from>-<to> <tz>`,
+      # and is skipped here outside it — loudly, because a green tick on a partial suite is only
+      # honest if the reader is told. `lib/sql-clock-window.test.ts` holds each declared window to
+      # the `raise` its file actually carries, so the two cannot drift apart unnoticed.
       - name: Run every file under supabase/tests/
         run: |
           set -e
+          skipped=''
           for f in supabase/tests/*.sql; do
+            # `<from> <to> <tz>`, or empty for the files that do not care what time it is.
+            window=$(sed -n 's/^-- ci-clock-window: \([0-9]\{1,2\}\)-\([0-9]\{1,2\}\) \(.*\)$/\1 \2 \3/p' "$f" | head -1)
+            if [ -n "$window" ]; then
+              # `set --` splits without a subshell, so the three parts survive into the branch.
+              # shellcheck disable=SC2086
+              set -- $window
+              from=$1 to=$2 tz=$3
+              # A shell with no tzdata does not report an unknown zone — it silently answers in
+              # UTC, which for this window is seven hours off and would skip the middle of the
+              # working day while running the file at midnight. Refuse rather than decide on a
+              # number that looks fine and is wrong.
+              if [ ! -f "/usr/share/zoneinfo/$tz" ]; then
+                echo "::error file=$f::Cannot resolve the timezone '$tz' — /usr/share/zoneinfo/$tz is missing, and TZ would fall back to UTC without saying so. Install tzdata on this runner; deciding the clock window on a UTC hour would be wrong by this zone's whole offset."
+                exit 1
+              fi
+              # Read per file, immediately before running it. The loop takes minutes, and a window
+              # edge crossed mid-run would otherwise skip a file that could still run, or run one
+              # that could not. If the edge falls in the second between this line and psql, the
+              # file's own `raise` still catches it and the job goes red — which is the honest
+              # outcome, and exactly what was happening on every push after 20:00 before this.
+              hour=$(TZ="$tz" date +%-H)
+              if [ "$hour" -lt "$from" ] || [ "$hour" -gt "$to" ]; then
+                echo "::warning file=$f::Skipped — this file drives an hourly gate through the real clock and needs ${from}:00-${to}:59 $tz, but it is ${hour}:xx there now. Nothing about it is broken; re-run this job inside that window to cover it."
+                skipped="$skipped $f"
+                continue
+              fi
+            fi
             echo "::group::$f"
             docker exec -i supabase_db_todoapp psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$f"
             echo "::endgroup::"
           done
+          # A green tick on a partial suite is worth exactly as much as the reader knowing it was
+          # partial, so say so where the reader is — the run summary, not only the log.
+          if [ -n "$skipped" ]; then
+            {
+              echo "### Database checks ran on less than the full suite"
+              echo
+              echo "These files were skipped for being outside the wall-clock window they declare:"
+              for f in $skipped; do echo "- \`$f\`"; done
+              echo
+              echo "Re-run this job inside that window before reading the green tick as full coverage."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "NOT the full suite — skipped:$skipped"
+          fi
 
       # Transactional SQL files intentionally use one session and roll back. This harness uses
       # two real psql sessions so each winner order proves the losing RPC waits on the shared
