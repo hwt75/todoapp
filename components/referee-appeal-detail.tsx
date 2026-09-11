@@ -171,34 +171,52 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
       const evidence: RefereeEvidenceItem[] = [];
       let evidenceFailures = 0;
       let evidenceCleared = 0;
-      for (const row of evidenceRows ?? []) {
-        // Swept after the retention period: the row is still here because
-        // `commitments_owing()` reads it to decide whether a day held, but the bytes are gone.
-        // Counted apart from a signing failure and skipped before one can be attempted --
-        // signing a path whose object no longer exists would report this as something that
-        // might work later, and it will not.
-        if (row.swept_at != null) {
-          evidenceCleared++;
-          continue;
-        }
 
-        // One hour, not one minute — long enough for an actual review to happen without
-        // the image simply failing partway through with no explanation. Evidence review is
-        // exactly the slow, unhurried case this screen exists for (FR-15's own point: the
-        // referee is never rushed by a clock only the author feels). The bucket and the hour
-        // are `lib/evidence.ts`'s constants (Story 6.9) so this screen and the author's own
-        // three cannot drift onto two buckets or two expiries.
+      // Swept after the retention period: the row is still here because `commitments_owing()`
+      // reads it to decide whether a day held, but the bytes are gone. Counted apart from a
+      // signing failure and taken out before one can be attempted -- signing a path whose object
+      // no longer exists would report this as something that might work later, and it will not.
+      const signable = (evidenceRows ?? []).filter((row) => row.swept_at == null);
+      evidenceCleared = (evidenceRows ?? []).length - signable.length;
+
+      if (signable.length > 0) {
+        // One call for every path, not one per photo -- the same correction `lib/evidence.ts`
+        // made for the author's own three surfaces and this screen never got. The loop that was
+        // here awaited each signature in turn, so with three photographs no image began
+        // downloading until three round trips to Sydney had finished one after another.
+        //
+        // One hour, not one minute — long enough for an actual review to happen without the
+        // image simply failing partway through with no explanation. Evidence review is exactly
+        // the slow, unhurried case this screen exists for (FR-15's own point: the referee is
+        // never rushed by a clock only the author feels). The bucket and the hour are
+        // `lib/evidence.ts`'s constants (Story 6.9) so this screen and the author's own three
+        // cannot drift onto two buckets or two expiries.
         const { data: signed, error: signError } = await supabase.storage
           .from(EVIDENCE_BUCKET)
-          .createSignedUrl(row.storage_path as string, EVIDENCE_URL_TTL_SECONDS);
+          .createSignedUrls(
+            signable.map((row) => row.storage_path as string),
+            EVIDENCE_URL_TTL_SECONDS,
+          );
         if (cancelled) return;
 
-        if (signError || !signed?.signedUrl) {
-          evidenceFailures++;
-          continue;
+        // `createSignedUrls` reports failure per item — a path with no `signedUrl` — which is the
+        // per-photo failure the old loop was written around. A call that failed outright signs
+        // nothing, and every photograph is then counted unopenable rather than silently dropped.
+        const urls = new Map<string, string>();
+        if (!signError) {
+          for (const item of signed ?? []) {
+            if (item.path && item.signedUrl && !item.error) urls.set(item.path, item.signedUrl);
+          }
         }
 
-        evidence.push({ id: row.id as string, url: signed.signedUrl });
+        for (const row of signable) {
+          const url = urls.get(row.storage_path as string);
+          if (!url) {
+            evidenceFailures++;
+            continue;
+          }
+          evidence.push({ id: row.id as string, url });
+        }
       }
 
       setView({
@@ -281,12 +299,20 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
               view.evidenceFailures === 0 &&
               view.evidenceCleared === 0 && <p>{REFEREE_APPEAL_DETAIL_COPY.noEvidence}</p>}
             {/* A signed URL into a private bucket, not an asset next/image's own optimiser
-                is set up to fetch. */}
+                is set up to fetch. `lazy` so a second and third photograph do not compete with
+                the first for the connection before the referee has scrolled to them, and
+                `decoding="async"` so decoding a large one does not block the page.
+
+                No `width`/`height`: nothing here knows the photograph's real dimensions —
+                `evidence` stores a path, not a size — and attributes that disagree with the
+                image would reserve the wrong box and shift the page anyway. */}
             {view.evidence.map((item, index) => (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 key={item.id}
                 src={item.url}
+                loading="lazy"
+                decoding="async"
                 alt={REFEREE_APPEAL_DETAIL_COPY.evidenceAlt(index + 1, view.evidence.length)}
               />
             ))}

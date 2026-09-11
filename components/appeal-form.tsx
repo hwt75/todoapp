@@ -5,6 +5,7 @@ import { classifyConflict, classifyWriteError } from '@/lib/declaration-submit';
 import { APPEAL_COPY, holdStateCopy, toRow, type AppealDraft } from '@/lib/appeal';
 import {
   EVIDENCE_BUCKET,
+  compressEvidencePhoto,
   evidenceObjectPath,
   fileCapturedOn,
   isEvidenceDated,
@@ -155,11 +156,16 @@ export function AppealForm({
 
     try {
       const supabase = createClient();
-      const path = evidenceObjectPath(submission.appealId, crypto.randomUUID(), file.name);
+      // Shrunk before it goes up, for the reason `components/today.tsx` gives: the referee reads
+      // it in a box under half his screen and paid for the full original. Hands back the original
+      // untouched on any format it cannot decode, and carries `lastModified` across so
+      // `captured_on` below still names the day the photo was taken.
+      const stored = await compressEvidencePhoto(file);
+      const path = evidenceObjectPath(submission.appealId, crypto.randomUUID(), stored.name);
 
       const { error: uploadError } = await supabase.storage
         .from(EVIDENCE_BUCKET)
-        .upload(path, file, { contentType: file.type || undefined });
+        .upload(path, stored, { contentType: stored.type || undefined });
 
       if (uploadError) {
         setEvidence({ kind: 'failed', reason: APPEAL_COPY.evidenceFailed });

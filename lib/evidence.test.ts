@@ -1,6 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  EVIDENCE_COMPRESS_ABOVE_BYTES,
   EVIDENCE_COPY,
+  EVIDENCE_MAX_EDGE,
+  compressEvidencePhoto,
   evidenceObjectPath,
   fileCapturedOn,
   isEvidenceDated,
@@ -150,6 +153,164 @@ describe('fileCapturedOn / isEvidenceDated', () => {
   it('is refused for a day before or after the one being appealed (FR-14)', () => {
     expect(isEvidenceDated(fileDatedOn('2026-08-17'), '2026-08-18')).toBe(false);
     expect(isEvidenceDated(fileDatedOn('2026-08-19'), '2026-08-18')).toBe(false);
+  });
+});
+
+describe('compressEvidencePhoto', () => {
+  /** The capture moment every one of these must survive — `fileCapturedOn` reads it, and
+   *  `captured_on` is derived from it on both write paths. */
+  const CAPTURED_AT = new Date('2026-08-18T12:00:00+07:00').getTime();
+
+  function photo(bytes: number, name = 'IMG_0001.jpg', type = 'image/jpeg') {
+    return new File([new Uint8Array(bytes)], name, { type, lastModified: CAPTURED_AT });
+  }
+
+  /**
+   * Stands in for the browser pipeline this helper drives: decode, draw, re-encode. The `lib`
+   * project runs in Node, which has neither, so each test states what the browser would have
+   * done and asserts what the helper makes of it.
+   */
+  function stubBrowser({
+    width = 3024,
+    height = 4032,
+    outputBytes = 180 * 1024,
+    decode,
+    toBlobResult,
+  }: {
+    width?: number;
+    height?: number;
+    outputBytes?: number;
+    decode?: () => never;
+    toBlobResult?: 'null';
+  } = {}) {
+    const closed = { count: 0 };
+    const drawn: Array<{ w: number; h: number }> = [];
+    const encodedAs: Array<{ type: string; quality: number }> = [];
+
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn(async (_file: unknown, options?: { imageOrientation?: string }) => {
+        if (decode) decode();
+        return {
+          width,
+          height,
+          orientation: options?.imageOrientation,
+          close: () => {
+            closed.count++;
+          },
+        };
+      }),
+    );
+
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => ({
+        drawImage: (_bitmap: unknown, _x: number, _y: number, w: number, h: number) =>
+          drawn.push({ w, h }),
+      }),
+      toBlob: (cb: (blob: Blob | null) => void, type: string, quality: number) => {
+        encodedAs.push({ type, quality });
+        cb(toBlobResult === 'null' ? null : new Blob([new Uint8Array(outputBytes)]));
+      },
+    };
+
+    vi.stubGlobal('document', { createElement: () => canvas });
+    return { closed, drawn, encodedAs, canvas };
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('keeps the capture moment, which is the whole of what dates the evidence', async () => {
+    stubBrowser();
+    const original = photo(2_400_000);
+    const stored = await compressEvidencePhoto(original);
+
+    // The bug this guards: `new File(...)` defaults `lastModified` to now, so every photograph
+    // would be dated the moment it was uploaded. A same-day claim made near midnight would then
+    // refuse itself, and `evidence_derive_owner()` would refuse the rest.
+    expect(stored.lastModified).toBe(CAPTURED_AT);
+    expect(fileCapturedOn(stored)).toBe(fileCapturedOn(original));
+    expect(fileCapturedOn(stored)).toBe('2026-08-18');
+    expect(stored.name).toBe('IMG_0001.jpg');
+    expect(stored.type).toBe('image/jpeg');
+    expect(stored.size).toBeLessThan(original.size);
+  });
+
+  it('scales the long edge to the stored maximum and keeps the shape of the picture', async () => {
+    const { drawn } = stubBrowser({ width: 3024, height: 4032 });
+    await compressEvidencePhoto(photo(2_400_000));
+
+    // 4032 is the long edge, so both fall by the same factor — a portrait photo must not come
+    // back square.
+    expect(drawn).toEqual([
+      { w: Math.round(3024 * (EVIDENCE_MAX_EDGE / 4032)), h: EVIDENCE_MAX_EDGE },
+    ]);
+  });
+
+  it('reads the EXIF orientation while it still can', async () => {
+    stubBrowser();
+    await compressEvidencePhoto(photo(2_400_000));
+    // The re-encode drops the tag, so a photo decoded without applying it is stored on its side.
+    expect(createImageBitmap).toHaveBeenCalledWith(expect.anything(), {
+      imageOrientation: 'from-image',
+    });
+  });
+
+  it('never enlarges a picture that is already smaller than the maximum', async () => {
+    const { drawn } = stubBrowser({ width: 800, height: 600 });
+    await compressEvidencePhoto(photo(2_400_000));
+    expect(drawn).toEqual([{ w: 800, h: 600 }]);
+  });
+
+  it('leaves a photo that is already small alone, without touching a canvas', async () => {
+    stubBrowser();
+    const small = photo(EVIDENCE_COMPRESS_ABOVE_BYTES - 1);
+    expect(await compressEvidencePhoto(small)).toBe(small);
+    expect(createImageBitmap).not.toHaveBeenCalled();
+  });
+
+  it('hands back the original when the browser cannot decode the format', async () => {
+    // Chrome on Android still cannot read HEIC, and the bucket accepts it.
+    stubBrowser({
+      decode: () => {
+        throw new Error('unsupported image format');
+      },
+    });
+    const heic = photo(2_400_000, 'IMG_0002.heic', 'image/heic');
+    const stored = await compressEvidencePhoto(heic);
+
+    expect(stored).toBe(heic);
+    expect(stored.type).toBe('image/heic');
+  });
+
+  it('hands back the original when the re-encode comes out no smaller', async () => {
+    stubBrowser({ outputBytes: 3_000_000 });
+    const original = photo(2_400_000);
+    expect(await compressEvidencePhoto(original)).toBe(original);
+  });
+
+  it('hands back the original when the canvas gives nothing', async () => {
+    stubBrowser({ toBlobResult: 'null' });
+    const original = photo(2_400_000);
+    expect(await compressEvidencePhoto(original)).toBe(original);
+  });
+
+  it('hands back the original where there is no browser at all', async () => {
+    // The state this module is imported in on the server, and in the `lib` test project.
+    vi.unstubAllGlobals();
+    const original = photo(2_400_000);
+    expect(await compressEvidencePhoto(original)).toBe(original);
+  });
+
+  it('releases the decoded bitmap on both the happy and the failing path', async () => {
+    const ok = stubBrowser();
+    await compressEvidencePhoto(photo(2_400_000));
+    expect(ok.closed.count).toBe(1);
+
+    const refused = stubBrowser({ toBlobResult: 'null' });
+    await compressEvidencePhoto(photo(2_400_000));
+    expect(refused.closed.count).toBe(1);
   });
 });
 

@@ -7,6 +7,7 @@ import { calendarMoment } from '@/lib/declaration';
 import {
   EVIDENCE_BUCKET,
   EVIDENCE_COPY,
+  compressEvidencePhoto,
   evidenceObjectPath,
   fileCapturedOn,
   isEvidenceDated,
@@ -489,13 +490,19 @@ export function Today({
 
     try {
       const supabase = createClient();
+      // Shrunk before it goes up, never after: the referee reads this in a box under half his
+      // screen, and the full-size original was the whole of why that screen was slow. Declines
+      // and hands back the original on any format it cannot decode, so a photo is never lost to
+      // this — and carries `lastModified` across, which is what `captured_on` below reads.
+      const stored = await compressEvidencePhoto(file);
+
       // Leads with the parent's own id whichever parent it is — that is what the bucket's
       // policies read via `storage.foldername(name)` to derive access (NFR4).
-      const path = evidenceObjectPath(parent.id, crypto.randomUUID(), file.name);
+      const path = evidenceObjectPath(parent.id, crypto.randomUUID(), stored.name);
 
       const { error: uploadError } = await supabase.storage
         .from(EVIDENCE_BUCKET)
-        .upload(path, file, { contentType: file.type || undefined });
+        .upload(path, stored, { contentType: stored.type || undefined });
 
       if (uploadError) {
         // Nothing reached Storage, so there is nothing to finish — only a state update, and
