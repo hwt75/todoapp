@@ -63,6 +63,83 @@ export function evidenceObjectPath(parentId: string, evidenceId: string, filenam
 }
 
 /**
+ * The longest edge a stored photograph keeps, in pixels.
+ *
+ * The referee reads these at `max-height: 40vh` (`.kept-photo`) — about 325 CSS pixels on a
+ * phone, so roughly 1000 device pixels at 3x. 1600 leaves room to pinch into a corner of the
+ * frame and still be looking at real detail, and is still a quarter of the 4032 a phone camera
+ * hands over.
+ */
+export const EVIDENCE_MAX_EDGE = 1600;
+
+/** JPEG quality for a re-encoded photograph. High enough that a compression artefact is not
+ *  mistaken for what the photo shows, low enough to be worth doing. */
+export const EVIDENCE_JPEG_QUALITY = 0.8;
+
+/** Below this, re-encoding is not worth the risk of making the file bigger or the wait on a
+ *  slow phone — a photo this small already loads in about a second on a weak connection. */
+export const EVIDENCE_COMPRESS_ABOVE_BYTES = 400 * 1024;
+
+/**
+ * The photograph as it should be stored: the same picture, at a size the referee can actually
+ * receive.
+ *
+ * Nothing shrank these before. A phone camera hands over 2-2.5MB (measured on the live bucket,
+ * 2026-09-11) and every byte crossed the wire to Sydney so the referee could paint it into a
+ * box under 40% of his screen height. That is the whole of why his screen was slow.
+ *
+ * **It never throws and never returns nothing.** Every failure path returns the original file:
+ * a format the browser cannot decode (Chrome on Android still cannot read HEIC), a canvas that
+ * refuses, a re-encode that came out no smaller. Losing the author's proof to save bandwidth
+ * would be a far worse bug than the one this fixes, so the compression is an optimisation that
+ * is allowed to decline.
+ *
+ * **`lastModified` is carried over deliberately.** `fileCapturedOn` reads it — not EXIF, which
+ * a canvas re-encode strips — and `captured_on` is derived from it on both write paths, then
+ * checked again by `evidence_derive_owner()`. A `new File(...)` defaults that field to *now*,
+ * which would date every photograph the moment it was uploaded and make a same-day claim on a
+ * day's last minutes refuse itself. `lib/evidence.test.ts` holds this.
+ */
+export async function compressEvidencePhoto(file: File): Promise<File> {
+  if (file.size <= EVIDENCE_COMPRESS_ABOVE_BYTES) return file;
+  if (typeof createImageBitmap !== 'function' || typeof document === 'undefined') return file;
+
+  let bitmap: ImageBitmap | undefined;
+  try {
+    // `from-image` applies the EXIF orientation the tag would have carried. Without it a photo
+    // taken in portrait is stored on its side, because the re-encode drops the tag that told
+    // the browser to rotate it.
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+
+    const scale = Math.min(1, EVIDENCE_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+
+    const context = canvas.getContext('2d');
+    if (!context) return file;
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', EVIDENCE_JPEG_QUALITY),
+    );
+
+    // A photo already smaller than what we would write — a tight HEIC, or one that was never
+    // large in the first place — is kept as it is.
+    if (!blob || blob.size >= file.size) return file;
+
+    return new File([blob], file.name, {
+      type: 'image/jpeg',
+      lastModified: file.lastModified,
+    });
+  } catch {
+    return file;
+  } finally {
+    bitmap?.close();
+  }
+}
+
+/**
  * The private bucket every kind of evidence lands in.
  *
  * Named once so the writer and the reader cannot drift onto two different buckets. Still called

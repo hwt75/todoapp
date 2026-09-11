@@ -24,7 +24,7 @@ import { RefereeAppealDetail } from './referee-appeal-detail';
 const getUser = vi.fn();
 const rpc = vi.fn();
 const penaltyEqSpy = vi.fn();
-const createSignedUrlSpy = vi.fn();
+const createSignedUrlsSpy = vi.fn();
 
 const PENALTY_ID = 'penalty-1';
 
@@ -41,10 +41,10 @@ let appealResult: unknown = {
 };
 let penaltyResult: unknown = { data: { state: 'held' }, error: null };
 let evidenceResult: unknown = { data: [], error: null };
-let signedUrlResult: unknown = {
-  data: { signedUrl: 'https://storage.example.test/signed/proof.jpg' },
-  error: null,
-};
+/** `createSignedUrls` answers per item — an entry carrying a `path` and either a `signedUrl` or
+ *  its own `error` — so one photograph failing is a shorter list of usable URLs, never a shorter
+ *  list of photographs. Each test below states the entries for the paths its evidence rows name. */
+let signedUrlResult: unknown = { data: [], error: null };
 let rpcResult: unknown = { data: null, error: null };
 
 vi.mock('@/lib/supabase/client', () => ({
@@ -77,8 +77,8 @@ vi.mock('@/lib/supabase/client', () => ({
     },
     storage: {
       from: () => ({
-        createSignedUrl: (...args: unknown[]) => {
-          createSignedUrlSpy(...args);
+        createSignedUrls: (...args: unknown[]) => {
+          createSignedUrlsSpy(...args);
           return Promise.resolve(signedUrlResult);
         },
       }),
@@ -100,7 +100,7 @@ beforeEach(() => {
   getUser.mockResolvedValue({ data: { user: { id: 'ref-1' } }, error: null });
   rpc.mockClear();
   penaltyEqSpy.mockClear();
-  createSignedUrlSpy.mockClear();
+  createSignedUrlsSpy.mockClear();
   replace.mockClear();
   push.mockClear();
   profileResult = { data: { role: 'referee' }, error: null };
@@ -116,10 +116,7 @@ beforeEach(() => {
   };
   penaltyResult = { data: { state: 'held' }, error: null };
   evidenceResult = { data: [], error: null };
-  signedUrlResult = {
-    data: { signedUrl: 'https://storage.example.test/signed/proof.jpg' },
-    error: null,
-  };
+  signedUrlResult = { data: [], error: null };
   rpcResult = { data: null, error: null };
 });
 
@@ -165,6 +162,16 @@ describe('evidence', () => {
       data: [{ id: 'evidence-1', storage_path: 'appeal-1/proof.jpg' }],
       error: null,
     };
+    signedUrlResult = {
+      data: [
+        {
+          path: 'appeal-1/proof.jpg',
+          signedUrl: 'https://storage.example.test/signed/proof.jpg',
+          error: null,
+        },
+      ],
+      error: null,
+    };
     renderDetail();
 
     const image = await screen.findByAltText(
@@ -173,7 +180,42 @@ describe('evidence', () => {
     expect(image).toHaveAttribute('src', 'https://storage.example.test/signed/proof.jpg');
     // Long enough for an actual review, not the one-minute window a reviewer flagged as
     // failing mid-review with no explanation.
-    expect(createSignedUrlSpy).toHaveBeenCalledWith('appeal-1/proof.jpg', 3600);
+    expect(createSignedUrlsSpy).toHaveBeenCalledWith(['appeal-1/proof.jpg'], 3600);
+  });
+
+  it('asks for every path in one call, not one call per photograph', async () => {
+    // The sequential loop this replaced awaited each signature in turn, so no image began
+    // downloading until every round trip had finished one after another. Asserted here because
+    // nothing else on this file would notice it coming back.
+    evidenceResult = {
+      data: [
+        { id: 'evidence-1', storage_path: 'appeal-1/one.jpg' },
+        { id: 'evidence-2', storage_path: 'appeal-1/two.jpg' },
+        { id: 'evidence-3', storage_path: 'appeal-1/three.jpg' },
+      ],
+      error: null,
+    };
+    signedUrlResult = {
+      data: [
+        { path: 'appeal-1/one.jpg', signedUrl: 'https://s.test/1.jpg', error: null },
+        { path: 'appeal-1/two.jpg', signedUrl: 'https://s.test/2.jpg', error: null },
+        { path: 'appeal-1/three.jpg', signedUrl: 'https://s.test/3.jpg', error: null },
+      ],
+      error: null,
+    };
+    renderDetail();
+
+    await screen.findByAltText('Evidence photo 1 of 3 the doer submitted with this appeal.');
+
+    // Deliberately not `toHaveBeenCalledTimes(1)`: the `useRouter` mock above hands back a new
+    // object on every render and `router` is in the load effect's dependency array, so the effect
+    // re-runs here in a way it does not against Next's own stable router. What matters is the
+    // shape of each call — every path together — and that holds however many times it fires.
+    expect(createSignedUrlsSpy.mock.calls.length).toBeGreaterThan(0);
+    for (const [paths, ttl] of createSignedUrlsSpy.mock.calls) {
+      expect(paths).toEqual(['appeal-1/one.jpg', 'appeal-1/two.jpg', 'appeal-1/three.jpg']);
+      expect(ttl).toBe(3600);
+    }
   });
 
   it('numbers each attachment distinctly for a screen-reader user', async () => {
@@ -181,6 +223,13 @@ describe('evidence', () => {
       data: [
         { id: 'evidence-1', storage_path: 'appeal-1/one.jpg' },
         { id: 'evidence-2', storage_path: 'appeal-1/two.jpg' },
+      ],
+      error: null,
+    };
+    signedUrlResult = {
+      data: [
+        { path: 'appeal-1/one.jpg', signedUrl: 'https://s.test/1.jpg', error: null },
+        { path: 'appeal-1/two.jpg', signedUrl: 'https://s.test/2.jpg', error: null },
       ],
       error: null,
     };
@@ -194,6 +243,32 @@ describe('evidence', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows the photographs that signed and counts only the one that did not', async () => {
+    // The per-item failure the batch call newly makes reachable: one entry carries an error and
+    // the other a URL, in a single response. The old loop could only fail a photograph by its
+    // own round trip failing.
+    evidenceResult = {
+      data: [
+        { id: 'evidence-1', storage_path: 'appeal-1/one.jpg' },
+        { id: 'evidence-2', storage_path: 'appeal-1/two.jpg' },
+      ],
+      error: null,
+    };
+    signedUrlResult = {
+      data: [
+        { path: 'appeal-1/one.jpg', signedUrl: 'https://s.test/1.jpg', error: null },
+        { path: 'appeal-1/two.jpg', signedUrl: null, error: 'Object not found' },
+      ],
+      error: null,
+    };
+    renderDetail();
+
+    expect(
+      await screen.findByAltText('Evidence photo 1 of 1 the doer submitted with this appeal.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('1 evidence item could not be loaded.')).toBeInTheDocument();
+  });
+
   it('surfaces a note when signing fails, rather than silently shrinking the list', async () => {
     evidenceResult = {
       data: [
@@ -202,6 +277,8 @@ describe('evidence', () => {
       ],
       error: null,
     };
+    // The whole call failing signs nothing, so every photograph is counted unopenable — never a
+    // shorter list that reads as though fewer were ever attached.
     signedUrlResult = { data: null, error: { message: 'signing failed' } };
     renderDetail();
 
