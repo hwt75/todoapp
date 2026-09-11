@@ -831,6 +831,16 @@ button:disabled {
   gap: var(--space-4);
 }
 
+/* The amount and the sub-line naming the debt. `min-width: 0` is what lets this column
+   shrink at all inside the flex row — without it one long, unbroken commitment name pushes
+   the `Owed` label out past the card's own `overflow: hidden` edge. And the name wraps
+   rather than truncating, for the reason `.row-name` gives: a name the author chose is not
+   disposable. */
+.collection-debt {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* Screen-title size, not the frame's own 26px, and not the display face: the handoff draws a
    size no token defines, and `--type-figure` belongs to the debt total and the running timer.
    Recorded as a deviation in this story's spec rather than taken quietly.
@@ -852,6 +862,14 @@ button:disabled {
   padding-top: var(--space-4);
 }
 
+/* The message and the status lines under the controls are paragraphs, and the base rule
+   gives every paragraph a bottom margin — which here would stack on the column's own gap and,
+   on the last status line, leave a step of dead space under the card that
+   `.card-pad > :last-child` can no longer reach. The gap is the spacing; the margin is not. */
+.collection-said > p {
+  margin: 0;
+}
+
 /* The one serif string in either surface, and the only claimant of `--font-quote` — the
    budget is asserted in both directions by `lib/design-tokens.test.ts`, so a second claimant
    fails and so does its disappearance.
@@ -866,6 +884,9 @@ button:disabled {
   line-height: 1.5;
   /* Prose, so it may not be clipped at any text size. */
   overflow-wrap: anywhere;
+  /* From the frame. A sentence meant to be read aloud should not end on one orphaned word;
+     browsers that do not know the property ignore the line. */
+  text-wrap: pretty;
 }
 
 /* ---------------------------------------------------------------- forms */

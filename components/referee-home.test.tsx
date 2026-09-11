@@ -378,6 +378,10 @@ describe('the owed penalties list (Story 4.7)', () => {
     expect(message).toHaveClass('collection-message');
     expect(container.querySelector('textarea')).toBeNull();
     expect(container.querySelector('.collection-card input')).toBeNull();
+    // Nor the third way to make text editable, and exactly one sentence per card — the DOM
+    // side of the stylesheet's one-claimant budget.
+    expect(container.querySelector('.collection-card [contenteditable]')).toBeNull();
+    expect(container.querySelectorAll('.collection-card .collection-message')).toHaveLength(1);
   });
 
   it('keeps the message readable when the clipboard fails — the fallback it never had', async () => {
@@ -444,6 +448,46 @@ describe('the owed penalties list (Story 4.7)', () => {
     ).toBeInTheDocument();
   });
 
+  it('stacks three debts as three cards, oldest first, each saying its own sum and day', async () => {
+    // The I/O matrix row this story wrote for itself and had not asserted: several owed
+    // penalties, in the order the list already keeps, with no message borrowing another
+    // card's amount.
+    penaltyResult = {
+      data: [
+        owedRow,
+        {
+          ...owedRow,
+          id: 'penalty-older',
+          amount_dong: 1_000_000,
+          period: '2026-08-15',
+          settlement_id: 's-older',
+          created_at: '2026-08-15T00:00:00Z',
+        },
+        {
+          ...owedRow,
+          id: 'penalty-newer',
+          amount_dong: 250_000,
+          period: '2026-08-20',
+          settlement_id: 's-newer',
+          created_at: '2026-08-20T00:00:00Z',
+        },
+      ],
+      error: null,
+    };
+    render(<RefereeHome />);
+
+    await screen.findByText('Owed penalties');
+    expect(screen.getAllByRole('article')).toHaveLength(3);
+    const messages = screen
+      .getAllByText(/^todoapp says you owe/)
+      .map((el) => el.textContent?.replace(/\. I'm just the one collecting it.*$/, ''));
+    expect(messages).toEqual([
+      'todoapp says you owe 1.000.000₫ for Aug 15, 2026',
+      'todoapp says you owe 500.000₫ for Aug 18, 2026',
+      'todoapp says you owe 250.000₫ for Aug 20, 2026',
+    ]);
+  });
+
   it('copies the pre-written message unchanged onto the clipboard', async () => {
     penaltyResult = { data: [owedRow], error: null };
     render(<RefereeHome />);
@@ -508,6 +552,49 @@ describe('the owed penalties list (Story 4.7)', () => {
     // Success reloads — the next read reflects the penalty no longer owed.
     penaltyResult = { data: [], error: null };
     await vi.waitFor(() => expect(screen.queryByText('Owed penalties')).not.toBeInTheDocument());
+  });
+
+  it('leaves a neighbouring card its own Copied. when another card is marked collected', async () => {
+    // The state maps are keyed by penalty id and live outside the reloaded view, so one
+    // card's success must not wipe what another card was just told. Asserted here because
+    // the matrix promises it and nothing else on this file exercised two cards at once.
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+    const older = {
+      ...owedRow,
+      id: 'penalty-older',
+      amount_dong: 1_000_000,
+      period: '2026-08-15',
+      settlement_id: 's-older',
+      created_at: '2026-08-15T00:00:00Z',
+    };
+    penaltyResult = { data: [owedRow, older], error: null };
+    render(<RefereeHome />);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Copy collection message for A commitment, Aug 18, 2026',
+      }),
+    );
+    expect(await screen.findByText('Copied.')).toBeInTheDocument();
+
+    // The other card is collected; the reload brings back only the one he copied for.
+    penaltyResult = { data: [owedRow], error: null };
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Mark collected for A commitment, Aug 15, 2026' }),
+    );
+    await vi.waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Mark collected for A commitment, Aug 15, 2026' }),
+      ).not.toBeInTheDocument(),
+    );
+
+    expect(screen.getByText('Copied.')).toBeInTheDocument();
+    expect(
+      screen.getByRole('article', { name: '500.000₫ owed — A commitment, Aug 18, 2026' }),
+    ).toBeInTheDocument();
   });
 
   it('keeps the button disabled through the reload a successful Mark Collected triggers, not just until the RPC call itself resolves', async () => {
