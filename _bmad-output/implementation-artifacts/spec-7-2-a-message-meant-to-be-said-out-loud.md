@@ -3,7 +3,7 @@ title: 'Story 7.2 — A message meant to be said out loud'
 type: 'feature'
 created: '2026-09-08'
 status: 'approved'
-review_loop_iteration: 0
+review_loop_iteration: 1
 baseline_commit: 'd046be123da6d24405d8b9f83f5aacc1660be330'
 story_key: '7-2-a-message-meant-to-be-said-out-loud'
 context:
@@ -12,6 +12,7 @@ context:
   - '{project-root}/design_handoff_todoapp/design/redesign-brief.md'
   - '{project-root}/design_handoff_todoapp/design/Referee surface.dc.html'
   - '{project-root}/_bmad-output/planning-artifacts/ux-designs/ux-todoapp-2026-08-11/DESIGN.md'
+  - '{project-root}/_bmad-output/planning-artifacts/ux-designs/ux-todoapp-2026-08-11/EXPERIENCE.md'
 ---
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
@@ -199,11 +200,83 @@ reads it as a bug: nothing is wrong with the glyph, the sentence stays in one fa
 `collectionMessage()` keeps producing exactly the string `formatDong` gives it — which is also the
 string the clipboard receives, and that identity is worth more than the shape of one character.
 
+## Code review (2026-09-10)
+
+Four layers over `c3250df` — Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance
+Auditor — each in its own context, then triaged against the code rather than the diff hunk.
+Verification Gap returned nothing. Nine findings were dismissed as noise; the ones that stood are
+below, all patched in `c7c9872`, and none was deferred.
+
+Two of them changed what the card does, and both were losses the card took when it left the 4.7
+row: `.row-main` gave that row `min-width: 0` and `.row-name` gave the commitment name its
+wrap, and the card's own column had neither, so one long unbroken name pushed the `Owed` label
+out past the card's `overflow: hidden` edge at 375px. And the message and status lines are
+paragraphs, so the base paragraph margin stacked on the column's own gap and, on a status line,
+left a step of dead space at the foot of the card that `.card-pad > :last-child` could no longer
+reach.
+
+### Review Findings
+
+- [x] [Review][Decision] **The `Owed` label is filled; frame 14 draws it outlined and
+  transparent.** A third deviation from the frame, taken silently where the other two were
+  asked. Resolved by recording rather than by changing the code: `DESIGN.md`'s `status-label`
+  is a tint-and-ink pair, the Ledger's own `Owed` pill (`components/ledger.tsx`) already wears
+  `pill-neutral`, and the Always boundary's *no tint* means no state colour — the neutral tint
+  is not one. So it is the same shape as the two recorded deviations, a `DESIGN.md` rule beating
+  a drawing. The Deviations list inside the frozen block stays at two until hwt75 adds it; this
+  entry is where the deviation lives until then.
+- [x] [Review][Patch] A long unbroken commitment name pushes the `Owed` label out of the card
+  and it is clipped — `.collection-debt` now carries `min-width: 0` and `overflow-wrap:
+  anywhere` [app/globals.css, components/referee-home.tsx]
+- [x] [Review][Patch] The message and the status lines carry the base paragraph margin on top of
+  the column gap, and a status line leaves dead space under the card — `.collection-said > p`
+  zeroes it [app/globals.css]
+- [x] [Review][Patch] `text-wrap: pretty` from the frame was not carried [app/globals.css]
+- [x] [Review][Patch] The `owedLabel` comment names `ledgerLabel`; the function is
+  `ledgerPillLabel` [lib/referee.ts]
+- [x] [Review][Patch] `--type-quote` had no one-claimant budget while `--font-quote` did; the
+  figure budget beside it asserts size and face separately for a reason [lib/design-tokens.test.ts]
+- [x] [Review][Patch] Matrix rows with no test: three cards oldest first with three distinct
+  messages, and a neighbouring card keeping its `Copied.` through another card's Mark Collected
+  [components/referee-home.test.tsx]
+- [x] [Review][Patch] The editable-field test did not rule out `contenteditable` or assert one
+  message per card; `cardLabel` and `owedLabel` had no unit test, and nothing held the
+  referee's `Owed` to the Ledger's word [components/referee-home.test.tsx, lib/referee.test.ts]
+
+Dismissed, for the record: the sub-line's step from caption to label size is what frame 14 draws
+(13px, secondary ink), not a regression; `aria-label` on the `article` is the spec's own
+*announced as one thing*; the `·` separator is the glyph the product's pills already use; two
+new tests overlap two old ones and both pairs are kept; the budget regex counting comments is how
+every budget in that file counts; and the card gap being tighter than the card's inner gap was
+looked at and accepted on 2026-09-08.
+
+### The browser pass, closed
+
+The 2026-09-08 pass saw one screenshot at desktop width in light mode. The three states it left
+open were looked at on 2026-09-10, by the same substitute route (the live referee account still
+owes nothing) rendering three fabricated debts — one with a two-name list, one with a
+sixty-character unbroken name, one carrying a `Copied.` line — through the real
+`collectionMessage`, `formatDong`, `formatOwedDay` and the real stylesheet, and deleted after:
+
+- **375px, light.** The long name wraps under the amount and the `Owed` pill stays on the card;
+  the status line sits inside the padding with no step under it.
+- **375px, dark.** Every surface, border and ink takes its dark token; the serif stays legible.
+- **Root font size at 150%** (the nearest thing to Dynamic Type a desktop browser offers). The
+  message wraps to five lines, the two controls stack, nothing clips. Lora is the face the
+  message computes to.
+
+Checks on the final state: `npm test` 1394 passed across 52 files (four new here);
+`components/referee-home` 39, `lib/design-tokens` 44, `lib/referee` — all green;
+`npm run lint` and `npm run format:check` clean. No migration, so no SQL suite.
+
 ## Status
 
-`review` on 2026-09-08. Implemented; not yet code-reviewed, and the browser pass above is open.
+`done` on 2026-09-10. Code-reviewed, patched, and the browser pass closed on all three states it
+had left open.
 
 ## Commits
 
 | Commit | Scope |
 | --- | --- |
+| `c3250df` | `feat(7-2-…)` — the collection card: the message on screen in the serif, the token budget flipped to one, six 4.7 tests rewritten and five added. Merged in PR #4. |
+| `c7c9872` | `fix(7-2-…)` — the code-review patches above: the card survives a long name and a status line, plus the tests the matrix promised. |

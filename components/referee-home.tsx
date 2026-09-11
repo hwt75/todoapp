@@ -452,7 +452,10 @@ export function RefereeHome() {
                     aria-label={OWED_PENALTIES_COPY.cardLabel(amount, missed, day)}
                   >
                     <div className="collection-head">
-                      <div>
+                      {/* `collection-debt` lets this column shrink and its name wrap — see the
+                          stylesheet — so a long commitment name cannot push the label off the
+                          card. */}
+                      <div className="collection-debt">
                         <div className="collection-amount">{amount}</div>
                         {/* Not aria-hidden: the day and the commitments are what identify
                             this debt, not decoration — a screen-reader user needs them too. */}
