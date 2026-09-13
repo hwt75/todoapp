@@ -6,14 +6,17 @@ import {
   COMMITMENT_CADENCES,
   COMMITMENT_KINDS,
   EMPTY_DRAFT,
+  KEPT_PHOTO_COPY,
   KIND_LABELS,
   LATE_WINDOW_MAX_MINUTES,
   LATE_WINDOW_MIN_MINUTES,
+  REFEREE_SIGN_OFF_COPY,
   TIMED_COMMITMENT_COPY,
   type CommitmentCadence,
   type CommitmentDraft,
   type CommitmentKind,
   autoChecksPossible,
+  canBeSignedOff,
   canBeTimed,
   draftProblems,
   requiredTargets,
@@ -40,6 +43,16 @@ interface Props {
   busy?: boolean;
   /** When the resolution pass last looked at this commitment, for the "last read" display. */
   autoCheckLastCheckedAt?: string | null;
+  /**
+   * Whether a referee is paired to this account — `has_paired_referee()`'s answer, which the
+   * form cannot work out for itself (`profile.referee_of` lives on the referee's own row).
+   *
+   * Three states. `undefined` is "not asked yet, or the asking failed", and it deliberately does
+   * not become `false`: the database refuses only a write that turns the flag *on*, so an unknown
+   * answer must leave an already-flagged commitment saveable. Only a known `false` greys the
+   * control, and even then only while it is unticked.
+   */
+  hasReferee?: boolean;
   onSave: (draft: CommitmentDraft) => void;
   onCancel: () => void;
   onDelete?: () => void;
@@ -55,6 +68,7 @@ export function CommitmentForm({
   initial,
   busy = false,
   autoCheckLastCheckedAt,
+  hasReferee,
   onSave,
   onCancel,
   onDelete,
@@ -62,11 +76,39 @@ export function CommitmentForm({
   const [draft, setDraft] = useState<CommitmentDraft>(initial ?? EMPTY_DRAFT);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const problems = draftProblems(draft);
+  const problems = draftProblems(draft, {
+    hasPairedReferee: hasReferee,
+    // What this commitment was when it was opened. An edit that leaves the flag where it found it
+    // writes no turn-on, so the trigger never fires and neither does the mirror.
+    signOffAlreadySaved: initial?.requiresRefereeApproval ?? false,
+  });
   const targets = requiredTargets(draft.cadence);
   const checksPossible = autoChecksPossible(draft.kind, draft.cadence);
   const autoCheckActive = checksPossible && draft.autoCheckEnabled;
   const timeable = canBeTimed(draft.kind, draft.cadence);
+
+  // The three reasons the sign-off control cannot be offered, in the order they are explained —
+  // mutually exclusive, so exactly one sentence is ever on screen. The photo is not among them:
+  // the control switches it on rather than refusing the author for a thing he did not cause.
+  //
+  // `hasReferee === false`, never `!hasReferee`: an unasked or failed pairing read is `undefined`,
+  // and greying the control on it would be the form deciding an outcome the server has not been
+  // asked about (AD-1). The trigger refuses the save with its own sentence if there really is
+  // nobody to ask.
+  const signOffRefusal = !canBeSignedOff(draft.kind)
+    ? REFEREE_SIGN_OFF_COPY.wrongKind
+    : autoCheckActive
+      ? REFEREE_SIGN_OFF_COPY.autoChecked
+      : hasReferee === false
+        ? REFEREE_SIGN_OFF_COPY.noReferee
+        : null;
+
+  // **Never disabled while it is ticked.** A control the author cannot untick is a commitment he
+  // cannot save and cannot repair — and the database is deliberately kinder than that: a pairing
+  // revoked after the fact leaves flagged days to auto-approve rather than making the row
+  // unsaveable (`commitment_sign_off_needs_a_referee()`'s own comment, and Step 6 of the SQL
+  // test). Whatever the refusal, the way out is always the tick that caused it.
+  const signOffDisabled = signOffRefusal !== null && !draft.requiresRefereeApproval;
 
   function set<K extends keyof CommitmentDraft>(key: K, value: CommitmentDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -254,21 +296,66 @@ export function CommitmentForm({
             that marking it changes nothing. The untimed sentence deliberately does not name what
             *does* settle the day: the morning answer does for a Do-it daily, but an Hours-per-day
             commitment is judged by banked Focus minutes and never by a declaration at all. */}
+        {/* Held on by sign-off (Story 8.1). `commitment_sign_off_implies_photo` refuses the
+            combination outright, so offering a control that can only produce a refused save is
+            offering a dead end — and it is what would have made "the form never lets the author
+            cause this" false everywhere it is written. Unticking sign-off is the way out, and
+            that control is never disabled while it is ticked. */}
         <p>
           <label>
             <input
               type="checkbox"
+              disabled={draft.requiresRefereeApproval}
               checked={draft.requiresPhoto}
               onChange={(event) => set('requiresPhoto', event.target.checked)}
             />{' '}
             Keep a photo against this
           </label>
         </p>
+        {/* Read from `KEPT_PHOTO_COPY` rather than written inline, because one of these sentences
+            became false. The untimed one promised the photo decides nothing; with sign-off on, the
+            photo is what the referee reads. Story 8.1 gives that case its own sentence and moves
+            all three somewhere a test can hold them — `EVIDENCE_COPY`'s own A2 precedent. */}
         <p className="row-muted">
-          {draft.dueTime === null
-            ? 'Your own record, for any day you want one. Nothing reads it: it never decides a day, and a day with no photo ends exactly as it would have ended anyway.'
-            : 'This one already keeps a photo — the timed proof above, which does decide its day. Marking it here adds nothing while it has a time.'}
+          {draft.requiresRefereeApproval
+            ? KEPT_PHOTO_COPY.signedOff
+            : draft.dueTime === null
+              ? KEPT_PHOTO_COPY.untimed
+              : KEPT_PHOTO_COPY.timed}
         </p>
+
+        {/* Story 8.1. Disabled with one of three mutually exclusive explanations, the shape the
+            Auto-check block below established and EXPERIENCE.md's "Optional check row" requires:
+            a control whose meaning depends on the commitment says why it is unavailable rather
+            than sitting greyed with no reason.
+
+            Turning it on turns the photo requirement on, rather than refusing the save for a
+            missing photo the author was never offered a chance to choose —
+            `commitment_sign_off_implies_photo` is the constraint that would otherwise fire.
+
+            The warning is shown only while the flag is on: with it off, this surface is the one
+            it was before this story. */}
+        <p>
+          <label>
+            <input
+              type="checkbox"
+              disabled={signOffDisabled}
+              checked={draft.requiresRefereeApproval}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  requiresRefereeApproval: event.target.checked,
+                  requiresPhoto: event.target.checked ? true : current.requiresPhoto,
+                }))
+              }
+            />{' '}
+            {REFEREE_SIGN_OFF_COPY.label}
+          </label>
+        </p>
+        {signOffDisabled && <p className="row-muted">{signOffRefusal}</p>}
+        {draft.requiresRefereeApproval && (
+          <p className="row-muted">{REFEREE_SIGN_OFF_COPY.warning}</p>
+        )}
       </div>
 
       {/* Its own frame: what can watch this commitment is a separate question from what the
