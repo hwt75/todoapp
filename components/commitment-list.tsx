@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { CommitmentForm } from '@/components/commitment-form';
+import { calendarMoment } from '@/lib/declaration';
+import { readRefereeReach } from '@/lib/evidence';
 import {
   CADENCE_LABELS,
   KIND_LABELS,
@@ -114,6 +116,17 @@ export function CommitmentList({ ownerId }: { ownerId: string }) {
   const [hasReferee, setHasReferee] = useState<boolean | undefined>(undefined);
   /** The pairing read's own failure, said out loud rather than collapsed into "no referee". */
   const [pairingFailed, setPairingFailed] = useState<string | null>(null);
+  /**
+   * Story 8.3: whether the commitment being edited asked for the referee's signature **as of
+   * today**, which is not the same as `row.requires_referee_approval` for the rest of any day the
+   * author moves the flag. `undefined` until asked, and on a failure — `hasReferee`'s own three
+   * states, for the same reason: an unknown must not be read as a `false` that would make the
+   * form say the photograph decides nothing.
+   */
+  const [signOffRead, setSignOffRead] = useState<{
+    id: string;
+    signedOff: boolean | undefined;
+  } | null>(null);
 
   // Plain function, not a useCallback the effect depends on: the React Compiler rejects
   // an effect whose dependency sets state, and it is right — the effect should own its
@@ -164,6 +177,57 @@ export function CommitmentList({ ownerId }: { ownerId: string }) {
       cancelled = true;
     };
   }, []);
+
+  /**
+   * Story 8.3 — the flag as of today for the commitment being edited.
+   *
+   * Its own effect and its own request, keyed on which row is open: the pairing read above
+   * answers about the account and is asked once, this answers about one commitment and one day
+   * and has to be asked again every time a different row is opened.
+   *
+   * Reset to `undefined` before each read for the reason `components/today.tsx`'s own reach
+   * effect gives — the previous row's answer left in place would describe this row, and on the
+   * flagged→unflagged pair that is the exact wrong sentence. A failure leaves it `undefined`
+   * too, which falls back to the draft flag: the reading this form made before Story 8.3, wrong
+   * only in the window the story is about, rather than a screen that cannot describe itself.
+   */
+  const editingId = view.kind === 'edit' ? view.row.id : null;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (editingId === null) return;
+
+    async function read() {
+      const id = editingId as string;
+      const answer = await readRefereeReach([id], calendarMoment(new Date()).day, {
+        cancelled: () => cancelled,
+      });
+      if (cancelled) return;
+      setSignOffRead({ id, signedOff: answer.reach.get(id) });
+    }
+
+    void read();
+    return () => {
+      cancelled = true;
+    };
+  }, [editingId]);
+
+  /**
+   * The as-of answer, but only if it is about the row now open.
+   *
+   * **Stamped with its commitment id and discarded by mismatch, rather than cleared when a new
+   * read goes out** — `components/today.tsx`'s reach read is keyed by its day for the same
+   * reason. Opening a flagged row and then an unflagged one would otherwise describe the second
+   * with the first's answer for a whole round trip, which is precisely the wrong sentence. It
+   * also keeps the effect free of a synchronous `setState`, which `react-hooks/set-state-in-effect`
+   * refuses and which would cost a render on every open that had nothing to clear.
+   *
+   * `undefined` for a row nobody has answered for yet, for a read that failed, and for a
+   * commitment being created — the form falls back to the draft flag in all three, which is the
+   * reading it made before Story 8.3.
+   */
+  const signedOffToday = signOffRead?.id === editingId ? signOffRead.signedOff : undefined;
 
   async function save(draft: CommitmentDraft, existing?: CommitmentRow) {
     setBusy(true);
@@ -240,6 +304,7 @@ export function CommitmentList({ ownerId }: { ownerId: string }) {
         busy={busy}
         autoCheckLastCheckedAt={view.row.auto_check_last_checked_at}
         hasReferee={hasReferee}
+        signedOffToday={signedOffToday}
         onSave={(draft) => void save(draft, view.row)}
         onCancel={() => setView({ kind: 'list' })}
         onDelete={() => void archive(view.row)}

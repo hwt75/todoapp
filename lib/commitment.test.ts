@@ -20,6 +20,9 @@ import {
   withDueTime,
   withKind,
 } from './commitment';
+// Story 8.3: the setup form's sentence and Today's own hint describe one photograph, so the
+// absence assertion below has to reach across both files or it only holds half the promise.
+import { EVIDENCE_COPY } from './evidence';
 
 function draft(overrides: Partial<CommitmentDraft> = {}): CommitmentDraft {
   return { ...EMPTY_DRAFT, name: 'Gym', ...overrides };
@@ -766,5 +769,23 @@ describe('what the author is told before a signature is asked for', () => {
     expect(KEPT_PHOTO_COPY.untimed).toContain('it never decides a day');
     expect(KEPT_PHOTO_COPY.signedOff).not.toContain('never decides a day');
     expect(KEPT_PHOTO_COPY.signedOff).toContain('your referee');
+  });
+
+  // Story 8.3, and the other direction of the same promise. The setup form's three sentences
+  // and Today's own photo hint are two surfaces describing one photograph, and until 8.3 they
+  // disagreed: the form said the referee looks at it and the policy did not let him. Now that
+  // the policy does, what has to stay true is that **neither** surface names him with sign-off
+  // off — an unflagged commitment-day photograph reaches him as neither row nor object, and
+  // Story 6.8's narrowing is untouched there. Asserted as an absence on the setup side too, so
+  // a later edit that makes one sentence generous cannot pass by matching only its twin.
+  it('names the referee on neither surface while sign-off is off', () => {
+    expect(KEPT_PHOTO_COPY.untimed).not.toMatch(/referee/i);
+    expect(KEPT_PHOTO_COPY.timed).not.toMatch(/referee/i);
+    expect(EVIDENCE_COPY.hint(false)).not.toMatch(/referee/i);
+  });
+
+  it('names him on both once it is on', () => {
+    expect(KEPT_PHOTO_COPY.signedOff).toMatch(/referee/i);
+    expect(EVIDENCE_COPY.hint(true)).toMatch(/referee/i);
   });
 });

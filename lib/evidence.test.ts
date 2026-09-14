@@ -9,6 +9,7 @@ import {
   isEvidenceDated,
   photosOn,
   readKeptPhotos,
+  readRefereeReach,
 } from './evidence';
 
 /**
@@ -38,8 +39,31 @@ const signCalls: Array<{ paths: string[]; ttl: number }> = [];
 let selected: string | null = null;
 const tables: string[] = [];
 
+/** Story 8.3: what `requires_referee_approval_as_of()` answers per commitment id, and every call
+ *  it was asked. `undefined` for an id nobody named means the reader returned NULL. */
+let signOffAsOf: Record<string, unknown> = {};
+let signOffError: { message: string } | null = null;
+/** The one commitment id whose call rejects outright rather than resolving with an `error`. */
+let signOffThrowsFor: string | null = null;
+const rpcCalls: Array<{ fn: string; args: Record<string, unknown> }> = [];
+/** The most calls ever in flight at once, so the batching bound is measured and not assumed. */
+let inFlight = 0;
+let concurrentPeak = 0;
+
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      rpcCalls.push({ fn, args });
+      inFlight++;
+      concurrentPeak = Math.max(concurrentPeak, inFlight);
+      // A real round trip never resolves in the same microtask. Awaited here so `inFlight` can
+      // actually overlap and the batching assertion measures something.
+      await Promise.resolve();
+      inFlight--;
+      if (args.p_commitment_id === signOffThrowsFor) throw new Error('boom');
+      if (signOffError) return { data: null, error: signOffError };
+      return { data: signOffAsOf[args.p_commitment_id as string] ?? null, error: null };
+    },
     from: (table: string) => {
       tables.push(table);
       let days: string[] = [];
@@ -95,6 +119,112 @@ beforeEach(() => {
   signCalls.length = 0;
   selected = null;
   tables.length = 0;
+  signOffAsOf = {};
+  signOffError = null;
+  signOffThrowsFor = null;
+  rpcCalls.length = 0;
+  inFlight = 0;
+  concurrentPeak = 0;
+});
+
+/**
+ * Story 8.3 — the read that lets the author's copy tell the truth about who can open a photo.
+ *
+ * Its whole contract is three answers rather than two: yes, no, and **not known**. A caller that
+ * collapses the third into "no" tells the author a photograph is his alone on the strength of a
+ * request that failed or a reader that returned NULL, which is the one direction that is never
+ * safe — Epic 6 retrospective A2, arrived at by a different road.
+ */
+describe('readRefereeReach', () => {
+  it('asks the as-of reader, with the day, once per commitment', async () => {
+    signOffAsOf = { c1: true, c2: false };
+
+    const reach = await readRefereeReach(['c1', 'c2'], '2026-09-14');
+
+    expect(rpcCalls).toHaveLength(2);
+    expect(rpcCalls.every((call) => call.fn === 'requires_referee_approval_as_of')).toBe(true);
+    expect(rpcCalls.map((call) => call.args)).toEqual([
+      { p_commitment_id: 'c1', p_day: '2026-09-14' },
+      { p_commitment_id: 'c2', p_day: '2026-09-14' },
+    ]);
+    expect(reach.reach.get('c1')).toBe(true);
+    expect(reach.reach.get('c2')).toBe(false);
+    expect(reach.failed).toBeNull();
+  });
+
+  it('deduplicates, and asks nothing at all for an empty list', async () => {
+    signOffAsOf = { c1: true };
+
+    await readRefereeReach(['c1', 'c1', 'c1'], '2026-09-14');
+    expect(rpcCalls).toHaveLength(1);
+
+    rpcCalls.length = 0;
+    expect((await readRefereeReach([], '2026-09-14')).reach.size).toBe(0);
+    expect(rpcCalls).toHaveLength(0);
+  });
+
+  it('leaves a commitment out rather than calling it unflagged when the read fails', async () => {
+    signOffError = { message: 'network' };
+
+    const reach = await readRefereeReach(['c1'], '2026-09-14');
+
+    // `has` and not `get`, because the difference between the two is the whole point: `get`
+    // returns undefined either way, and only `has` tells a known `false` from an unanswered one.
+    expect(reach.reach.has('c1')).toBe(false);
+    // And the failure is carried rather than dropped. Without a channel for it, losing the
+    // `authenticated` EXECUTE grant on the reader looks exactly like a commitment that was never
+    // flagged: every sentence quietly stops appearing and nothing anywhere says why.
+    expect(reach.failed).toBe('network');
+  });
+
+  it('does not let one rejected call take the rest of the batch down', async () => {
+    // A fetch that throws rather than resolving with an `error` — a dropped connection, an
+    // aborted navigation. `Promise.all` rejects the whole batch on the first one, which would
+    // have turned one unanswerable commitment into a screen with no answers at all.
+    signOffAsOf = { c1: true, c2: false };
+    signOffThrowsFor = 'c2';
+
+    const reach = await readRefereeReach(['c1', 'c2'], '2026-09-14');
+
+    expect(reach.reach.get('c1')).toBe(true);
+    expect(reach.reach.has('c2')).toBe(false);
+    expect(reach.failed).toBe('boom');
+  });
+
+  it('goes out in bounded batches rather than one call per row at once', async () => {
+    const ids = Array.from({ length: 25 }, (_, at) => `c${at}`);
+
+    await readRefereeReach(ids, '2026-09-14');
+
+    // All of them asked, and the bound is what stops a long list becoming one unbounded
+    // fan-out on the author's connection.
+    expect(rpcCalls).toHaveLength(25);
+    // Exactly the bound, not merely under it. `toBeLessThanOrEqual` would pass just as green on
+    // a serial loop — which is the other way to get this wrong, and 25 round trips deep.
+    expect(concurrentPeak).toBe(10);
+  });
+
+  it('leaves it out for a NULL answer too — no history is not the same as not signed off', async () => {
+    // What `requires_referee_approval_as_of()` returns for a commitment with no log rows at all.
+    // Every server-side reader of this flag compares with `is true` for exactly this reason.
+    signOffAsOf = { c1: null };
+
+    const reach = await readRefereeReach(['c1'], '2026-09-14');
+
+    expect(reach.reach.has('c1')).toBe(false);
+    // NULL is not a failure: nothing went wrong, the reader simply had no history to answer
+    // from. Reporting it as one would put an error on screen for a state the Story 8.1 backfill
+    // makes unreachable anyway.
+    expect(reach.failed).toBeNull();
+  });
+
+  it('answers nothing once its caller has gone', async () => {
+    signOffAsOf = { c1: true };
+
+    const reach = await readRefereeReach(['c1'], '2026-09-14', { cancelled: () => true });
+
+    expect(reach.reach.size).toBe(0);
+  });
 });
 
 describe('EVIDENCE_COPY.hint', () => {
@@ -104,15 +234,30 @@ describe('EVIDENCE_COPY.hint', () => {
   // one of these rows. Nothing tested the copy, so nothing noticed. These assertions are
   // about the promise, not the wording: they fail if the exclusivity claim comes back, and
   // they fail if the referee stops being named.
-  it('does not claim the author is the only reader', () => {
+  it('does not claim the author is the only reader when the referee can open it', () => {
     // Narrow on purpose: "Only you and your referee" is the true sentence and contains
     // "only you". What must never come back is the exclusivity claim itself.
-    expect(EVIDENCE_COPY.hint).not.toMatch(/only you can (open|see|read)/i);
-    expect(EVIDENCE_COPY.hint).not.toMatch(/private/i);
+    expect(EVIDENCE_COPY.hint(true)).not.toMatch(/only you can (open|see|read)/i);
+    expect(EVIDENCE_COPY.hint(true)).not.toMatch(/private/i);
   });
 
   it('names the referee as the other reader', () => {
-    expect(EVIDENCE_COPY.hint).toMatch(/referee/i);
+    expect(EVIDENCE_COPY.hint(true)).toMatch(/referee/i);
+  });
+
+  // Story 8.3, and the half that catches a branch wired backwards. An unflagged
+  // commitment-day photograph reaches the referee as neither row nor object -- Story 6.8
+  // narrowed both policies and Story 8.3 widened them only for a commitment flagged as of the
+  // day -- so naming him here would be A2 the right way round: a reach promised that the
+  // policy does not grant. Asserted as an absence, in the same regex idiom as its twin,
+  // because a test that only ever checks the true branch passes just as green with the
+  // condition inverted.
+  it('does not name the referee when he cannot open it', () => {
+    expect(EVIDENCE_COPY.hint(false)).not.toMatch(/referee/i);
+  });
+
+  it('says the author is the only reader when he is', () => {
+    expect(EVIDENCE_COPY.hint(false)).toMatch(/only you can (open|see|read)/i);
   });
 });
 

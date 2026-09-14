@@ -35,6 +35,12 @@ export interface RowCommitment {
    * every test — whose fixtures supply the field regardless of the query — stays green.
    */
   requires_photo: boolean;
+  /* Story 8.3 deliberately adds no `requires_referee_approval` here. Today's photo control does
+     need to know whether the referee can open the photograph, but the answer it needs is the flag
+     **as of the day** — `requires_referee_approval_as_of()`, read by `lib/evidence.ts`'s
+     `readRefereeReach()` — and the live column is exactly the thing that disagrees with it for
+     the rest of any day the author moves the flag. Carrying the column here would put the wrong
+     answer within easy reach of the surface that must not use it. */
 }
 
 /**

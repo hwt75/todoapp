@@ -535,6 +535,70 @@ describe('asking the referee to sign a commitment off', () => {
     expect(screen.getByText(KEPT_PHOTO_COPY.signedOff)).toBeInTheDocument();
   });
 
+  /*
+   * Story 8.3 — the same promise, on the day the author takes the flag *off*.
+   *
+   * Every test above drives the flag on only, which is why none of them caught this: the form
+   * was the fourth reader of a flag every other reader takes **as of the day**, and it read the
+   * live draft. Untick sign-off at 10:00 on a commitment that was flagged when the day began,
+   * and this helper said "Nothing reads it: it never decides a day" while the widened referee
+   * policies still let the referee open today's photograph and `sign_off_day()` still accepted a
+   * refusal that costs a penalty. The condition moved to `|| signedOffToday`; the three
+   * sentences did not change.
+   */
+  it('keeps naming the referee after sign-off is unticked on a day it was on', async () => {
+    render(
+      <CommitmentForm
+        initial={{ ...signable, requiresRefereeApproval: true }}
+        hasReferee
+        signedOffToday
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label));
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).not.toBeChecked();
+
+    // The draft flag is now off and today's answer is still true, which is the whole of the
+    // window this closes. The save is real and takes effect tomorrow; today the photograph is
+    // still the thing his referee signs off on.
+    expect(screen.queryByText(/never decides a day/)).not.toBeInTheDocument();
+    expect(screen.getByText(KEPT_PHOTO_COPY.signedOff)).toBeInTheDocument();
+  });
+
+  it('says the photo decides nothing once the day it was flagged on has passed', async () => {
+    // The same unticked draft, a day later: `signedOffToday` is now false, and the sentence is
+    // true again. Without this the test above would pass on a form that had simply stopped
+    // being able to say `untimed` at all.
+    render(
+      <CommitmentForm
+        initial={{ ...signable, requiresRefereeApproval: true }}
+        hasReferee
+        signedOffToday={false}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label));
+
+    expect(screen.getByText(/never decides a day/)).toBeInTheDocument();
+    expect(screen.queryByText(KEPT_PHOTO_COPY.signedOff)).not.toBeInTheDocument();
+  });
+
+  it('falls back to the draft flag for a commitment that does not exist yet', async () => {
+    // A new commitment has no id and therefore no history to read, so `signedOffToday` is
+    // `undefined` — the same third state `hasReferee` carries, and it must not read as `false`
+    // in one direction or `true` in the other. The draft alone governs, which is what this form
+    // did before Story 8.3.
+    render(<CommitmentForm hasReferee onSave={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByText(KEPT_PHOTO_COPY.untimed)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label));
+    expect(screen.getByText(KEPT_PHOTO_COPY.signedOff)).toBeInTheDocument();
+  });
+
   it('shows the conflict rather than swallowing it when an Auto-check is added afterwards', async () => {
     const onSave = vi.fn();
     render(

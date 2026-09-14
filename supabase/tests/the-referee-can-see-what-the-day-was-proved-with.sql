@@ -7,6 +7,16 @@
 -- prove is two things at once: that he now gets the paths, and that his raw reach did not widen to
 -- give them to him.
 --
+-- **Amended by Story 8.3, which made one of its assertions half wrong.** Step 2 said a Story 6.8
+-- kept photograph "must not reach the referee" and tested that `referee_day_lookup()` does not
+-- name it -- two different claims wearing one sentence. Story 8.3 widened his *reach* for a
+-- commitment flagged as of the day, and deliberately did not widen his *list*: Story 8.4 owns what
+-- he is shown. So the sentence is split rather than deleted. Step 2 is now about the list and
+-- holds for both; Step 2c asserts that an **unflagged** kept photograph still reaches him as
+-- neither row nor object, which is the half that was always the point; Step 2d asserts that a
+-- **flagged** one now reaches him both ways and is *still* absent from this lookup, which is what
+-- keeps the not-widened-here decision from being undone by accident.
+--
 --   docker exec -i supabase_db_todoapp psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/the-referee-can-see-what-the-day-was-proved-with.sql
 --
 -- One transaction, rolled back at the end.
@@ -40,6 +50,17 @@ declare
   v_owner   uuid;
   v_c       uuid;
   v_c2      uuid;
+  -- **v_mine's** unflagged commitment and its kept photograph, held apart from `v_c2` on
+  -- purpose. `v_c2` is assigned inside the loop below and ends it holding *theirs*, so an
+  -- assertion pointed at it is refused by the pairing conjunct before the flag arm is ever
+  -- reached — it would pass unchanged if the widening had reached every unflagged
+  -- commitment-day photograph in the database. Step 2c is about the flag, so it needs a
+  -- commitment of the account this referee is actually paired to.
+  v_mine_c2 uuid;
+  v_mine_kept text;
+  -- Story 8.3: v_mine's flagged commitment, whose kept photograph he may now open.
+  v_c3      uuid;
+  v_kept    text;
   v_decl    uuid;
   v_s       uuid;
   v_ev      uuid := gen_random_uuid();
@@ -142,7 +163,41 @@ begin
 
     insert into public.evidence (commitment_id, storage_path, for_day, captured_on)
     values (v_c2, v_path, v_day, v_day);
+
+    -- Kept for Step 2c, before the next iteration overwrites both.
+    if v_case = 'mine' then
+      v_mine_c2 := v_c2;
+      v_mine_kept := v_path;
+    end if;
   end loop;
+
+  -- Story 8.3: the same kind of photograph on a commitment that asked for the referee's
+  -- signature. Added to `mine` only, and outside the loop for that reason --
+  -- `commitment_sign_off_needs_a_referee` (20260911090000:263) refuses a flagged commitment on an
+  -- account no referee is paired to, and no referee is paired to `theirs`.
+  --
+  -- Created today with the flag on, so `requires_referee_approval_as_of(v_c3, v_day)` takes the
+  -- reader's backward-extrapolation branch and answers true for v_day. The as-of read is
+  -- exercised in both directions in `8-3-the-photograph-reaches-the-referee.sql`; what this file
+  -- needs is only a flagged day to look at.
+  select s.id into v_s
+    from public.settlement s where s.subject = v_mine and s.period = v_day and s.kind = 'day';
+
+  insert into public.commitment (owner_id, idempotency_key, name, kind, cadence, carries_penalty,
+                                 requires_photo, requires_referee_approval)
+  values (v_mine, gen_random_uuid(), 'Thuoc', 'do', 'daily', true, true, true)
+  returning id into v_c3;
+
+  insert into public.settlement_commitment (settlement_id, subject, commitment_id, outcome)
+  values (v_s, v_mine, v_c3, 'held');
+
+  v_kept := v_c3::text || '/' || gen_random_uuid()::text || '/kept.jpg';
+
+  insert into storage.objects (bucket_id, name, owner)
+  values ('appeal-evidence', v_kept, v_mine);
+
+  insert into public.evidence (commitment_id, storage_path, for_day, captured_on)
+  values (v_c3, v_kept, v_day, v_day);
 
   -- ---------------------------------------------------------------- as the referee
 
@@ -180,8 +235,61 @@ begin
 
   if array_length(v_paths, 1) is not null then
     raise exception
-      'Story 6.8''s kept photo answers for no verdict and must not reach the referee. Got: %',
+      'Story 6.8''s kept photo answers for no verdict and this lookup must not name it. Got: %',
       v_paths;
+  end if;
+
+  -- 2c. And on an **unflagged** commitment it does not reach him at all -- not as a row and not
+  --     as an object. This is what Step 2's sentence used to claim while testing only the lookup.
+  --     Story 8.3 widened both referee policies for a *flagged* commitment-day and for no other,
+  --     so this is the half of Story 6.8's narrowing that had to survive it, and it is asserted
+  --     here against the same fixture rather than in a file of its own that could drift from it.
+  --     `v_mine_c2`, never `v_c2`: the latter holds *theirs* by the time the loop above ends, and
+  --     a count of zero against another account's commitment says only that the pairing conjunct
+  --     works. It is the flag arm that has to be doing the refusing here.
+  select count(*) into v_seen from public.evidence e where e.commitment_id = v_mine_c2;
+  if v_seen <> 0 then
+    raise exception
+      'An unflagged commitment-day photograph must reach the referee as no row at all. He read '
+      '% of them.', v_seen;
+  end if;
+
+  select count(*) into v_seen from storage.objects o
+   where o.bucket_id = 'appeal-evidence' and o.name = v_mine_kept;
+  if v_seen <> 0 then
+    raise exception
+      'An unflagged commitment-day photograph must reach the referee as no object either. He '
+      'read % of them.', v_seen;
+  end if;
+
+  -- 2d. On a **flagged** commitment it reaches him both ways -- and is still absent from this
+  --     lookup. Both halves matter. The first is Story 8.3's whole point; the second is Story
+  --     8.3's deliberate omission, because Story 8.4 owns what the referee is *shown* and
+  --     `referee_day_lookup()` was left narrowed on purpose. If 8.4 later widens the list, delete
+  --     the second half knowingly rather than discovering it here.
+  select count(*) into v_seen from public.evidence e where e.commitment_id = v_c3;
+  if v_seen <> 1 then
+    raise exception
+      'A flagged commitment-day photograph must reach the referee as a row (Story 8.3). He read '
+      '% of them.', v_seen;
+  end if;
+
+  select count(*) into v_seen from storage.objects o
+   where o.bucket_id = 'appeal-evidence' and o.name = v_kept;
+  if v_seen <> 1 then
+    raise exception
+      'A flagged commitment-day photograph must reach the referee as an object too -- widening '
+      'one arm and not the other is the failure Story 8.3 exists to avoid. He read % of them.',
+      v_seen;
+  end if;
+
+  select evidence_paths into v_paths
+    from public.referee_day_lookup(v_s) where commitment_name = 'Thuoc';
+
+  if v_paths is null or array_length(v_paths, 1) is not null then
+    raise exception
+      'referee_day_lookup() has started naming a commitment-day photograph. Story 8.3 widened '
+      'the referee''s reach and deliberately not his list. Got: %', v_paths;
   end if;
 
   -- 2b. A swept photo is not offered to him at all (20260908180000). The row survives, because

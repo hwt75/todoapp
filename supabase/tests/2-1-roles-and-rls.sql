@@ -524,15 +524,44 @@ begin
     -- reach. Nothing client-side has a reason to ask it, and a client that could would learn the
     -- live doer's id from any session.
     'public.paired_doer_id()',
-    -- Story 8.1. The reader matters most of the three: it is `security definer`, takes an
-    -- arbitrary p_commitment_id, and performs no ownership check of its own — it was written to
-    -- be called by settlement, which already knows whose day it is judging. A later drop/create
-    -- would hand EXECUTE back to PUBLIC with nothing red, and Story 8.6 is the first client
-    -- reader and must choose then between a grant and a security_invoker view. Deliberately NOT
-    -- here: has_paired_referee(), which is granted to `authenticated` on purpose — it takes no
-    -- argument, answers only about auth.uid(), and is the form's alternative to offering a
-    -- checkbox whose save the database will refuse.
-    'public.requires_referee_approval_as_of(uuid, date)',
+    -- Story 8.1 put `requires_referee_approval_as_of(uuid, date)` in this array, with the note
+    -- that "Story 8.6 is the first client reader and must choose then between a grant and a
+    -- security_invoker view". **Story 8.3 answered that question early, and hwt75 chose the
+    -- grant on 2026-09-14**, so the entry is gone from the array. Kept as a comment rather than
+    -- deleted, because the history is the point: this guard was not edited to fit new code, it
+    -- was told a decision, and the next reader should be able to see which.
+    --
+    -- Why it was here. It is `security definer`, takes an arbitrary p_commitment_id, and performs
+    -- no ownership check of its own — it was written to be called by settlement, which already
+    -- knows whose day it is judging. That has not changed, and an ownership check cannot be added
+    -- now: settlement calls it from cron, where auth.uid() is null, so any auth.uid()-based guard
+    -- inside it would refuse the caller it exists for.
+    --
+    -- Why it is no longer here. The author's own photo control has to tell him who can open the
+    -- photograph he is about to take, and Story 8.3 made that sentence follow the flag **as of
+    -- the day** — the same reading the widened policies make. Left on the live column the two
+    -- disagree for the rest of any day he moves the flag, and switching it off says "Only you can
+    -- open it" while the referee still reaches that day's photograph: Epic 6 retrospective A2,
+    -- inside the story that exists to be A2's consent answer. What the grant exposes is one
+    -- boolean about a commitment uuid the caller must already hold, obtainable only through
+    -- `commitment: read own` or `commitment: referee reads his own doer's` — the owner, or the
+    -- referee paired to him. `evidence_object_owner()` is granted on the same reasoning.
+    --
+    -- **What did NOT follow from it**, and the distinction is load-bearing: no *policy* predicate
+    -- may call it. The widened referee policies of `20260914120000` reach the flag through
+    -- `photograph_reaches_the_referee()`, which is `security definer` and needs no caller
+    -- privilege at all, precisely so that no policy's correctness ever depends on an ACL — the
+    -- thing `drop function` destroys and a bare `create` in `public` hands back to PUBLIC.
+    --
+    -- Two others deliberately NOT here, both since before this decision and both unaffected by
+    -- it: has_paired_referee(), granted on purpose because it takes no argument and answers only
+    -- about auth.uid(); and Story 8.3's own pair, photograph_reaches_the_referee(uuid, date) and
+    -- commitment_day_object_reaches_the_referee(text), granted for the same reason
+    -- evidence_object_is_a_commitment_day() and evidence_object_owner() are — each is called
+    -- *from* a policy, which is evaluated as the caller, so without the grant every referee read
+    -- of a flagged photograph fails at the API. `8-3-the-photograph-reaches-the-referee.sql`
+    -- asserts all three grants in both directions.
+    --
     -- The two trigger functions, here for the reason commitment_log_due_time_change() already
     -- is: a trigger fires regardless of its EXECUTE grant, so the grant buys nothing and exposes
     -- an RPC — one that writes the money-deciding log directly, one that reads profile rows the
@@ -664,7 +693,7 @@ begin
   end loop;
 
   raise notice using message =
-    'Step 6 ok: thirty-nine deciding functions and the outbox are all out of reach of anon '
+    'Step 6 ok: thirty-eight deciding functions and the outbox are all out of reach of anon '
     'and authenticated, and the eight Story 6.6 touches carry an explicit ACL that still lets '
     'postgres and service_role in, with search_path pinned to empty.';
   raise notice using message =
