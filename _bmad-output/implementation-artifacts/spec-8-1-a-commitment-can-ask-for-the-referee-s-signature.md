@@ -2,7 +2,7 @@
 title: 'Story 8.1 — A commitment can ask for the referee''s signature'
 type: 'feature'
 created: '2026-09-11'
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 1
 baseline_commit: 'db72cc0ff35d95359ed7b5ba362960152ed8a955'
 story_key: '8-1-a-commitment-can-ask-for-the-referee-s-signature'

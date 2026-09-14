@@ -151,3 +151,11 @@ jobs:
       # day came from.
       - name: Run the due-time reminder race
         run: node scripts/test-due-reminder-race.mjs
+
+      # And the same reason again, for the one writer that deliberately takes no lock at all.
+      # `sign_off_day()` serialises two decisions on one commitment-day on its unique index rather
+      # than on the account key, because it moves no money — and a single-session test cannot
+      # reach that branch, since the RPC's own check-then-act read always raises first. Without
+      # this step Story 8.2's whole no-advisory-lock argument ships unverified.
+      - name: Run the referee sign-off race
+        run: node scripts/test-sign-off-race.mjs
