@@ -520,7 +520,22 @@ begin
     -- Reads referee_invite and every profile's is_live_doer to answer whose money the caller may
     -- reach. Nothing client-side has a reason to ask it, and a client that could would learn the
     -- live doer's id from any session.
-    'public.paired_doer_id()'
+    'public.paired_doer_id()',
+    -- Story 8.1. The reader matters most of the three: it is `security definer`, takes an
+    -- arbitrary p_commitment_id, and performs no ownership check of its own — it was written to
+    -- be called by settlement, which already knows whose day it is judging. A later drop/create
+    -- would hand EXECUTE back to PUBLIC with nothing red, and Story 8.6 is the first client
+    -- reader and must choose then between a grant and a security_invoker view. Deliberately NOT
+    -- here: has_paired_referee(), which is granted to `authenticated` on purpose — it takes no
+    -- argument, answers only about auth.uid(), and is the form's alternative to offering a
+    -- checkbox whose save the database will refuse.
+    'public.requires_referee_approval_as_of(uuid, date)',
+    -- The two trigger functions, here for the reason commitment_log_due_time_change() already
+    -- is: a trigger fires regardless of its EXECUTE grant, so the grant buys nothing and exposes
+    -- an RPC — one that writes the money-deciding log directly, one that reads profile rows the
+    -- caller cannot otherwise see.
+    'public.commitment_log_requires_referee_approval_change()',
+    'public.commitment_sign_off_needs_a_referee()'
   ]
   loop
     foreach r in array array['anon', 'authenticated'] loop
@@ -637,7 +652,7 @@ begin
   end loop;
 
   raise notice using message =
-    'Step 6 ok: thirty-two deciding functions and the outbox are all out of reach of anon '
+    'Step 6 ok: thirty-eight deciding functions and the outbox are all out of reach of anon '
     'and authenticated, and the eight Story 6.6 touches carry an explicit ACL that still lets '
     'postgres and service_role in, with search_path pinned to empty.';
   raise notice using message =

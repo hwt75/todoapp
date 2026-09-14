@@ -68,6 +68,20 @@ export interface CommitmentDraft {
    * changes when it is on, and a day with no photo settles exactly as it would with it off.
    */
   requiresPhoto: boolean;
+  /**
+   * Whether this commitment asks the author's paired referee to sign its day off (Story 8.1).
+   *
+   * Gated by neither `autoChecksPossible()` nor `canBeTimed()`, and not for `requiresPhoto`'s
+   * reason. Those two exclude an abstention and an hours quota because no *sensor* exists and
+   * because no *moment* exists; this is narrower than either and excludes on a third ground
+   * entirely — a signature is a statement that a thing was *done*, so only a Do-it commitment
+   * has anything for a referee to sign. `canBeSignedOff()` is that rule, kept separate from both.
+   *
+   * Unlike `requiresPhoto` it decides money from Story 8.2 onward, which is why the column
+   * carries an append-only log and an `_as_of()` reader in the database and `requires_photo`
+   * does not.
+   */
+  requiresRefereeApproval: boolean;
 }
 
 /** The window's bounds, mirroring `commitment_late_window_range`. */
@@ -99,6 +113,9 @@ export const EMPTY_DRAFT: CommitmentDraft = {
   // Off, like `carriesPenalty` and for a milder version of the same reason: keeping a record is
   // a thing the author chooses to do, never something the product starts asking him for.
   requiresPhoto: false,
+  // Off, like `carriesPenalty` and for exactly its reason: this one decides money too, and
+  // putting another person's judgement on a day has to be a deliberate act.
+  requiresRefereeApproval: false,
 };
 
 export type TargetField = 'weeklyTarget' | 'weekStartDay' | 'dailyMinutesTarget';
@@ -157,6 +174,24 @@ export function canBeTimed(kind: CommitmentKind, cadence: CommitmentCadence): bo
   return kind !== 'abstain' && cadence !== 'daily_hours_quota';
 }
 
+/**
+ * Whether there is anything here a referee could sign off on (Story 8.1).
+ *
+ * **Deliberately neither `canBeTimed()` nor `autoChecksPossible()`, and narrower than both.**
+ * Those two exclude the same two cases — an abstention and an hours quota — for unrelated
+ * reasons: one asks whether a *sensor* exists, the other whether a *moment* does. This asks a
+ * third thing. A signature is a statement that a thing was done, and only `do` is a thing done:
+ * `abstain` is a thing *not* done, with no act to witness, and `open_ended` is hours banked
+ * rather than an act at all. So this refuses `open_ended` where the other two accept it, and the
+ * three must never be merged.
+ *
+ * Takes no cadence, again unlike the other two: the rule is about the kind and nothing else.
+ * Mirrors `commitment_sign_off_needs_a_do`; the constraint is what actually decides.
+ */
+export function canBeSignedOff(kind: CommitmentKind): boolean {
+  return kind === 'do';
+}
+
 /** `HH:MM`, 24-hour, whole minutes — the shape `<input type="time">` produces and the database accepts. */
 const TIME_OF_DAY = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -207,13 +242,100 @@ export const TIMED_COMMITMENT_COPY = {
 } as const;
 
 /**
+ * What the photo control says about itself, in each of the three cases it has.
+ *
+ * Lifted out of `components/commitment-form.tsx`, where the first two sentences were inline, for
+ * the reason Story 8.1 made unavoidable rather than for tidiness. The untimed sentence promised
+ * *"Nothing reads it: it never decides a day"* — which stops being true the moment sign-off is
+ * on, because the photo is then exactly what the referee reads. That is the Epic 6 retrospective's
+ * A2 defect one step earlier: the app promising something the rules no longer keep. `EVIDENCE_COPY`
+ * in `lib/evidence.ts` is the precedent for how it gets fixed — the copy moves to match the rule,
+ * and it is tested, so the next change to either has to face the other.
+ *
+ * Three sentences rather than one, because no single one is true of all three cases.
+ */
+export const KEPT_PHOTO_COPY = {
+  /** The plain case: a record the author keeps, which decides nothing. */
+  untimed:
+    'Your own record, for any day you want one. Nothing reads it: it never decides a day, and ' +
+    'a day with no photo ends exactly as it would have ended anyway.',
+  /** A time is set, so Epic 6's own proof control already keeps a photo that does decide the day. */
+  timed:
+    'This one already keeps a photo — the timed proof above, which does decide its day. Marking ' +
+    'it here adds nothing while it has a time.',
+  /** Sign-off is on, so the photo is what the referee reads. Said whether or not a time is set. */
+  signedOff:
+    'This photo is what your referee looks at. It stops being only your own record: it is the ' +
+    'thing he signs the day off on, which is why sign-off switches it on and keeps it on.',
+} as const;
+
+/**
+ * What the author is told about asking for his referee's signature, verbatim.
+ *
+ * Kept here for the reason `TIMED_COMMITMENT_COPY` gives, and load-bearing for a stronger one:
+ * `warning` is the only place in the product the author learns that his friend forgetting costs
+ * him nothing. The setup surface states the silence rule in the moment the flag is turned on, not
+ * in help text — and it says it as information about his friend rather than as a task for him,
+ * because a sentence that reads as "go chase him" is the opposite of what silence-approves is for.
+ *
+ * The three disabled explanations are mutually exclusive and mirror three of the four refusals
+ * in `draftProblems()`. The fourth, a photo, is not among them: turning sign-off on turns the
+ * photo requirement on rather than refusing the draft for a thing the author did not cause.
+ */
+export const REFEREE_SIGN_OFF_COPY = {
+  label: 'Ask your referee to sign this off',
+  warning:
+    'Your referee can look at the photo and refuse the day before midnight, which fails it. ' +
+    'If he says nothing at all, the day holds on the photo alone — his silence costs you ' +
+    'nothing, and reminding him is not your job.',
+  /** `commitment_sign_off_needs_a_do`. */
+  wrongKind: 'Only a Do-it commitment has something done for him to put his name to.',
+  /** `commitment_sign_off_not_with_auto_check`. */
+  autoChecked:
+    'An Auto-check already answers for this one. Two answers to one question is how they come ' +
+    'to disagree.',
+  /** `commitment_sign_off_needs_a_referee()`, the one refusal that is a trigger rather than a check. */
+  noReferee: 'Nobody to ask yet — pair a referee in Settings first.',
+} as const;
+
+/**
+ * What the draft alone cannot say.
+ *
+ * Every other rule in `draftProblems()` is a pure function of the draft. The referee pairing is
+ * not: it is a fact about the account, it lives on the referee's own `profile` row, and
+ * `profile: read own` hides that row from the doer — so the form has to be *told*, by
+ * `has_paired_referee()`, rather than working it out. Optional, and left undecided rather than
+ * assumed when it is absent: a caller with no answer yet must not be shown a refusal it cannot
+ * act on, and `commitment_sign_off_needs_a_referee()` refuses the save regardless.
+ */
+export interface DraftContext {
+  /**
+   * Whether some profile carries `referee_of` = this account — `has_paired_referee()`'s answer.
+   * Left out, or `undefined`, when nobody has asked yet or the asking failed. That is not `false`:
+   * a refusal the caller cannot act on is worse than letting the database make it.
+   */
+  hasPairedReferee?: boolean;
+  /**
+   * Whether the commitment **as already saved** carried the flag.
+   *
+   * This is what makes the pairing rule mirror the trigger rather than overshoot it.
+   * `commitment_sign_off_needs_a_referee_on_update` fires only when the value actually moves to
+   * true, so a commitment already flagged is saveable however the pairing reads — the SPEC's "no
+   * enforcement that a pairing *stays*", and the reason a revoked pairing auto-approves instead of
+   * erroring. Without this, an author whose friend unpaired could neither save nor repair his own
+   * row.
+   */
+  signOffAlreadySaved?: boolean;
+}
+
+/**
  * Every reason a draft cannot be saved, in the order a reader would meet them.
  *
  * Returns messages rather than a boolean so the form can show which field is wrong. An
  * empty array means the database would accept it — the constraints here mirror the ones
  * in `20260819150000_commitment.sql`, and the migration is what actually decides.
  */
-export function draftProblems(draft: CommitmentDraft): string[] {
+export function draftProblems(draft: CommitmentDraft, context?: DraftContext): string[] {
   const problems: string[] = [];
 
   if (draft.name.trim() === '') {
@@ -331,6 +453,38 @@ export function draftProblems(draft: CommitmentDraft): string[] {
     }
   }
 
+  // Story 8.1's four refusals, mirroring `commitment_sign_off_needs_a_do`,
+  // `commitment_sign_off_not_with_auto_check`, `commitment_sign_off_implies_photo` and the
+  // `commitment_sign_off_needs_a_referee()` trigger. The database is what actually decides; these
+  // exist so a bad draft is refused without a round trip, exactly as the cadence-target rules are.
+  if (draft.requiresRefereeApproval) {
+    // Mirrors `canBeSignedOff()`. Its own message rather than one shared with the time or the
+    // Auto-check rule: those exclude two kinds for reasons that are not this one, and a shared
+    // sentence would imply a shared cause.
+    if (!canBeSignedOff(draft.kind)) {
+      problems.push(REFEREE_SIGN_OFF_COPY.wrongKind);
+    }
+
+    if (draft.autoCheckEnabled) {
+      problems.push(REFEREE_SIGN_OFF_COPY.autoChecked);
+    }
+
+    // The form turns the photo on with the flag rather than letting the author cause this, so
+    // reaching it means a draft assembled somewhere the form is not — which is exactly when a
+    // mirror earns its keep.
+    if (!draft.requiresPhoto) {
+      problems.push('Your referee needs a photo to look at, so this one has to keep one.');
+    }
+
+    // Only when the answer is known and is no, and only when this save is actually turning the
+    // flag on — which is precisely the trigger's own `when` clause. A commitment already flagged
+    // stays saveable whatever the pairing says, because the database lets it: a pairing revoked
+    // afterwards makes flagged days auto-approve, not make the row unrepairable.
+    if (context?.hasPairedReferee === false && context?.signOffAlreadySaved !== true) {
+      problems.push(REFEREE_SIGN_OFF_COPY.noReferee);
+    }
+  }
+
   return problems;
 }
 
@@ -342,6 +496,7 @@ export function draftProblems(draft: CommitmentDraft): string[] {
 export function withKind(draft: CommitmentDraft, kind: CommitmentKind): CommitmentDraft {
   const checksPossible = autoChecksPossible(kind, draft.cadence);
   const timeable = canBeTimed(kind, draft.cadence);
+  const signable = canBeSignedOff(kind);
   return {
     ...draft,
     kind,
@@ -351,6 +506,11 @@ export function withKind(draft: CommitmentDraft, kind: CommitmentKind): Commitme
     // one is refused by a constraint about a field no longer on screen.
     dueTime: timeable ? draft.dueTime : null,
     lateWindowMinutes: timeable ? draft.lateWindowMinutes : null,
+    // Cleared for the time's reason exactly: `commitment_sign_off_needs_a_do` would refuse the
+    // save, naming a control the author can no longer see. `requiresPhoto` is deliberately not
+    // cleared with it — the photo outlives the signature, and a record the author chose to keep
+    // is not the product's to withdraw because he changed the kind.
+    requiresRefereeApproval: signable ? draft.requiresRefereeApproval : false,
     // `requiresPhoto` is carried by the spread above and cleared by neither this nor
     // `withCadence`, on purpose. A time is cleared because a constraint would refuse it on a
     // kind that cannot carry one; there is no such constraint here, and every kind can keep a
@@ -358,7 +518,14 @@ export function withKind(draft: CommitmentDraft, kind: CommitmentKind): Commitme
   };
 }
 
-/** Clears whatever the previous cadence needed, so switching cadence cannot leave a stale target. */
+/**
+ * Clears whatever the previous cadence needed, so switching cadence cannot leave a stale target.
+ *
+ * `requiresRefereeApproval` is carried through untouched, unlike in `withKind()`:
+ * `commitment_sign_off_needs_a_do` names a kind and no cadence at all, so no cadence can make the
+ * flag refusable. Clearing it here would lose a decision the author made for a reason the database
+ * does not have.
+ */
 export function withCadence(draft: CommitmentDraft, cadence: CommitmentCadence): CommitmentDraft {
   const required = requiredTargets(cadence);
   const checksPossible = autoChecksPossible(draft.kind, cadence);
@@ -395,6 +562,11 @@ export function toRow(draft: CommitmentDraft, ownerId: string, idempotencyKey: s
     // Story 6.8. Configuration, like every other column here — no settlement function reads it,
     // so it has no as-of change log and needs none (see the migration's own comment).
     requires_photo: draft.requiresPhoto,
+    // Story 8.1, and the one column here that is not merely configuration: from Story 8.2 it
+    // decides money, so writing it appends to `commitment_requires_referee_approval_change` and
+    // every reader goes through `requires_referee_approval_as_of()`. Sent on every save, including
+    // when it is false, so an edit cannot silently drop it.
+    requires_referee_approval: draft.requiresRefereeApproval,
     auto_check_kind: draft.autoCheckEnabled ? 'account_elsewhere' : null,
     auto_check_account_ref: draft.autoCheckEnabled ? draft.autoCheckAccountRef.trim() : null,
     // Untouched (stripped before the request) while still enabled — it is a value the

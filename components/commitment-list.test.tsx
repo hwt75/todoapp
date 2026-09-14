@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CommitmentList } from './commitment-list';
+import { REFEREE_SIGN_OFF_COPY } from '@/lib/commitment';
 
 /**
  * The surface for changing commitments, and the three writes underneath it.
@@ -23,11 +24,18 @@ import { CommitmentList } from './commitment-list';
 const calls: { table: string; op: string; payload?: unknown; options?: unknown }[] = [];
 /** The column string every read asked for — see `today.test.tsx`'s own note on why. */
 const selected: string[] = [];
+/** Every `rpc()` name this surface called, so a read that quietly stopped happening is visible. */
+const rpcs: string[] = [];
 let listResult: unknown = { data: [], error: null };
 let writeResult: unknown = { error: null };
+let pairedRefereeResult: unknown = { data: false, error: null };
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
+    rpc: (name: string) => {
+      rpcs.push(name);
+      return Promise.resolve(pairedRefereeResult);
+    },
     from: (table: string) => {
       const query = {
         select: (columns?: string) => {
@@ -65,13 +73,16 @@ const gym = {
   due_time: null,
   late_window_minutes: null,
   requires_photo: false,
+  requires_referee_approval: false,
 };
 
 beforeEach(() => {
   calls.length = 0;
   selected.length = 0;
+  rpcs.length = 0;
   listResult = { data: [gym], error: null };
   writeResult = { error: null };
+  pairedRefereeResult = { data: false, error: null };
 });
 
 describe('the commitment list', () => {
@@ -249,5 +260,103 @@ describe('a commitment that already keeps a photo', () => {
 
     const update = calls.find((c) => c.op === 'update');
     expect(update?.payload).toMatchObject({ requires_photo: false });
+  });
+});
+
+/**
+ * Story 8.1 — the flag survives the round trip, and the pairing reaches the form.
+ *
+ * Three hand-written column lists stand between the database and the checkbox — `CommitmentRow`,
+ * the `SELECT` string and `toDraft()` — and a column missing from any of them fails silently:
+ * the box draws unchecked, an untouched save sends `false`, and the author finds out when his
+ * referee is never asked. This one costs more than 6.8's did, because writing `false` appends to
+ * an append-only log as a decision he never made.
+ *
+ * The pairing has to arrive the same way. `save()` is a direct supabase write with no server hop
+ * where it could be read in passing, and `profile: read own` stops the doer seeing the row where
+ * `referee_of` points at him, so this surface asks `has_paired_referee()` outright.
+ */
+describe('a commitment that asks for the referee’s signature', () => {
+  it('asks for the column, renders it checked, and sends it back untouched', async () => {
+    listResult = {
+      data: [{ ...gym, kind: 'do', requires_photo: true, requires_referee_approval: true }],
+      error: null,
+    };
+    pairedRefereeResult = { data: true, error: null };
+
+    render(<CommitmentList ownerId="u1" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+
+    expect(selected.some((columns) => columns.includes('requires_referee_approval'))).toBe(true);
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).toBeChecked();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    const update = calls.find((c) => c.op === 'update');
+    expect(update?.payload).toMatchObject({ requires_referee_approval: true });
+  });
+
+  it('asks the database whether a referee is paired, and offers the control once one is', async () => {
+    pairedRefereeResult = { data: true, error: null };
+
+    render(<CommitmentList ownerId="u1" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'New commitment' }));
+
+    expect(rpcs).toContain('has_paired_referee');
+    expect(await screen.findByLabelText(REFEREE_SIGN_OFF_COPY.label)).toBeEnabled();
+  });
+
+  it('leaves the control disabled and explained when no referee is paired', async () => {
+    render(<CommitmentList ownerId="u1" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'New commitment' }));
+
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).toBeDisabled();
+    expect(screen.getByText(REFEREE_SIGN_OFF_COPY.noReferee)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Story 8.1 — a pairing that could not be read is not a pairing that does not exist.
+ *
+ * Collapsing the rpc's error into `false` would make the form refuse a save the database would
+ * have accepted, and grey the one control that could undo it. The read fails, the list still
+ * draws, the failure is said out loud, and the answer stays unknown.
+ */
+describe('when the pairing read fails', () => {
+  beforeEach(() => {
+    pairedRefereeResult = { data: null, error: { message: 'network gone' } };
+  });
+
+  it('still draws the list and says the check did not happen', async () => {
+    render(<CommitmentList ownerId="u1" />);
+
+    expect(await screen.findByRole('button', { name: 'New commitment' })).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Could not check whether a referee is paired/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/network gone/)).toBeInTheDocument();
+  });
+
+  it('leaves the sign-off control alone rather than greying it on a failed request', async () => {
+    render(<CommitmentList ownerId="u1" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'New commitment' }));
+
+    // Unknown, not no. The trigger refuses the save with its own sentence if there really is
+    // nobody to ask, and that is the server's call to make (AD-1).
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).toBeEnabled();
+    expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.noReferee)).not.toBeInTheDocument();
+  });
+
+  it('keeps an already-flagged commitment saveable', async () => {
+    listResult = {
+      data: [{ ...gym, kind: 'do', requires_photo: true, requires_referee_approval: true }],
+      error: null,
+    };
+
+    render(<CommitmentList ownerId="u1" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).toBeEnabled();
   });
 });

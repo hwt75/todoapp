@@ -2,7 +2,13 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { CommitmentForm } from './commitment-form';
-import { EMPTY_DRAFT, TIMED_COMMITMENT_COPY, type CommitmentDraft } from '@/lib/commitment';
+import {
+  EMPTY_DRAFT,
+  KEPT_PHOTO_COPY,
+  REFEREE_SIGN_OFF_COPY,
+  TIMED_COMMITMENT_COPY,
+  type CommitmentDraft,
+} from '@/lib/commitment';
 
 /**
  * Create or edit one commitment.
@@ -418,5 +424,239 @@ describe('keeping a photo against a commitment', () => {
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({ dueTime: null, requiresPhoto: true }),
     );
+  });
+});
+
+/**
+ * Story 8.1 — the control that asks the referee for his signature.
+ *
+ * The inverse of the 6.8 block above. That one asserts the *absence* of cost copy, because a
+ * photo that decides nothing must not borrow the timed warning's stakes. This flag does decide a
+ * day from Story 8.2 on, so the sentence has to be there — and has to say the thing a database
+ * cannot say: that his friend forgetting costs him nothing.
+ *
+ * Three disabled cases, mutually exclusive, each with its own sentence. The fourth refusal —
+ * a photo — is deliberately not one of them: switching sign-off on switches the photo on, so the
+ * author is never refused for a state he was not offered the chance to choose.
+ */
+describe('asking the referee to sign a commitment off', () => {
+  const signable: CommitmentDraft = {
+    ...EMPTY_DRAFT,
+    name: 'Thuốc',
+    requiresPhoto: true,
+  };
+
+  it('is disabled on a kind with nothing done to sign, and says so', async () => {
+    render(<CommitmentForm hasReferee onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.selectOptions(screen.getByLabelText('Kind'), 'abstain');
+
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).toBeDisabled();
+    expect(screen.getByText(REFEREE_SIGN_OFF_COPY.wrongKind)).toBeInTheDocument();
+    expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.autoChecked)).not.toBeInTheDocument();
+    expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.noReferee)).not.toBeInTheDocument();
+  });
+
+  it('is disabled when a machine already answers, and says so', async () => {
+    render(<CommitmentForm hasReferee onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.click(screen.getByLabelText('Account elsewhere'));
+
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).toBeDisabled();
+    expect(screen.getByText(REFEREE_SIGN_OFF_COPY.autoChecked)).toBeInTheDocument();
+    expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.wrongKind)).not.toBeInTheDocument();
+  });
+
+  it('is disabled with no referee paired, and says where to pair one', () => {
+    // A *known* no. `has_paired_referee()` has to have answered before the control is greyed.
+    render(<CommitmentForm hasReferee={false} onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).toBeDisabled();
+    expect(screen.getByText(REFEREE_SIGN_OFF_COPY.noReferee)).toBeInTheDocument();
+    expect(screen.getByText(REFEREE_SIGN_OFF_COPY.noReferee).textContent).toMatch(/Settings/);
+  });
+
+  it('is left alone while the pairing is still unknown, rather than greyed on a guess', () => {
+    // `undefined` is "not asked yet, or the asking failed" and is not a no. Greying on it would
+    // be the form deciding an outcome the server was never asked about (AD-1), and the trigger
+    // refuses the save with its own sentence if there really is nobody to ask.
+    render(<CommitmentForm onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).toBeEnabled();
+    expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.noReferee)).not.toBeInTheDocument();
+  });
+
+  it('is offered once a referee is paired, with no explanation in the way', () => {
+    render(<CommitmentForm hasReferee onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).toBeEnabled();
+    expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.noReferee)).not.toBeInTheDocument();
+    expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.wrongKind)).not.toBeInTheDocument();
+    expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.autoChecked)).not.toBeInTheDocument();
+  });
+
+  it('says nothing about a referee until the flag is on', async () => {
+    render(<CommitmentForm hasReferee onSave={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.warning)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label));
+
+    expect(screen.getByText(REFEREE_SIGN_OFF_COPY.warning)).toBeInTheDocument();
+  });
+
+  it('turns the photo requirement on with it', async () => {
+    const onSave = vi.fn();
+    render(<CommitmentForm hasReferee onSave={onSave} onCancel={vi.fn()} />);
+
+    await userEvent.type(screen.getByLabelText('Name'), 'Thuốc');
+    expect(screen.getByLabelText('Keep a photo against this')).not.toBeChecked();
+
+    await userEvent.click(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label));
+
+    // `commitment_sign_off_implies_photo` would refuse the save otherwise, for a state the
+    // author was never offered the chance to choose.
+    expect(screen.getByLabelText('Keep a photo against this')).toBeChecked();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ requiresRefereeApproval: true, requiresPhoto: true }),
+    );
+  });
+
+  it('stops the photo helper promising the photo decides nothing', async () => {
+    render(<CommitmentForm hasReferee onSave={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByText(KEPT_PHOTO_COPY.untimed)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label));
+
+    // The A2 defect one step earlier: with sign-off on, the photo is exactly what the referee
+    // reads, so a line saying nothing reads it is the app promising what the rules do not keep.
+    expect(screen.queryByText(/never decides a day/)).not.toBeInTheDocument();
+    expect(screen.getByText(KEPT_PHOTO_COPY.signedOff)).toBeInTheDocument();
+  });
+
+  it('shows the conflict rather than swallowing it when an Auto-check is added afterwards', async () => {
+    const onSave = vi.fn();
+    render(
+      <CommitmentForm
+        initial={{ ...signable, requiresRefereeApproval: true }}
+        hasReferee
+        onSave={onSave}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByLabelText('Account elsewhere'));
+    await userEvent.type(screen.getByLabelText('Account'), 'my-handle');
+
+    // The flag is not silently cleared. The save is refused with a sentence, and the author
+    // decides which of the two answers to this one question he wants.
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('drops the flag when the kind that could carry it is switched away', async () => {
+    const onSave = vi.fn();
+    render(
+      <CommitmentForm
+        initial={{ ...signable, requiresRefereeApproval: true }}
+        hasReferee
+        onSave={onSave}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await userEvent.selectOptions(screen.getByLabelText('Kind'), 'abstain');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    // The photo stays; only the signature goes, because only the signature has a constraint
+    // naming a control the author can no longer see.
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ requiresRefereeApproval: false, requiresPhoto: true }),
+    );
+  });
+});
+
+/**
+ * Story 8.1 — the author is never locked out of his own flagged commitment.
+ *
+ * The database is deliberately kinder than a naive mirror would be. `commitment_sign_off_needs_a
+ * _referee()` fires only on a write that turns the flag *on*, so a pairing revoked afterwards
+ * leaves flagged days to auto-approve rather than making the row unsaveable — the SPEC's own
+ * "no enforcement that a pairing stays", and Step 6 of the SQL test.
+ *
+ * A form that refused the save AND greyed the control would be stricter than the rule it mirrors,
+ * and would leave him unable to save and unable to untick. Both halves are asserted here because
+ * either alone is enough to trap him.
+ */
+describe('a flagged commitment whose referee is gone', () => {
+  const flagged: CommitmentDraft = {
+    ...EMPTY_DRAFT,
+    name: 'Thuốc',
+    requiresPhoto: true,
+    requiresRefereeApproval: true,
+  };
+
+  for (const [when, hasReferee] of [
+    ['the pairing was revoked', false],
+    ['the pairing could not be read', undefined],
+  ] as const) {
+    it(`can still be saved when ${when}`, async () => {
+      const onSave = vi.fn();
+      render(
+        <CommitmentForm
+          initial={flagged}
+          hasReferee={hasReferee}
+          onSave={onSave}
+          onCancel={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ requiresRefereeApproval: true }),
+      );
+    });
+
+    it(`can still be unticked when ${when}`, async () => {
+      const onSave = vi.fn();
+      render(
+        <CommitmentForm
+          initial={flagged}
+          hasReferee={hasReferee}
+          onSave={onSave}
+          onCancel={vi.fn()}
+        />,
+      );
+
+      // Never disabled while ticked. Whatever the refusal, the way out is the tick that caused it.
+      const control = screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label);
+      expect(control).toBeEnabled();
+
+      await userEvent.click(control);
+      expect(control).not.toBeChecked();
+
+      // And clearing it leaves a saveable draft — the photo stays, which nothing refuses.
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ requiresRefereeApproval: false, requiresPhoto: true }),
+      );
+    });
+  }
+
+  it('holds the photo on while sign-off is on, and hands it back when it comes off', async () => {
+    render(<CommitmentForm initial={flagged} hasReferee onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    // `commitment_sign_off_implies_photo` refuses the combination outright, so a photo control
+    // that could be unticked here would offer nothing but a refused save.
+    const photo = screen.getByLabelText('Keep a photo against this');
+    expect(photo).toBeChecked();
+    expect(photo).toBeDisabled();
+
+    await userEvent.click(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label));
+    expect(screen.getByLabelText('Keep a photo against this')).toBeEnabled();
   });
 });

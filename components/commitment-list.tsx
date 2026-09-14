@@ -30,6 +30,8 @@ interface CommitmentRow {
   late_window_minutes: number | null;
   /** Story 6.8: whether the author keeps a photo against this one. Never read by settlement. */
   requires_photo: boolean;
+  /** Story 8.1: whether this one asks the paired referee to sign its day off. */
+  requires_referee_approval: boolean;
 }
 
 type View =
@@ -40,7 +42,7 @@ type View =
   | { kind: 'failed'; reason: string };
 
 const SELECT =
-  'id,name,kind,cadence,carries_penalty,weekly_target,week_start_day,daily_minutes_target,auto_check_kind,auto_check_account_ref,auto_check_last_checked_at,due_time,late_window_minutes,requires_photo';
+  'id,name,kind,cadence,carries_penalty,weekly_target,week_start_day,daily_minutes_target,auto_check_kind,auto_check_account_ref,auto_check_last_checked_at,due_time,late_window_minutes,requires_photo,requires_referee_approval';
 
 /** The one query both the first load and every refresh use, so they cannot drift apart. */
 function fetchCommitments() {
@@ -69,6 +71,10 @@ function toDraft(row: CommitmentRow): CommitmentDraft {
     // Read back so an edit that never touches the checkbox cannot silently turn it off — the
     // column is `not null default false`, so a row written before Story 6.8 reads as false.
     requiresPhoto: row.requires_photo,
+    // Read back for the same reason, and with more at stake: this one appends to an
+    // append-only log on every change, so a flag lost on a round trip would be recorded as a
+    // decision the author never made.
+    requiresRefereeApproval: row.requires_referee_approval,
   };
 }
 
@@ -94,6 +100,20 @@ export function CommitmentList({ ownerId }: { ownerId: string }) {
   const [view, setView] = useState<View>({ kind: 'loading' });
   const [rows, setRows] = useState<CommitmentRow[]>([]);
   const [busy, setBusy] = useState(false);
+  // `save()` writes to `commitment` directly, so there is no server hop where the pairing could
+  // be read in passing. The form cannot read it either — `profile.referee_of` is on the
+  // referee's own row and `profile: read own` hides it — so this is asked for explicitly and
+  // passed down.
+  //
+  // Three states, not two, and the third is the point. `undefined` means nobody has asked yet or
+  // the asking failed, and it is not the same as `false`. Collapsing them makes the form stricter
+  // than the rule it mirrors: `commitment_sign_off_needs_a_referee()` refuses only a write that
+  // turns the flag on, so a commitment already flagged stays editable whatever the pairing says —
+  // and a form told `false` on a failed request would disable both the save and the control,
+  // locking the author out of his own row.
+  const [hasReferee, setHasReferee] = useState<boolean | undefined>(undefined);
+  /** The pairing read's own failure, said out loud rather than collapsed into "no referee". */
+  const [pairingFailed, setPairingFailed] = useState<string | null>(null);
 
   // Plain function, not a useCallback the effect depends on: the React Compiler rejects
   // an effect whose dependency sets state, and it is right — the effect should own its
@@ -123,7 +143,23 @@ export function CommitmentList({ ownerId }: { ownerId: string }) {
       setView({ kind: 'list' });
     }
 
+    // Its own request, and its failure is not the list's failure: a commitments screen that
+    // refuses to draw because one boolean could not be read is the larger loss. But the failure
+    // is not swallowed either — it leaves `hasReferee` undefined, which is what stops the form
+    // refusing a save it has no business refusing, and says so on screen.
+    async function pairing() {
+      const { data, error } = await createClient().rpc('has_paired_referee');
+      if (cancelled) return;
+
+      if (error) {
+        setPairingFailed(error.message);
+        return;
+      }
+      setHasReferee(data === true);
+    }
+
     void first();
+    void pairing();
     return () => {
       cancelled = true;
     };
@@ -190,6 +226,7 @@ export function CommitmentList({ ownerId }: { ownerId: string }) {
     return (
       <CommitmentForm
         busy={busy}
+        hasReferee={hasReferee}
         onSave={(draft) => void save(draft)}
         onCancel={() => setView({ kind: 'list' })}
       />
@@ -202,6 +239,7 @@ export function CommitmentList({ ownerId }: { ownerId: string }) {
         initial={toDraft(view.row)}
         busy={busy}
         autoCheckLastCheckedAt={view.row.auto_check_last_checked_at}
+        hasReferee={hasReferee}
         onSave={(draft) => void save(draft, view.row)}
         onCancel={() => setView({ kind: 'list' })}
         onDelete={() => void archive(view.row)}
@@ -217,6 +255,13 @@ export function CommitmentList({ ownerId }: { ownerId: string }) {
         <p>
           <strong>Failed.</strong> {view.reason}
         </p>
+      )}
+
+      {/* Said rather than swallowed. The list itself is fine — this only means the sign-off
+          control cannot be greyed on a known answer, so the database will be the one to refuse
+          a flag with nobody to ask. */}
+      {pairingFailed !== null && (
+        <p className="row-muted">Could not check whether a referee is paired. {pairingFailed}</p>
       )}
 
       {rows.length === 0 && <p className="row-muted">Nothing yet.</p>}

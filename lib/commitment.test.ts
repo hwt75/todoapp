@@ -3,11 +3,14 @@ import {
   COMMITMENT_CADENCES,
   COMMITMENT_KINDS,
   EMPTY_DRAFT,
+  KEPT_PHOTO_COPY,
   LATE_WINDOW_DEFAULT_MINUTES,
   MINUTES_IN_A_DAY,
+  REFEREE_SIGN_OFF_COPY,
   TIMED_COMMITMENT_COPY,
   type CommitmentDraft,
   autoChecksPossible,
+  canBeSignedOff,
   canBeTimed,
   draftProblems,
   minutesIntoDay,
@@ -278,6 +281,7 @@ describe('the row that reaches the database', () => {
         'name',
         'owner_id',
         'requires_photo',
+        'requires_referee_approval',
         'week_start_day',
         'weekly_target',
       ].sort(),
@@ -621,5 +625,146 @@ describe('keeping a photo against a commitment', () => {
   it('reaches the database as its own column, off by default', () => {
     expect(toRow(draft({ requiresPhoto: true }), 'o', 'k').requires_photo).toBe(true);
     expect(toRow(draft(), 'o', 'k').requires_photo).toBe(false);
+  });
+});
+
+/**
+ * Story 8.1 — a commitment that asks for the referee's signature.
+ *
+ * Four refusals, and the reason all four are mirrored here rather than left to the database: the
+ * form has to be able to refuse a bad draft without a round trip, exactly as the cadence rules
+ * are. Three are check constraints; the fourth cannot be one, because a check cannot query
+ * `profile`, so it arrives as an answer the caller has to supply.
+ *
+ * The clearing behaviour is the other half. `withKind()` clears the flag because
+ * `commitment_sign_off_needs_a_do` would refuse the save, naming a control the author can no
+ * longer see — the same failure mode a stale cadence target has. `withCadence()` does not,
+ * because no cadence can make the flag refusable.
+ */
+describe('asking for the referee’s signature', () => {
+  const signable = { requiresRefereeApproval: true, requiresPhoto: true };
+
+  it('is off on a blank commitment, like every other thing that decides money', () => {
+    expect(EMPTY_DRAFT.requiresRefereeApproval).toBe(false);
+  });
+
+  it('is accepted on a Do-it commitment that keeps a photo and has a referee', () => {
+    expect(draftProblems(draft(signable), { hasPairedReferee: true })).toEqual([]);
+  });
+
+  it('is refused on any kind but Do-it', () => {
+    // Narrower than `canBeTimed()`: that accepts `open_ended`, and this does not. A signature is
+    // a statement that a thing was done, and hours banked are not an act anyone witnessed.
+    expect(canBeSignedOff('do')).toBe(true);
+    for (const kind of ['abstain', 'open_ended'] as const) {
+      expect(canBeSignedOff(kind)).toBe(false);
+      expect(draftProblems(draft({ ...signable, kind }), { hasPairedReferee: true })).toContain(
+        REFEREE_SIGN_OFF_COPY.wrongKind,
+      );
+    }
+  });
+
+  it('is refused beside an Auto-check, because a machine already answers', () => {
+    expect(
+      draftProblems(
+        draft({ ...signable, autoCheckEnabled: true, autoCheckAccountRef: 'my-handle' }),
+        { hasPairedReferee: true },
+      ),
+    ).toContain(REFEREE_SIGN_OFF_COPY.autoChecked);
+  });
+
+  it('is refused with no photo to look at', () => {
+    // The form never lets the author cause this — switching sign-off on switches the photo on —
+    // so reaching it means a draft assembled somewhere the form is not.
+    expect(
+      draftProblems(draft({ requiresRefereeApproval: true, requiresPhoto: false }), {
+        hasPairedReferee: true,
+      }),
+    ).toContain('Your referee needs a photo to look at, so this one has to keep one.');
+  });
+
+  it('is refused with no referee paired, and only when the answer is actually known', () => {
+    expect(draftProblems(draft(signable), { hasPairedReferee: false })).toContain(
+      REFEREE_SIGN_OFF_COPY.noReferee,
+    );
+
+    // Unasked is not the same as no. A caller with no answer yet must not be shown a refusal it
+    // cannot act on; `commitment_sign_off_needs_a_referee()` refuses the save either way.
+    expect(draftProblems(draft(signable))).toEqual([]);
+    expect(draftProblems(draft(signable), {})).toEqual([]);
+  });
+
+  it('stops refusing once the flag is already saved, exactly as the trigger does', () => {
+    // `commitment_sign_off_needs_a_referee_on_update` fires only when the value moves to true, so
+    // a commitment already flagged is saveable however the pairing reads. A mirror that refused
+    // it anyway would leave an author whose friend unpaired unable to save AND unable to repair —
+    // stricter than the rule it claims to mirror, which is the worst thing a mirror can be.
+    expect(
+      draftProblems(draft(signable), { hasPairedReferee: false, signOffAlreadySaved: true }),
+    ).toEqual([]);
+
+    // A new commitment, or an edit that turns the flag on, is still refused.
+    expect(
+      draftProblems(draft(signable), { hasPairedReferee: false, signOffAlreadySaved: false }),
+    ).toContain(REFEREE_SIGN_OFF_COPY.noReferee);
+  });
+
+  it('is the one rule that is not a pure function of the draft', () => {
+    // Same draft, two answers. Every other rule in draftProblems() reads the draft and nothing
+    // else; this one reads a fact about the account that lives on the referee's own profile row.
+    const same = draft(signable);
+    expect(draftProblems(same, { hasPairedReferee: true })).toEqual([]);
+    expect(draftProblems(same, { hasPairedReferee: false })).toHaveLength(1);
+  });
+
+  it('is cleared when the kind becomes one with nothing to sign', () => {
+    const cleared = withKind(draft(signable), 'abstain');
+    expect(cleared.requiresRefereeApproval).toBe(false);
+    // The photo stays. A record the author chose to keep is not the product's to withdraw
+    // because he changed the kind, and no constraint refuses it.
+    expect(cleared.requiresPhoto).toBe(true);
+    expect(draftProblems(cleared, { hasPairedReferee: true })).toEqual([]);
+  });
+
+  it('survives a switch of cadence, which no constraint refuses it for', () => {
+    const kept = withCadence(draft({ ...signable, weeklyTarget: 3, weekStartDay: 1 }), 'daily');
+    expect(kept.requiresRefereeApproval).toBe(true);
+  });
+
+  it('reaches the database as its own column, off by default', () => {
+    expect(toRow(draft(signable), 'o', 'k').requires_referee_approval).toBe(true);
+    expect(toRow(draft(), 'o', 'k').requires_referee_approval).toBe(false);
+  });
+});
+
+describe('what the author is told before a signature is asked for', () => {
+  it('names what the referee can do, clause by clause', () => {
+    expect(REFEREE_SIGN_OFF_COPY.warning).toContain('refuse the day before midnight');
+    expect(REFEREE_SIGN_OFF_COPY.warning).toContain('fails it');
+  });
+
+  it('states the silence rule in the moment the flag is turned on', () => {
+    // The only place in the product the author learns that his friend forgetting costs him
+    // nothing. It is not help text and it is not a link, and this is what keeps it that way.
+    expect(REFEREE_SIGN_OFF_COPY.warning).toContain('If he says nothing at all');
+    expect(REFEREE_SIGN_OFF_COPY.warning).toContain('the day holds on the photo alone');
+    expect(REFEREE_SIGN_OFF_COPY.warning).toContain('his silence costs you nothing');
+  });
+
+  it('reads as information about his friend, never as a task for him', () => {
+    // A sentence that sends the author off to chase his friend is the opposite of what
+    // silence-approves exists for.
+    expect(REFEREE_SIGN_OFF_COPY.warning).toContain('reminding him is not your job');
+    expect(REFEREE_SIGN_OFF_COPY.warning).not.toMatch(/remind (him|your referee)\b(?! is not)/i);
+    expect(REFEREE_SIGN_OFF_COPY.warning).not.toMatch(/\bchase\b/i);
+    expect(REFEREE_SIGN_OFF_COPY.warning).not.toMatch(/\bwaiting for\b/i);
+  });
+
+  it('stops the photo helper saying the photo decides nothing', () => {
+    // The sentence Story 8.1 made false. `KEPT_PHOTO_COPY.untimed` still says it, and still
+    // should — with sign-off off, nothing does read the photo.
+    expect(KEPT_PHOTO_COPY.untimed).toContain('it never decides a day');
+    expect(KEPT_PHOTO_COPY.signedOff).not.toContain('never decides a day');
+    expect(KEPT_PHOTO_COPY.signedOff).toContain('your referee');
   });
 });
