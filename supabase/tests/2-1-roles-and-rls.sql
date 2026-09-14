@@ -512,9 +512,12 @@ begin
     'public.declaration_cancels_due_time_reminder()',
     -- Story 6.7. `object_to_day()` and `referee_day_lookup()` are deliberately NOT here: they are
     -- the referee's own two doors, granted to `authenticated` exactly as `rule_appeal()` and
-    -- `mark_penalty_collected()` are, with the function itself as the privilege boundary. These
-    -- two are the internals behind them -- the window rule, and a notification body a client that
-    -- could call it could use to compose text about somebody else's day.
+    -- `mark_penalty_collected()` are, with the function itself as the privilege boundary. Story
+    -- 8.2 adds a third, `sign_off_day()`, on the same terms and for the same reason — it is also
+    -- not here, and `8-2-the-referee-s-decision-and-what-a-refusal-costs.sql` is what asserts its
+    -- grant in both directions. These two are the internals behind them -- the window rule, and a
+    -- notification body a client that could call it could use to compose text about somebody
+    -- else's day.
     'public.objection_deadline(timestamptz)',
     'public.objection_body(date, bigint)',
     -- Reads referee_invite and every profile's is_live_doer to answer whose money the caller may
@@ -535,7 +538,16 @@ begin
     -- an RPC — one that writes the money-deciding log directly, one that reads profile rows the
     -- caller cannot otherwise see.
     'public.commitment_log_requires_referee_approval_change()',
-    'public.commitment_sign_off_needs_a_referee()'
+    'public.commitment_sign_off_needs_a_referee()',
+    -- Story 8.2. The one combiner of commitments_owing()'s `refused` and `answer` columns, and
+    -- the expression settle_day() judges every commitment-day through. Pure and argument-only, so
+    -- reaching it leaks nothing — it is here because it belongs to settlement's vocabulary and
+    -- nothing client-side has a reason to ask it, the same argument penalty_amount_dong() is
+    -- listed on. Deliberately NOT here: sign_off_day(), which is granted to `authenticated` on
+    -- purpose — the referee's own door, exactly as object_to_day() and rule_appeal() are, with
+    -- the function itself as the privilege boundary. `8-2-the-referee-s-decision-and-what-a-
+    -- refusal-costs.sql` asserts that grant in both directions; this file does not duplicate it.
+    'public.effective_answer(boolean, public.declaration_answer)'
   ]
   loop
     foreach r in array array['anon', 'authenticated'] loop
@@ -652,7 +664,7 @@ begin
   end loop;
 
   raise notice using message =
-    'Step 6 ok: thirty-eight deciding functions and the outbox are all out of reach of anon '
+    'Step 6 ok: thirty-nine deciding functions and the outbox are all out of reach of anon '
     'and authenticated, and the eight Story 6.6 touches carry an explicit ACL that still lets '
     'postgres and service_role in, with search_path pinned to empty.';
   raise notice using message =
