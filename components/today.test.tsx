@@ -61,8 +61,43 @@ function holdTheUploadOpen() {
 let signedByPath: Record<string, unknown> = {};
 const signCalls: Array<{ paths: string[]; ttl: number }> = [];
 
+// Story 8.3: what `requires_referee_approval_as_of()` answers, per commitment id. Absent means
+// the reader answered NULL — a commitment with no log history — which the client must treat as
+// "unknown" and never as "not signed off". `rpcCalls` records every call so a read that asks
+// about the wrong day, or does not ask at all, cannot pass silently: the whole defect this story
+// closes is a client reading the *live* column instead of the flag as of the day.
+let signOffAsOf: Record<string, unknown> = {};
+let signOffError: unknown = null;
+const rpcCalls: Array<{ fn: string; args: Record<string, unknown> }> = [];
+/** Commitment ids whose as-of read has actually come back — see the mock's own note on why this
+ *  is the thing to wait on and `rpcCalls` is not. */
+const rpcSettled: string[] = [];
+let rpcGate: Promise<void> | null = null;
+let releaseRpc: (() => void) | null = null;
+
+function holdTheReadOpen() {
+  rpcGate = new Promise((resolve) => {
+    releaseRpc = resolve;
+  });
+}
+
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      rpcCalls.push({ fn, args });
+      // Held open so a test can stand inside the window where a new read is in flight and the
+      // previous answer is all the screen has — which is where the day-rollover defect lived.
+      if (rpcGate) await rpcGate;
+      // `rpcSettled` and not `rpcCalls` is what a test waits on. `rpcCalls` is pushed
+      // synchronously on entry, so awaiting it proves only that the call was *made* — an
+      // absence assertion that runs then is asserting about a render that could not have
+      // happened yet, and a component wrongly falling back to `hint(false)` would pass it.
+      await Promise.resolve();
+      rpcSettled.push(args.p_commitment_id as string);
+      if (signOffError) return { data: null, error: signOffError };
+      const id = args.p_commitment_id as string;
+      return { data: signOffAsOf[id] ?? null, error: null };
+    },
     storage: {
       from: (bucket: string) => ({
         upload: async (path: string) => {
@@ -164,6 +199,14 @@ beforeEach(() => {
   releaseUpload = null;
   signedByPath = {};
   signCalls.length = 0;
+  // Story 8.3: every commitment reads `false` as of the day unless a test says otherwise — the
+  // ordinary case, a record the author keeps and nobody else reads.
+  signOffAsOf = { c1: false, c2: false, c3: false };
+  signOffError = null;
+  rpcCalls.length = 0;
+  rpcSettled.length = 0;
+  rpcGate = null;
+  releaseRpc = null;
   for (const key of Object.keys(rows)) delete rows[key];
   // Story 6.9: nothing filed, which is what most of this suite is about.
   rows.evidence = { data: [], error: null };
@@ -1057,6 +1100,12 @@ describe('keeping a photo against a commitment', () => {
     // for a real account.
     const read = fromCalls.find((c) => c.table === 'commitment');
     expect(read?.select).toContain('requires_photo');
+    // Story 8.3, and deliberately the opposite assertion: `requires_referee_approval` must NOT
+    // be selected here. Today needs to know whether the referee can open the photograph, but the
+    // answer it needs is the flag as of the day, and the live column is the thing that disagrees
+    // with it. Carrying it on the row would put the wrong answer within reach of the one surface
+    // that must not use it.
+    expect(read?.select).not.toContain('requires_referee_approval');
   });
 
   it('offers nothing for a commitment that is not marked', async () => {
@@ -1313,6 +1362,198 @@ describe('keeping a photo against a commitment', () => {
     // The flag does not reopen a timed commitment's own window. Epic 6 owns that row entirely.
     expect(screen.queryByLabelText('Proof')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Proof — Pill')).not.toBeInTheDocument();
+  });
+
+  /*
+   * Story 8.3 — who the author is told can open this photograph.
+   *
+   * The sentence under this control was false until 8.3: it promised the referee could open a
+   * commitment-day photograph while both referee policies excluded exactly that by
+   * `commitment_id is null`. 8.3 widened them for a commitment flagged as of the day and for no
+   * other, so the sentence is now true for a flagged row and still false for an unflagged one.
+   *
+   * Both directions, and the absence is the half that matters. A test that only asserts the
+   * referee is named when sign-off is on passes just as green with the branch inverted — and
+   * inverted is the dangerous direction, because then the app promises privacy the policy has
+   * stopped keeping, which is Epic 6 retrospective A2 itself.
+   */
+  it('says the referee can open a photo kept against a signed-off commitment', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+    signOffAsOf = { c3: true };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByLabelText('Proof — Sketchbook');
+
+    // By the promise, not the wording — `lib/evidence.test.ts`'s own A2 idiom.
+    expect(await screen.findByText(/only you and your referee can open it/i)).toBeInTheDocument();
+  });
+
+  it('says nothing about the referee for an unflagged one, because he cannot open it', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+    signOffAsOf = { c3: false };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByLabelText('Proof — Sketchbook');
+
+    expect(await screen.findByText(/only you can open it/i)).toBeInTheDocument();
+    // `queryAllByText` + length, not `queryByText`: the single-match form *throws* on two
+    // matches rather than failing the assertion, and a screen with the sentence rendered twice
+    // is a failure that should read as one.
+    expect(screen.queryAllByText(/referee/i)).toHaveLength(0);
+  });
+
+  /*
+   * The two matrix rows a live-column read passes and an as-of read does not — and therefore the
+   * two that pin the fix rather than describe it.
+   *
+   * `requires_referee_approval_as_of()` answers the value in force at `day_begins_at(day)`, so a
+   * flag the author moves today does not govern today. The live column says the opposite for the
+   * rest of that day. Both of these fixtures set the live column **against** the as-of answer, so
+   * a client that went back to reading the row would fail them both.
+   */
+  it('still says the referee opens it when sign-off was switched off this morning', async () => {
+    atLocalTime('11:30');
+    // The live column says false. The day says true, because it was true when the day began —
+    // and the policy agrees, so the referee really can still open today's photograph. Saying
+    // "Only you can open it" here is Epic 6 retrospective A2 exactly.
+    rows.commitment = {
+      data: [{ ...sketchbook, requires_referee_approval: false }],
+      error: null,
+    };
+    signOffAsOf = { c3: true };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByLabelText('Proof — Sketchbook');
+
+    expect(await screen.findByText(/only you and your referee can open it/i)).toBeInTheDocument();
+  });
+
+  it('does not say it when sign-off was switched on this morning', async () => {
+    atLocalTime('11:30');
+    // The mirror image: the live column says true, but the flag reaches forward only, so today's
+    // photograph does not reach him until tomorrow. Naming him here would promise a reach the
+    // policy refuses.
+    rows.commitment = {
+      data: [{ ...sketchbook, requires_referee_approval: true }],
+      error: null,
+    };
+    signOffAsOf = { c3: false };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByLabelText('Proof — Sketchbook');
+
+    expect(await screen.findByText(/only you can open it/i)).toBeInTheDocument();
+    expect(screen.queryAllByText(/referee/i)).toHaveLength(0);
+  });
+
+  it('asks about the day the photo belongs to, not about the commitment alone', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByLabelText('Proof — Sketchbook');
+
+    // The day is the argument that makes this an as-of read at all. A call that passed a wrong
+    // day, or no day, would answer about some other day's flag and every assertion above would
+    // still pass — the fixture answers per commitment.
+    await waitFor(() => {
+      expect(
+        rpcCalls.some(
+          (call) =>
+            call.fn === 'requires_referee_approval_as_of' &&
+            call.args.p_commitment_id === 'c3' &&
+            call.args.p_day === todayLocal(),
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('says nothing at all when the read does not come back', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+    signOffError = { message: 'network' };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByLabelText('Proof — Sketchbook');
+
+    // Waits for the read to have **settled**, not merely to have been issued. Waiting on
+    // `rpcCalls` would let both absence assertions run before any state update could have
+    // happened, and a component that wrongly fell back to `hint(false)` would pass — the two
+    // assertions would be describing a render that had not occurred yet.
+    await waitFor(() => expect(rpcSettled).toContain('c3'));
+    // A second flush, so the state update the settled read schedules has been applied and the
+    // component really has had its chance to render the wrong sentence.
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Not "Only you can open it". An unanswered read is a third state, and defaulting it to the
+    // privacy claim is the one direction that is never safe: the author would be told a photo is
+    // his alone on the strength of a request that failed.
+    expect(screen.queryAllByText(/only you can open it/i)).toHaveLength(0);
+    expect(screen.queryAllByText(/referee/i)).toHaveLength(0);
+  });
+
+  it('drops yesterday’s answer the moment the day turns over', async () => {
+    // The answer is keyed by commitment id, and the same ids survive midnight. Without the day
+    // stamp on the stored read, a screen left open across the rollover goes on telling the author
+    // who can open *today’s* photograph using the flag as it stood *yesterday* — for as long
+    // as the new read takes, which on a bad connection is not a moment.
+    atLocalTime('23:59');
+    vi.setSystemTime(new Date(Date.UTC(2026, 7, 30, 16, 59, 30)));
+    rows.commitment = { data: [sketchbook], error: null };
+    signOffAsOf = { c3: true };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    expect(await screen.findByText(/only you and your referee can open it/i)).toBeInTheDocument();
+
+    // Past midnight, with the next read held open: the screen now has nothing but the stale
+    // answer, and must say nothing rather than repeat it.
+    holdTheReadOpen();
+    await act(async () => {
+      vi.setSystemTime(new Date(Date.UTC(2026, 7, 30, 17, 0, 30)));
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+
+    expect(screen.queryAllByText(/referee/i)).toHaveLength(0);
+    expect(screen.queryAllByText(/only you can open it/i)).toHaveLength(0);
+
+    releaseRpc?.();
+  });
+
+  it('leaves the claim control saying it, flagged or not', async () => {
+    // The other render site, and the one whose sentence was already true. A claim's proof is
+    // parented to the declaration, so `commitment_id is null` has put it inside the referee's
+    // reach since Story 4.6 whatever the sign-off flag says — `pill` here is unflagged.
+    atLocalTime('20:40');
+    rows.commitment = { data: [{ ...pill, requires_photo: true }], error: null };
+    rows.timed_claim_today = {
+      data: [{ commitment_id: 'c2', declaration_id: 'decl-9', proven: false }],
+      error: null,
+    };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    await screen.findByLabelText('Proof');
+
+    expect(screen.getByText(/only you and your referee can open it/i)).toBeInTheDocument();
   });
 });
 

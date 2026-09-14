@@ -12,7 +12,10 @@ import {
   fileCapturedOn,
   isEvidenceDated,
   readKeptPhotos,
+  readRefereeReach,
+  NO_REFEREE_REACH,
   type KeptPhotoRead,
+  type RefereeReach,
 } from '@/lib/evidence';
 import { KeptPhotoNote, KeptPhotos, useKeptPhotos } from '@/components/kept-photos';
 import { stateToday } from '@/lib/commitment-state';
@@ -201,6 +204,12 @@ export function Today({
    *  answer. Read back, never assembled from `evidenceState` — an upload's own report says a row
    *  was written, not what exists. */
   const [filed, setFiled] = useState<KeptPhotoRead | null>(null);
+  /** Story 8.3: per flagged row, whether the referee can open the photograph kept against it
+   *  **on the day this screen is drawn against** — read through
+   *  `requires_referee_approval_as_of()`, never from the live column. A row absent from the map
+   *  is one this read could not answer for, which is a third state and not `false`; see
+   *  `readRefereeReach()` for why that distinction is the safe direction. */
+  const [reachRead, setReachRead] = useState<{ day: string; answer: RefereeReach } | null>(null);
   /** Bumped by a successful upload, so a photo just attached appears without a manual reload.
    *  Deliberately not a dependency of the main read below: re-running that one would clear
    *  `evidenceState`, taking "Proof saved." off the screen the moment it was earned. */
@@ -402,6 +411,45 @@ export function Today({
       cancelled = true;
     };
   }, [keptKey, localDay, filedReload]);
+
+  /**
+   * Story 8.3 — who can open each of those photographs, read as of the day they belong to.
+   *
+   * Its own effect rather than a second job inside the one above, and not because it is tidier:
+   * that one re-runs on `filedReload`, which is bumped every time the author attaches a photo,
+   * and the flag cannot change because a file was uploaded. The two answers have different
+   * lifetimes, so they get different effects.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    const ids = keptKey === '' ? [] : keptKey.split(',');
+
+    if (ids.length === 0) return;
+
+    async function read() {
+      const answer = await readRefereeReach(ids, localDay, { cancelled: () => cancelled });
+      if (cancelled) return;
+      setReachRead({ day: localDay, answer });
+    }
+
+    void read();
+    return () => {
+      cancelled = true;
+    };
+  }, [keptKey, localDay]);
+
+  /**
+   * The reach answer, but only if it is about the day on screen.
+   *
+   * **Stamped with its day and discarded by mismatch, rather than cleared when a new read goes
+   * out.** The answer is keyed by commitment id, and the same ids survive midnight — so a
+   * screen left open across the rollover would go on telling the author who can open *today's*
+   * photograph using the flag as it stood *yesterday*, for as long as the new read takes. A
+   * clear-then-read closes the same window at the cost of a render and of getting the ordering
+   * right every time it is edited; keying it means a stale answer cannot be read at all.
+   */
+  const refereeReach =
+    reachRead !== null && reachRead.day === localDay ? reachRead.answer : NO_REFEREE_REACH;
 
   // Story 6.9: the read, plus whatever this browser has since failed to load out of it.
   const keptPhotos = useKeptPhotos(filed);
@@ -696,12 +744,14 @@ export function Today({
                           (() => {
                             const proof: EvidenceState = evidenceState[row.id] ?? { kind: 'idle' };
                             const inputId = `proof-${row.id}`;
+                            const hintId = `proof-hint-${row.id}`;
 
                             return (
                               <>
                                 <label htmlFor={inputId}>{EVIDENCE_COPY.label}</label>
                                 <input
                                   id={inputId}
+                                  aria-describedby={hintId}
                                   type="file"
                                   accept="image/png,image/jpeg,image/heic"
                                   // `capture` opens the camera rather than the library where
@@ -719,7 +769,18 @@ export function Today({
                                     }
                                   }}
                                 />
-                                <p className="row-muted">{EVIDENCE_COPY.hint}</p>
+                                {/* `true`, unconditionally and not from any flag: a claim's
+                                    proof is parented to the declaration, so `commitment_id is
+                                    null` has put it inside the referee's reach since Story 4.6
+                                    whatever sign-off says. This sentence was already true here,
+                                    Story 8.3 did not change it, and it needs no as-of read
+                                    because no flag can make it false. The `aria-describedby`
+                                    tie is new all the same — its twin below grew one and two
+                                    renderings of one sentence should not differ in whether the
+                                    control they sit under is described by it. */}
+                                <p className="row-muted" id={hintId}>
+                                  {EVIDENCE_COPY.hint(true)}
+                                </p>
 
                                 {proof.kind === 'uploading' && (
                                   <p role="status">{EVIDENCE_COPY.uploading}</p>
@@ -781,6 +842,7 @@ export function Today({
                 {kept.map((row) => {
                   const proof: EvidenceState = evidenceState[row.id] ?? { kind: 'idle' };
                   const inputId = `keep-photo-${row.id}`;
+                  const hintId = `keep-photo-hint-${row.id}`;
 
                   return (
                     <div key={row.id}>
@@ -790,6 +852,7 @@ export function Today({
                       <label htmlFor={inputId}>{`${EVIDENCE_COPY.label} — ${row.name}`}</label>
                       <input
                         id={inputId}
+                        aria-describedby={hintId}
                         type="file"
                         accept="image/png,image/jpeg,image/heic"
                         capture="environment"
@@ -806,7 +869,42 @@ export function Today({
                             void attachProof(row.id, { kind: 'commitment', id: row.id }, file);
                         }}
                       />
-                      <p className="row-muted">{EVIDENCE_COPY.hint}</p>
+                      {/* Story 8.3 — the one site whose sentence was false. This control's
+                          photograph is commitment-parented (Story 6.8), and both referee
+                          policies excluded exactly that by `commitment_id is null` until this
+                          story widened them for a commitment flagged **as of the day**. So the
+                          referee sentence belongs here only when sign-off was on for this day,
+                          and the branch is what makes the promise follow the policy instead of
+                          preceding it.
+
+                          `refereeReach`, never `row.requires_referee_approval`. The policy reads
+                          `requires_referee_approval_as_of(commitment, day)`; the live column is
+                          a different answer for the rest of any day the author moves the flag,
+                          and switching it *off* at 10:00 would have this line say "Only you can
+                          open it" about a photograph his referee can still open — Epic 6
+                          retrospective A2, inside the story that exists to answer A2. hwt75
+                          granted the reader to `authenticated` on 2026-09-14 so this read could
+                          be made.
+
+                          No sentence at all while the answer is unknown — the read in flight, or
+                          failed. Not `false`: `false` is the sentence that claims privacy, and a
+                          privacy claimed on a read that did not come back is the one direction
+                          that is never safe.
+
+                          **The element stays, empty, and is what the input points at.** Making
+                          the sentence conditional took its accessibility footing away with it:
+                          a screen-reader user who reaches this control before the read returns
+                          would be told nothing, and — with the paragraph rendered later as a
+                          bare sibling — never told afterwards either. An always-present
+                          `aria-describedby` target fixes the first, and `role="status"` the
+                          second: the sentence is announced when it arrives, in the same idiom
+                          the two upload outcomes below already use. An empty target describes
+                          nothing, which is the honest reading of an answer nobody has yet. */}
+                      <p className="row-muted" id={hintId} role="status">
+                        {refereeReach.reach.has(row.id)
+                          ? EVIDENCE_COPY.hint(refereeReach.reach.get(row.id) === true)
+                          : ''}
+                      </p>
 
                       {proof.kind === 'uploading' && <p role="status">{EVIDENCE_COPY.uploading}</p>}
                       {proof.kind === 'saved' && <p role="status">{EVIDENCE_COPY.saved}</p>}

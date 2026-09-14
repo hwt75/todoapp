@@ -53,6 +53,23 @@ interface Props {
    * control, and even then only while it is unticked.
    */
   hasReferee?: boolean;
+  /**
+   * Whether this commitment asked for the referee's signature **as of today** —
+   * `requires_referee_approval_as_of()`'s answer, read by `lib/evidence.ts`'s
+   * `readRefereeReach()` and passed in the way `hasReferee` above is, because the form cannot
+   * ask for itself.
+   *
+   * Three states, and the third for `hasReferee`'s own reason: `undefined` is "not asked, not
+   * answered, or a commitment that does not exist yet". A commitment being created has no id and
+   * therefore no history, so there is nothing to read and the draft flag alone governs.
+   *
+   * Story 8.3. This form was the fourth reader of a flag every other reader takes as of the day,
+   * and it read the live column: untick sign-off at 10:00 on a commitment that was flagged when
+   * the day began, and the helper below said *"Nothing reads it: it never decides a day"* while
+   * the widened referee policies still let the referee open today's photograph and
+   * `sign_off_day()` still accepted a refusal that costs a penalty.
+   */
+  signedOffToday?: boolean;
   onSave: (draft: CommitmentDraft) => void;
   onCancel: () => void;
   onDelete?: () => void;
@@ -69,6 +86,7 @@ export function CommitmentForm({
   busy = false,
   autoCheckLastCheckedAt,
   hasReferee,
+  signedOffToday,
   onSave,
   onCancel,
   onDelete,
@@ -315,9 +333,22 @@ export function CommitmentForm({
         {/* Read from `KEPT_PHOTO_COPY` rather than written inline, because one of these sentences
             became false. The untimed one promised the photo decides nothing; with sign-off on, the
             photo is what the referee reads. Story 8.1 gives that case its own sentence and moves
-            all three somewhere a test can hold them — `EVIDENCE_COPY`'s own A2 precedent. */}
+            all three somewhere a test can hold them — `EVIDENCE_COPY`'s own A2 precedent.
+
+            **`|| signedOffToday`, and Story 8.3 is why.** The draft flag alone is the *live*
+            reading of a flag every other reader takes as of the day. Untick sign-off at 10:00 on
+            a commitment that was flagged when the day began and the draft says false while the
+            policies, `sign_off_day()` and Today all still say true — so this line would promise
+            *"it never decides a day"* about a photograph the referee can open and refuse the day
+            on, for a penalty. Three sentences still, and no fourth: the condition moved, the copy
+            did not.
+
+            The cost, chosen by hwt75 on 2026-09-14: on the switch-*on* day the reverse holds and
+            this says `signedOff` a day before the referee can really open anything. That errs
+            toward the author believing the photo is *less* private than it is, which is the
+            benign direction — the same asymmetry that decides the unknown case on Today. */}
         <p className="row-muted">
-          {draft.requiresRefereeApproval
+          {draft.requiresRefereeApproval || signedOffToday === true
             ? KEPT_PHOTO_COPY.signedOff
             : draft.dueTime === null
               ? KEPT_PHOTO_COPY.untimed

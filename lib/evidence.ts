@@ -385,6 +385,150 @@ export function photosOn(read: KeptPhotoRead, commitmentId: string, day: string)
 }
 
 /**
+ * The one shared empty answer, and the only `Map` in this module that outlives a single call.
+ *
+ * `ReadonlyMap` is a compile-time claim and nothing more — it is erased at run time, so one
+ * `set()` on this instance, from anywhere, would teach every surface in the app the same wrong
+ * answer with the type never saying a word. The three mutators are replaced so the claim is true
+ * where it matters. Every non-empty answer is a fresh map built inside `readRefereeReach`, so
+ * this is the only instance that needs it.
+ */
+const EMPTY_REACH = new Map<string, boolean>();
+
+for (const mutator of ['set', 'delete', 'clear'] as const) {
+  Object.defineProperty(EMPTY_REACH, mutator, {
+    value: () => {
+      throw new Error('NO_REFEREE_REACH is shared and immutable. Build your own Map.');
+    },
+  });
+}
+
+/**
+ * Nothing known yet about who can open anything.
+ *
+ * A shared instance rather than a fresh object per call, so an effect comparing the answer it
+ * already holds against this one can short-circuit rather than re-render — which is what
+ * `components/today.tsx` does when the set of rows empties.
+ */
+export const NO_REFEREE_REACH: RefereeReach = Object.freeze({
+  reach: EMPTY_REACH as ReadonlyMap<string, boolean>,
+  failed: null,
+});
+
+/**
+ * What `readRefereeReach` answers.
+ *
+ * Two fields rather than one map, for the reason `KeptPhotoRead.failed` above gives: a read that
+ * came back empty and a read that never came back are different facts, and only the caller can
+ * decide what to do about the second. It matters more than usual here — if the `authenticated`
+ * EXECUTE grant on `requires_referee_approval_as_of()` is ever lost, every answer goes missing at
+ * once and the only symptom on screen is a helper sentence that quietly stopped appearing.
+ * `supabase/tests/8-3-the-photograph-reaches-the-referee.sql` step 0 catches that server-side;
+ * this is what lets a client say it rather than go silent.
+ */
+export interface RefereeReach {
+  /**
+   * Per commitment id, whether the referee can open the photograph kept against it on the day
+   * asked about. **A commitment absent from this map is a third answer, not a `false`.** It is
+   * one this read could not answer for: the call failed, or the reader returned NULL for a
+   * commitment with no log history at all. A caller must not collapse that into `false` —
+   * `false` is the sentence claiming privacy, and claiming a privacy on an answer that never
+   * arrived is the one direction that is never safe.
+   */
+  reach: ReadonlyMap<string, boolean>;
+  /** The read itself failed, and this is what it said. Null on success, including the honest
+   *  success of nothing having been asked. */
+  failed: string | null;
+}
+
+/** How many as-of reads go out at once. See `readRefereeReach`'s own note on why there is a
+ *  bound at all. */
+const REACH_PER_BATCH = 10;
+
+/**
+ * Whether the referee can open the photograph kept against each of these commitments **on this
+ * day**.
+ *
+ * Story 8.3. The author's photo control tells him who can open what he is about to take, and
+ * after this story that answer is the flag as of the day the photograph belongs to — the same
+ * reading `photograph_reaches_the_referee()` makes inside both widened referee policies.
+ *
+ * **Not the live `commitment.requires_referee_approval` column, and the distinction is the whole
+ * point.** `requires_referee_approval_as_of()` returns the value in force at `day_begins_at(day)`
+ * (`20260911090000:199-209`), because the flag decides money and a flag moved at 10:00 must not
+ * rewrite what the morning meant. The live column and that value differ for the rest of any day
+ * the author moves the flag — and in the direction that matters: switched off at 10:00, the
+ * referee still reaches today's photograph while the column says he does not. Saying "Only you
+ * can open it" then is Epic 6 retrospective A2, the defect this whole story exists to answer.
+ * hwt75 granted `authenticated` EXECUTE on that reader on 2026-09-14 so this read could exist.
+ *
+ * **One call per commitment, in bounded batches.** There is no `.in()` for a function: PostgREST
+ * exposes a computed column only for a function taking the table's own row type, and this one
+ * takes a uuid and a date. The list is short — Today's untimed, photo-keeping rows, or the single
+ * commitment a setup form is editing — but "short" is an assumption about the author's data, not
+ * a guarantee, so the calls go out `REACH_PER_BATCH` at a time rather than as one unbounded
+ * fan-out. If the list ever stops being short, the fix is a `security_invoker` view, not a second
+ * reading of the flag.
+ *
+ * **No call is allowed to reject.** `Promise.all` fails a whole batch on the first rejection, and
+ * a fetch can throw outright — a dropped connection, an aborted navigation — rather than
+ * resolving with an `error` field. Each call catches its own, so one commitment that could not be
+ * answered for leaves the others answered rather than turning the whole screen silent.
+ */
+export async function readRefereeReach(
+  commitmentIds: readonly string[],
+  day: string,
+  options: KeptPhotoOptions = {},
+): Promise<RefereeReach> {
+  const cancelled = options.cancelled ?? (() => false);
+  const ids = [...new Set(commitmentIds)];
+
+  if (ids.length === 0) return NO_REFEREE_REACH;
+
+  const supabase = createClient();
+  const reach = new Map<string, boolean>();
+  let failed: string | null = null;
+
+  for (const batch of chunk(ids, REACH_PER_BATCH)) {
+    if (cancelled()) return NO_REFEREE_REACH;
+
+    const answers = await Promise.all(
+      batch.map(async (id) => {
+        try {
+          const { data, error } = await supabase.rpc('requires_referee_approval_as_of', {
+            p_commitment_id: id,
+            p_day: day,
+          });
+          return { id, value: error ? null : data, failed: error ? error.message : null };
+        } catch (thrown) {
+          // A rejected fetch, which never reaches the `error` field at all. Caught per call so
+          // one of them cannot take the rest of the batch down with it.
+          return { id, value: null, failed: thrown instanceof Error ? thrown.message : 'unknown' };
+        }
+      }),
+    );
+
+    for (const answer of answers) {
+      // `=== true` / `=== false` rather than a coercion, and anything else left out of the map
+      // entirely. The reader answers NULL for a commitment with no log history, which the Story
+      // 8.1 backfill makes unreachable but which a truncated or errored response reproduces — and
+      // every server-side reader of this flag compares with `is true` for exactly that reason. A
+      // NULL coerced to `false` here would be the copy failing open into the privacy claim.
+      if (answer.value === true) reach.set(answer.id, true);
+      else if (answer.value === false) reach.set(answer.id, false);
+      // The first failure is the one reported. They are overwhelmingly one cause — a lost grant,
+      // a dropped connection — and a caller shown the fifth of five identical messages has been
+      // told nothing the first did not say.
+      failed ??= answer.failed;
+    }
+  }
+
+  if (cancelled()) return NO_REFEREE_REACH;
+
+  return { reach, failed };
+}
+
+/**
  * What the claim surface says about a photo.
  *
  * Kept here for the reason `lib/appeal.ts`'s `APPEAL_COPY` gives, and kept separate from it: an
@@ -392,19 +536,41 @@ export function photosOn(read: KeptPhotoRead, commitmentId: string, day: string)
  */
 export const EVIDENCE_COPY = {
   label: 'Proof',
-  /** Epic 6 retrospective, A2 (HIGH) — this used to read "It is private — only you can open
-   *  it", and it was false. `evidence: referee reads his own doer's`
-   *  (`20260907160000:141`) grants the referee every evidence row of his doer's whose
-   *  `commitment_id is null`, which is exactly this one: a claim's proof is parented to the
-   *  declaration. The retrospective's disposition was that one of the two had to change, the
-   *  copy or the policy. The policy is what makes him able to rule at all, so the copy is
-   *  what moved.
+  /**
+   * Who can open this photo — a function of whether the referee can, because there is no
+   * longer one answer.
    *
-   *  It names him rather than saying "not private", because the difference the author cares
-   *  about is *who* — a referee he chose is not the same as an audience. Story 6.8's
-   *  commitment-day photos stay out of the referee's reach entirely and are not what this
-   *  sentence is about; it appears only under a claim's `Proof` control. */
-  hint: 'A photo taken today. Only you and your referee can open it.',
+   * Epic 6 retrospective, A2 (HIGH) — this used to read "It is private — only you can open
+   * it", and it was false. `evidence: referee reads his own doer's`
+   * (`20260907160000:141`) grants the referee every evidence row of his doer's whose
+   * `commitment_id is null`, which is exactly a claim's proof: it is parented to the
+   * declaration. The retrospective's disposition was that one of the two had to change, the
+   * copy or the policy. The policy is what makes him able to rule at all, so the copy is
+   * what moved.
+   *
+   * It names him rather than saying "not private", because the difference the author cares
+   * about is *who* — a referee he chose is not the same as an audience.
+   *
+   * **Story 8.3 made it a branch, and found the old comment's last sentence false.** That
+   * sentence claimed this "appears only under a claim's `Proof` control", which
+   * `components/today.tsx` disproved: it was rendered at *two* sites, the claim control and
+   * Story 6.8's all-day control, and under the second one the referee could not open the
+   * photograph at all. A2 inverted — last time the app promised a privacy the policy did not
+   * keep, that time it promised a reach the policy did not grant, which fails toward privacy
+   * and is why nobody noticed. Story 8.3 widened both referee policies for a commitment-day
+   * photograph on a commitment flagged **as of that day** and for no other, so after it the
+   * sentence is true for a flagged commitment-day and still false for an unflagged one. One
+   * corrected string could not carry that; a branch can.
+   *
+   * The claim control passes `true` unconditionally and is unchanged by any of this: a
+   * declaration-parented proof has reached the referee since Story 4.6 whatever the sign-off
+   * flag says, so the argument is "can he open this photograph", not "is this commitment
+   * signed off".
+   */
+  hint: (refereeCanOpen: boolean): string =>
+    refereeCanOpen
+      ? 'A photo taken today. Only you and your referee can open it.'
+      : 'A photo taken today. Only you can open it.',
   uploading: 'Sending…',
   saved: 'Proof saved.',
   failed: 'Proof not saved.',
