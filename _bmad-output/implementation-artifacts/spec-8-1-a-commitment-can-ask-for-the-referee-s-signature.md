@@ -369,3 +369,28 @@ that his friend forgetting costs him nothing.
 4. Do 1–3 only after the migration is on the project. The client's `SELECT` names the new column, so
    against an un-migrated database the commitments screen does not render at all and there is
    nothing to check.
+
+## Both gates closed — 2026-09-14
+
+**Remote migration parity.** `npx supabase db push` applied `20260911090000` to
+`hxzalpnlrunctbajgtkv`; `npm run migrations:check` then reported **all 77 matching**, where before it
+named this file as the one outstanding. The push was authorised by hwt75 on the day, as AGENTS.md
+requires — it is not something a session takes on itself.
+
+**The done checkpoint ran.** hwt75 reports steps 1–3 pass. Recorded on his word, not on an
+observation this session could make: that is what makes the checkpoint human-only in the first
+place.
+
+**PR [#14](https://github.com/hwt75/todoapp/pull/14)**, `check` and `db-tests` both green on GitHub
+Actions, Vercel preview deployed. `Supabase Preview` skips, as it does on every PR in this
+repository — there is no branch database, so the preview read the live project, which is precisely
+why the migration had to land before the checkpoint could be run against it.
+
+**Still unrun: the security advisor.** README asks for it after any schema change and it has not
+been run against this one. Not a `done` gate — the two gates this story named were parity and the
+checkpoint — but it is owed, and this is where it is recorded so it is not lost. What it would be
+looking at: a new table (`commitment_requires_referee_approval_change`, RLS on, no client policy,
+all privileges revoked), three new functions, and one `grant execute` to `authenticated`
+(`has_paired_referee()`), which is the only widening of reach in the migration.
+
+Story promoted to `done` in `sprint-status.yaml` on this evidence.
