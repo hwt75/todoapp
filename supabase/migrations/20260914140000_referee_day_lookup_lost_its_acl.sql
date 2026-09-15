@@ -1,0 +1,43 @@
+-- `referee_day_lookup()` has been callable by `anon` since 2026-09-08, and this re-revokes it.
+--
+-- **Not a story.** Found while planning Story 8.4, which reads the referee's surfaces for the
+-- shape to copy, and fixed on its own rather than folded into that story's migration: a wrong
+-- ACL should not wait for a feature, and it should not arrive buried in a large diff.
+--
+-- **What happened.** `20260903140000:378-379` revoked the function from `public, anon` and granted
+-- it to `authenticated`. `20260908170000:41` then did `drop function` + `create` — necessary,
+-- because that story changed the return type and `create or replace` cannot — and the file ends
+-- without re-issuing either statement. `drop function` destroys the ACL, and this project's
+-- Supabase instance carries default privileges that grant EXECUTE on a new function in `public` to
+-- `anon` and `authenticated`. `20260908180000:147`'s `create or replace` preserved what it found.
+--
+-- This is the hazard the repository already names three times — `20260903090000:43-47` for
+-- `outbox_enqueue`, `20260914090000:532-536`, `2-1-roles-and-rls.sql:645-650` — and it happened
+-- anyway, in the one file that had a reason to drop rather than replace.
+--
+-- **What it cost, measured rather than assumed.** Nothing readable. The function's own body filters
+-- on `public.role_from_table() = 'referee'` and `s.subject = public.paired_doer_id()`
+-- (20260908180000:187-188), and both resolve through `auth.uid()`, which is null in an `anon`
+-- session — so it returned zero rows to every caller who should not have had it. Verified by
+-- calling it as `anon` before writing this. Defence in depth is what held: the function refuses by
+-- filtering, which is AD-7's read convention, and that convention is why a lost grant was a latent
+-- defect rather than a disclosure.
+--
+-- **Why no test caught it.** `2-1-roles-and-rls.sql` deliberately excludes this function from its
+-- must-be-revoked array, because it is *supposed* to be granted to `authenticated` — but the array
+-- is the only ACL assertion that file makes about it, so the `anon` direction went unasserted.
+-- Stories 8.2 and 8.3 both assert their own grants in both directions, in their own files; Story
+-- 6.7 predates that habit. The assertion this file is missing is added to `2-1-roles-and-rls.sql`
+-- in the same change, where the exclusion comment already lives.
+--
+-- **A sweep, not just this one.** Every `public` function `anon` could execute was listed before
+-- writing this. Four: this one, `push_body_is_sendable(text)` (a pure text predicate over its own
+-- argument), and `role_from_table()` / `role_from_token()` (each answers only about the calling
+-- session, so an `anon` caller learns that it is nobody). Those three are left alone deliberately.
+
+revoke execute on function public.referee_day_lookup(uuid) from public, anon;
+
+-- Re-issued rather than assumed. The grant survived, because the default privileges that handed
+-- EXECUTE to `anon` handed it to `authenticated` too -- but relying on that is relying on the very
+-- accident this file exists to undo.
+grant execute on function public.referee_day_lookup(uuid) to authenticated;

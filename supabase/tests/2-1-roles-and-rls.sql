@@ -518,6 +518,16 @@ begin
     -- grant in both directions. These two are the internals behind them -- the window rule, and a
     -- notification body a client that could call it could use to compose text about somebody
     -- else's day.
+    --
+    -- `referee_day_lookup()` being excluded from this array was not the same as it being
+    -- asserted, and between 2026-09-08 and 2026-09-14 it was executable by `anon`:
+    -- `20260908170000:41` dropped and recreated it for a return-type change and never re-issued
+    -- the revoke, and the default privileges on this project hand EXECUTE to `anon` on any new
+    -- function in `public`. It returned zero rows the whole time -- its body filters on
+    -- `role_from_table()` and `paired_doer_id()`, both null without a session -- so defence in
+    -- depth is what made it latent rather than a disclosure. Re-revoked by
+    -- `20260914140000_referee_day_lookup_lost_its_acl.sql`, and asserted in both directions at
+    -- the end of this file, which is the assertion whose absence let it last six days.
     'public.objection_deadline(timestamptz)',
     'public.objection_body(date, bigint)',
     -- Reads referee_invite and every profile's is_live_doer to answer whose money the caller may
@@ -699,6 +709,45 @@ begin
   raise notice using message =
     'PASS. A role is chosen server-side, cannot be raised from a session, and does not leak '
     'across accounts.';
+end $$;
+
+-- The referee's own doors, asserted in both directions rather than merely excluded from the array
+-- above. Excluding a function from a must-be-revoked list says nothing about what it *is* granted,
+-- and that silence is what let `referee_day_lookup()` sit executable by `anon` for six days after
+-- `20260908170000` dropped and recreated it (see the exclusion comment above, and
+-- `20260914140000_referee_day_lookup_lost_its_acl.sql`).
+--
+-- Asked rather than re-granted: this file runs as `postgres`, which may execute anything, so
+-- re-issuing a grant here would paper over exactly the breakage it is meant to catch. The idiom is
+-- `8-3-the-photograph-reaches-the-referee.sql:69-103`'s.
+do $$
+declare
+  f text;
+begin
+  foreach f in array array[
+    'public.referee_day_lookup(uuid)',
+    'public.object_to_day(uuid, uuid, text)',
+    'public.sign_off_day(uuid, date, boolean, text)',
+    'public.rule_appeal(uuid, boolean)',
+    'public.mark_penalty_collected(uuid)'
+  ]
+  loop
+    if not has_function_privilege('authenticated', f, 'execute') then
+      raise exception using message = format(
+        '`authenticated` cannot EXECUTE %s. It is one of the referee''s own doors, and without '
+        'the grant his screen answers nothing while every test here stays green.', f);
+    end if;
+
+    if has_function_privilege('anon', f, 'execute') then
+      raise exception using message = format(
+        '`anon` can EXECUTE %s. A signed-out caller has no account for it to answer about, and a '
+        '`drop function` followed by a bare `create` in `public` is how this last happened.', f);
+    end if;
+  end loop;
+
+  raise notice using message =
+    'Step 9 ok: the referee''s five doors are executable by `authenticated` and by no signed-out '
+    'caller, and nothing here granted them.';
 end $$;
 
 rollback;
