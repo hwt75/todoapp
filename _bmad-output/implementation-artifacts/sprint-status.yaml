@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 09-14-2026 18:00
+last_updated: 09-15-2026 00:00
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -104,8 +104,13 @@ development_status:
   # and 8-4 at breakdown time.
   epic-8: in-progress
   8-1-a-commitment-can-ask-for-the-referee-s-signature: done
+  # 8-2 stays in `review` on purpose, not for want of attention: its migration 20260914090000 is
+  # on the remote and PR #15 is merged green, so the only gate left is the done_checkpoint, which
+  # is hwt75's to run and nobody has written the steps for. The story shipped no surface, so there
+  # is nothing to check by hand until Story 8.4 builds one -- whether the checkpoint waits for 8.4
+  # or is run against the RPC directly is his call, and it is the thing blocking this line.
   8-2-the-referee-s-decision-and-what-a-refusal-costs: review
-  8-3-the-photograph-reaches-the-referee: review
+  8-3-the-photograph-reaches-the-referee: done
   8-4-what-is-waiting-for-him-today: backlog
   8-5-the-author-is-told-he-was-refused: backlog
   8-6-today-says-the-day-is-waiting-on-his-friend: backlog
