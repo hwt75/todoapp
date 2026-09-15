@@ -2,7 +2,7 @@
 title: 'Story 8.3 — The photograph reaches the referee'
 type: 'feature'
 created: '2026-09-14'
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 0
 baseline_commit: 'b0cfa6a065ccf306bd297f474655df852a371df9'
 story_key: '8-3-the-photograph-reaches-the-referee'
@@ -418,3 +418,34 @@ idiom for exactly these two.
 
 - The two assertions review found vacuous, now pointed at the right account.
   [`the-referee-can-see…sql:233`](../../supabase/tests/the-referee-can-see-what-the-day-was-proved-with.sql#L233)
+
+## Gate closed — 2026-09-15
+
+**Remote migration parity, which is the only gate this story had left.** `20260914120000` is on
+`hxzalpnlrunctbajgtkv`. `npm run migrations:check` reports **all 80 matching**, where the
+Verification section above recorded it as `1 local migration(s) not on the remote project`, and
+`npx supabase migration list` shows it with local and remote columns both filled. `stories.yaml:63`
+sets `done_checkpoint: false` on this story, so parity and the three review layers were the whole of
+it — unlike Story 8.1, nothing here is being recorded on anyone's word.
+
+**PR [#16](https://github.com/hwt75/todoapp/pull/16)**, merged 2026-09-14, `check` and `db-tests`
+green. `Supabase Preview` skips, as on every PR in this repository — there is no branch database.
+
+**One thing landed after the merge that names a function this story promised not to touch.**
+`referee_day_lookup()` had been executable by `anon` since `20260908170000` dropped and recreated it
+for a return-type change without re-issuing the revoke. It was found while planning Story 8.4 and
+fixed on its own in `20260914140000_referee_day_lookup_lost_its_acl.sql`
+(PR [#17](https://github.com/hwt75/todoapp/pull/17), merged 2026-09-15), not folded into this story
+or the next. It is not a defect of this one: the `git diff` claim above still holds, and the
+migration this story shipped names that function only in a comment. Recorded here because a reader
+of this file who greps for `referee_day_lookup` after the fact should find out why its grant line
+moved.
+
+**Not run against this schema: the Supabase security advisor.** Story 8.1 recorded the same debt for
+the same epic and it has not been paid since. Not a gate this story named, and it could not be run
+from the session that wrote this note — the Supabase MCP connector is unauthorised here, so saying
+it is clean would be claiming an unrun check. What it would be looking at for this story: two
+widened policies (`evidence` and `storage.objects`), three new functions, and the one `grant execute`
+to `authenticated` on `requires_referee_approval_as_of()` that hwt75 answered for above.
+
+Story promoted to `done` in `sprint-status.yaml` on this evidence.
