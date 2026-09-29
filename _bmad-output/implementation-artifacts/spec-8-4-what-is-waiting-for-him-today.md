@@ -281,3 +281,35 @@ SQL files pass.
 
 - The helper in the must-be-revoked array; the list among his doors.
   [`2-1-roles-and-rls.sql:596`](../../supabase/tests/2-1-roles-and-rls.sql#L596)
+
+## Done checkpoint — what hwt75 has to check on a real device
+
+**This pass closes Story 8.2's checkpoint too.** hwt75 decided on 2026-09-29 that 8.2, which
+shipped no surface of its own, is checked through this one. Both stories move to `done` on it.
+
+Needs migration `20260929090000` on the live project first. Two sessions: the author on his phone,
+the referee in a browser.
+
+*Story 8.4 — what the referee sees*
+
+1. With no flagged commitment photographed today, open `/referee`. **No waiting section at all**
+   — no heading, no empty line about it.
+2. As the author, turn sign-off on for two commitments and photograph both. Reload `/referee`:
+   both rows, each with its photo, a **Mark done** button, and a refuse box. Nothing on the section
+   is a number.
+3. A flagged commitment with **no** photograph yet does not appear.
+4. The refuse button stays disabled until a reason is typed, and the text above it says the
+   refusal is final.
+
+*Story 8.2 — what a decision costs, through that surface*
+
+5. **Mark one done.** The row says it is marked and keeps no controls. After midnight that day is
+   held, exactly as it would have been with no decision — no penalty, chain unbroken.
+6. **Refuse the other**, with a reason. The row says it is refused and says nothing about the
+   author being told (that is Story 8.5). After midnight that day is **failed**, one penalty owed,
+   that commitment's chain broken, every other commitment on the day unaffected.
+7. **A Grace Day still reaches it.** Spend one on the refused day: it is forgiven like any other
+   failed day.
+8. **Silence.** On another day, flag and photograph a commitment and let the referee do nothing.
+   After midnight it holds on the photo alone — no penalty, chain unbroken.
+9. Reload `/referee` after steps 5 and 6: both rows are gone. The list keeps no history.
