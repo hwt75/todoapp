@@ -102,16 +102,13 @@ development_status:
   # planning-artifacts/sprint-change-proposal-2026-09-10.md. The six stories below are that
   # spec's own stories.yaml, in its execution order; hwt75 set a done_checkpoint on 8-1, 8-2
   # and 8-4 at breakdown time.
-  epic-8: in-progress
+  epic-8: done
   8-1-a-commitment-can-ask-for-the-referee-s-signature: done
-  # 8-2 stays in `review` on purpose: its migration 20260914090000 is on the remote and PR #15 is
-  # merged green, so the only gate left is its done_checkpoint. hwt75 decided on 2026-09-29 that
-  # it is run through Story 8.4's surface, in the same device session as 8.4's own checkpoint --
-  # the steps are written once, in spec-8-4's "Done checkpoint" section, and both lines move to
-  # `done` on that one pass.
-  8-2-the-referee-s-decision-and-what-a-refusal-costs: review
+  # 8-2 had no surface of its own; hwt75 decided on 2026-09-29 that its done checkpoint runs through
+  # Story 8.4's, and reported that one device pass passed the same day. Both closed on it.
+  8-2-the-referee-s-decision-and-what-a-refusal-costs: done
   8-3-the-photograph-reaches-the-referee: done
-  8-4-what-is-waiting-for-him-today: review
+  8-4-what-is-waiting-for-him-today: done
   8-5-the-author-is-told-he-was-refused: done
   8-6-today-says-the-day-is-waiting-on-his-friend: done
   epic-8-retrospective: optional

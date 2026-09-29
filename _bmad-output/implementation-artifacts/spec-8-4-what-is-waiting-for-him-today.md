@@ -328,3 +328,9 @@ documented where it is granted — `referee_waiting_today()` among them, `sign_o
 `refusal_body()` and `refusal_payload()` are executable by neither client role, read from the live
 catalog. The one other WARN, leaked-password protection, is Auth configuration and predates the
 epic.
+
+## Done checkpoint — passed 2026-09-29
+
+hwt75 ran the device pass above and reported it passed. On his word, per the decision recorded at
+the top of that section, it closes **both** Story 8.4 and Story 8.2. With 8.1, 8.3, 8.5 and 8.6
+already done, Epic 8 is complete. hwt75 declined the optional Epic 8 retrospective.
