@@ -15,6 +15,10 @@ import {
   formatWindowClose,
   objectionIsOffered,
   type RefereeDayRow,
+  REFEREE_WAITING_COPY,
+  SIGN_OFF_REASON_MAX,
+  refusalIsOffered,
+  type RefereeWaitingRow,
 } from './referee';
 
 describe('isPairableEmail', () => {
@@ -363,5 +367,83 @@ describe('REFEREE_DAY_COPY does not promise a charge that often is not made', ()
 describe('OBJECTION_REASON_MAX', () => {
   it('mirrors the bound objection_reason_is_said enforces', () => {
     expect(OBJECTION_REASON_MAX).toBe(2000);
+  });
+});
+
+describe('refusalIsOffered (Story 8.4)', () => {
+  const row = (overrides: Partial<RefereeWaitingRow> = {}): RefereeWaitingRow => ({
+    commitmentId: 'c1',
+    commitmentName: 'Thuoc',
+    forDay: '2026-09-29',
+    carriesPenalty: true,
+    cadence: 'daily',
+    evidencePaths: [],
+    ...overrides,
+  });
+
+  it('offers a refusal on a daily commitment that carries a penalty today', () => {
+    expect(refusalIsOffered(row())).toBe(true);
+  });
+
+  // The three facts sign_off_day() refuses on that a client can see. Each would break his chain
+  // with nothing a Grace Day could reach, or, for an hours quota, has no day to refuse at all.
+  it('withholds it where the commitment carries no penalty today', () => {
+    expect(refusalIsOffered(row({ carriesPenalty: false }))).toBe(false);
+  });
+
+  it('withholds it on a Weekly Quota', () => {
+    expect(refusalIsOffered(row({ cadence: 'weekly_quota' }))).toBe(false);
+  });
+
+  it('withholds it on an hours quota', () => {
+    expect(refusalIsOffered(row({ cadence: 'daily_hours_quota' }))).toBe(false);
+  });
+});
+
+describe('REFEREE_WAITING_COPY (Story 8.4)', () => {
+  const statics = Object.entries(REFEREE_WAITING_COPY).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string',
+  );
+
+  it('states the silence rule where he meets the list', () => {
+    expect(REFEREE_WAITING_COPY.intro).toMatch(/do not have to do anything/i);
+    expect(REFEREE_WAITING_COPY.intro).toMatch(/say nothing.*holds/i);
+  });
+
+  // Nothing here may nag, count, or imply a duty. Asserted over every fixed string, so a new one
+  // added later is held to the same rule without anyone remembering to add a test.
+  it('never counts, queues, or presses him for time', () => {
+    for (const [key, value] of statics) {
+      expect(value, key).not.toMatch(/\d/);
+      expect(value, key).not.toMatch(/waiting for you|queue|pending|to review|left to|remaining/i);
+      expect(value, key).not.toMatch(/hurry|before it is too late|time left|deadline/i);
+    }
+  });
+
+  // Telling the author is Story 8.5, which does not exist yet. A referee who read that he had
+  // been told would believe a message was sent that was not.
+  it('never claims the author has been told', () => {
+    for (const [key, value] of statics) {
+      expect(value, key).not.toMatch(/\btold\b|notified|message|let him know|informed/i);
+    }
+  });
+
+  it('says a refusal is final before he makes one', () => {
+    expect(REFEREE_WAITING_COPY.finalWarning).toMatch(/final/i);
+    expect(REFEREE_WAITING_COPY.finalWarning).toMatch(/Grace Day/);
+  });
+
+  it('says an approval changes nothing, so it never reads as a chore discharged', () => {
+    expect(REFEREE_WAITING_COPY.approved).toMatch(/as it would have anyway/i);
+  });
+
+  it('names the row in every control, so two rows are never the same button', () => {
+    expect(REFEREE_WAITING_COPY.approveLabel('Thuoc')).toContain('Thuoc');
+    expect(REFEREE_WAITING_COPY.refuseLabel('Thuoc')).toContain('Thuoc');
+    expect(REFEREE_WAITING_COPY.proofAlt('Thuoc', 1, 1)).toContain('Thuoc');
+  });
+
+  it('mirrors the bound referee_decision_says_why enforces', () => {
+    expect(SIGN_OFF_REASON_MAX).toBe(2000);
   });
 });

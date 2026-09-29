@@ -13,6 +13,7 @@ import type { PenaltyState } from './ledger';
 import { EVIDENCE_RETENTION_DAYS } from './evidence';
 import { formatDong } from './money';
 import { ZONE, dayInQuestion } from './declaration';
+import type { CommitmentCadence } from './commitment';
 
 /** What Settings sends to the `pair-referee` Edge Function. Nothing else — the function
  *  derives everything about eligibility itself, never trusting a client-sent role or flag. */
@@ -621,3 +622,101 @@ export function formatWindowClose(deadline: string): string {
     hour12: false,
   }).format(new Date(deadline));
 }
+
+/**
+ * One row of `referee_waiting_today()` (Story 8.4) — one flagged commitment of his paired doer,
+ * today, with a photograph and no decision yet.
+ *
+ * Facts rather than a verdict, for the reason `RefereeDayRow` gives: `sign_off_day()` is the sole
+ * judge (AD-1), and `refusalIsOffered` below mirrors these facts only to decide whether the refuse
+ * control renders at all.
+ */
+export interface RefereeWaitingRow {
+  commitmentId: string;
+  commitmentName: string;
+  /** `YYYY-MM-DD`, the server's own today in the product's zone. Passed back to `sign_off_day()`
+   *  unchanged — the client never derives a date for storage (AD-6), and a referee whose browser
+   *  sits in another zone would otherwise sign off a day that is not the one on his screen. */
+  forDay: string;
+  /** `carries_penalty_as_of()` for today, never the live column. */
+  carriesPenalty: boolean;
+  cadence: CommitmentCadence;
+  /** Storage paths of the photographs this commitment-day was proved with, either parentage,
+   *  swept ones already excluded server-side. Paths, not URLs: the screen signs every row's in one
+   *  call. */
+  evidencePaths: string[];
+}
+
+/**
+ * Whether the refuse control renders on this row — the two facts `sign_off_day()` checks that a
+ * client can honestly see: the commitment carries a penalty today, and it is judged by the day
+ * (`daily`) rather than by its week (`weekly_quota`) or its measured minutes
+ * (`daily_hours_quota`). Everywhere else a refusal would break his chain with nothing a Grace Day
+ * could reach, and the server refuses it in its own words.
+ *
+ * Deliberately NOT a full mirror: a day already settled, already decided, or a commitment archived
+ * since the list was read all come back as the server's refusal, shown verbatim on the row. Marking
+ * done is always offered — it changes nothing, so it can break nothing.
+ */
+export function refusalIsOffered(row: RefereeWaitingRow): boolean {
+  return row.carriesPenalty && row.cadence === 'daily';
+}
+
+/** The bound `referee_decision_says_why` enforces, mirrored so the `<textarea>` stops him at the
+ *  limit rather than let the server refuse a sentence he has already written. The same number as
+ *  `OBJECTION_REASON_MAX`, and deliberately its own constant: the two are different constraints on
+ *  different tables, and one moving must not silently move the other. */
+export const SIGN_OFF_REASON_MAX = 2000;
+
+/**
+ * Every string the referee's waiting section says (`components/referee-home.tsx`, Story 8.4).
+ *
+ * **Nothing here may nag, count, or imply a duty.** This list is the deliberate reversal of Epic
+ * 6's "no referee approval queue", and the reversal is affordable only because his silence costs
+ * nobody anything: every one of these days holds at midnight on its photograph alone. So there is
+ * no number, no "waiting for you", no time left, and no empty state — with nothing in it, the
+ * section is simply not there, because "all done" is a queue drained.
+ *
+ * **Nothing here says the author has been told.** Telling him is Story 8.5 and does not exist yet;
+ * a referee who read "he has been told" would believe a message was sent that was not.
+ */
+export const REFEREE_WAITING_COPY = {
+  heading: 'Photos he asked you to see today',
+  /** The silence rule, said where he meets the list rather than in help text — the same place
+   *  the author is told it when he turns the flag on. */
+  intro:
+    'You do not have to do anything here. If you say nothing, each of these days holds at ' +
+    'midnight on the photo alone.',
+
+  /** Numbered rather than described, for the reason `REFEREE_DAY_COPY.proofAlt` gives. */
+  proofAlt: (name: string, index: number, total: number): string =>
+    total === 1 ? `The photo for ${name}` : `Photo ${index} of ${total} for ${name}`,
+  /** Reported, never dropped — Story 6.9's rule, as on the day lookup. */
+  proofLoadFailed: (count: number): string =>
+    count === 1
+      ? 'One photo here could not be opened.'
+      : `${count} photos here could not be opened.`,
+
+  approve: 'Mark done',
+  approving: 'Marking…',
+  /** Says what it did and that it cost nothing, so he never reads an approval as a chore he has
+   *  now discharged. */
+  approved: 'Marked done. The day holds, as it would have anyway.',
+
+  reasonLabel: 'Why does this day not hold?',
+  reasonPlaceholder: 'That is yesterday’s photo.',
+  refuse: 'Refuse this day',
+  refusing: 'Refusing…',
+  /** Final, and said so before he presses it: there is no withdrawal and no second round. */
+  finalWarning:
+    'This is final. The day closes as a failed day and its penalty stands against him — his ' +
+    'only remedy is a Grace Day of his own.',
+  refused: 'Refused. The day will close as a failed day.',
+  /** Where `refusalIsOffered` is false. Said once, on the row, so a missing control reads as a
+   *  rule rather than as a screen that failed to draw one. */
+  refusalNotOffered: 'This one can only be marked done today. A refusal would not land on it.',
+
+  failed: 'Failed.',
+  approveLabel: (name: string): string => `Mark ${name} done`,
+  refuseLabel: (name: string): string => `Refuse ${name}`,
+} as const;

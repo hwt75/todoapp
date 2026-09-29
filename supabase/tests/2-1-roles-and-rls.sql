@@ -586,7 +586,14 @@ begin
     -- purpose — the referee's own door, exactly as object_to_day() and rule_appeal() are, with
     -- the function itself as the privilege boundary. `8-2-the-referee-s-decision-and-what-a-
     -- refusal-costs.sql` asserts that grant in both directions; this file does not duplicate it.
-    'public.effective_answer(boolean, public.declaration_answer)'
+    'public.effective_answer(boolean, public.declaration_answer)',
+    -- Story 8.4. The one place the union of a commitment-day's two photograph parentages is
+    -- written; it lists storage paths for any commitment uuid it is handed, and both of its
+    -- callers -- photograph_reaches_the_referee() and referee_waiting_today() -- are `security
+    -- definer`, so no client grant would buy anything. Deliberately NOT here:
+    -- referee_waiting_today() itself, which is granted to `authenticated` as the referee's own
+    -- read and asserted in both directions in step 9 below.
+    'public.commitment_day_photographs(uuid, date)'
   ]
   loop
     foreach r in array array['anon', 'authenticated'] loop
@@ -703,7 +710,7 @@ begin
   end loop;
 
   raise notice using message =
-    'Step 6 ok: thirty-eight deciding functions and the outbox are all out of reach of anon '
+    'Step 6 ok: thirty-nine deciding functions and the outbox are all out of reach of anon '
     'and authenticated, and the eight Story 6.6 touches carry an explicit ACL that still lets '
     'postgres and service_role in, with search_path pinned to empty.';
   raise notice using message =
@@ -726,6 +733,7 @@ declare
 begin
   foreach f in array array[
     'public.referee_day_lookup(uuid)',
+    'public.referee_waiting_today()',
     'public.object_to_day(uuid, uuid, text)',
     'public.sign_off_day(uuid, date, boolean, text)',
     'public.rule_appeal(uuid, boolean)',
@@ -746,7 +754,7 @@ begin
   end loop;
 
   raise notice using message =
-    'Step 9 ok: the referee''s five doors are executable by `authenticated` and by no signed-out '
+    'Step 9 ok: the referee''s six doors are executable by `authenticated` and by no signed-out '
     'caller, and nothing here granted them.';
 end $$;
 

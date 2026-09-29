@@ -4,19 +4,25 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { formatDeadline } from '@/lib/appeal';
+import { EVIDENCE_BUCKET, EVIDENCE_URL_TTL_SECONDS } from '@/lib/evidence';
 import { formatDong } from '@/lib/money';
 import type { LedgerKind, PenaltyState } from '@/lib/ledger';
 import {
   OWED_PENALTIES_COPY,
   REFEREE_HOME_COPY,
+  REFEREE_WAITING_COPY,
+  SIGN_OFF_REASON_MAX,
   collectionMessage,
   daysSinceQuiet,
   formatOwedDay,
+  refusalIsOffered,
   summarizeReferee,
   type OwedPenaltyRow,
   type PendingAppealRow,
   type RefereeSummary,
+  type RefereeWaitingRow,
 } from '@/lib/referee';
+import type { CommitmentCadence } from '@/lib/commitment';
 
 type View =
   | { kind: 'loading' }
@@ -28,6 +34,12 @@ type View =
         // escalated", 20260826100000) already scopes the read below to exactly this state —
         // an unescalated or already-satisfied episode simply does not come back.
         goneQuietSince: string | null;
+        // Story 8.4 — today's flagged commitment-days of his paired doer with a photograph and
+        // no decision, and the signed URL of every photo behind them, keyed by storage path. A
+        // path present on a row and absent here is a photo that would not sign: counted on its
+        // row, never dropped.
+        waiting: RefereeWaitingRow[];
+        proofUrls: Map<string, string>;
       })
   | { kind: 'failed'; reason: string };
 
@@ -37,11 +49,30 @@ type View =
  *  refusal the referee still needs to read — see `markCollected` below). */
 type RowStatus = 'idle' | 'busy' | 'failed';
 
+/** One waiting row's own decision status (Story 8.4), keyed by `waitingKey` so a refusal on one
+ *  row never bleeds into another — the same shape as `markStatus` above. `approved` and `refused`
+ *  keep the row on screen saying what he just did, rather than reloading it away. */
+type DecisionState =
+  | { kind: 'idle' }
+  | { kind: 'approving' }
+  | { kind: 'refusing' }
+  | { kind: 'approved' }
+  | { kind: 'refused' }
+  | { kind: 'failed'; reason: string };
+
+/** The day is part of the key even though the list names today only: a key that depended on
+ *  that staying true would silently merge two days' rows the day it stopped. */
+function waitingKey(row: { forDay: string; commitmentId: string }): string {
+  return `${row.forDay}-${row.commitmentId}`;
+}
+
 /**
  * The Referee's home surface (Story 4.5 FR-19; Story 4.6 adds the appeals list; Story 4.7
  * adds the owed-penalties list) — two counts, a real list of pending appeals to open, and a
  * real list of owed penalties, each with a pre-written copy-to-clipboard collection message
- * and a Mark Collected control.
+ * and a Mark Collected control. Story 8.4 adds what is waiting for him today: the flagged
+ * commitment-days of his paired doer with a photograph and no decision, each with the photo and
+ * the two controls `sign_off_day()` answers — and nothing at all when there are none.
  *
  * **What this screen still deliberately does not have.** No ruling controls of its own (*He
  * did it* / *He didn't* live on `components/referee-appeal-detail.tsx`, reached by opening an
@@ -80,6 +111,8 @@ export function RefereeHome() {
   const [markStatus, setMarkStatus] = useState<Record<string, RowStatus>>({});
   const [markErrors, setMarkErrors] = useState<Record<string, string>>({});
   const [copyStatus, setCopyStatus] = useState<Record<string, 'idle' | 'copied' | 'failed'>>({});
+  const [decision, setDecision] = useState<Record<string, DecisionState>>({});
+  const [reasons, setReasons] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -176,6 +209,47 @@ export function RefereeHome() {
       const goneQuietSince =
         (quietRows?.[0] as { started_day?: string } | undefined)?.started_day ?? null;
 
+      // Story 8.4 — what is waiting for him today. `referee_waiting_today()`, a `security
+      // definer` function scoped to his paired doer and to today, never an RLS grant on the
+      // tables behind it (the 20260825100000 incident). It hands back the day itself, which is
+      // passed to `sign_off_day()` unchanged: this screen never derives a date (AD-6).
+      const { data: waitingRows, error: waitingError } =
+        await supabase.rpc('referee_waiting_today');
+      if (cancelled) return;
+
+      if (waitingError) {
+        setView({ kind: 'failed', reason: waitingError.message });
+        return;
+      }
+
+      const waiting: RefereeWaitingRow[] = (
+        (waitingRows ?? []) as Array<Record<string, unknown>>
+      ).map((row) => ({
+        commitmentId: row.commitment_id as string,
+        commitmentName: (row.commitment_name as string | null) ?? 'A commitment',
+        forDay: row.for_day as string,
+        carriesPenalty: Boolean(row.carries_penalty),
+        cadence: row.cadence as CommitmentCadence,
+        evidencePaths: (row.evidence_paths as string[] | null) ?? [],
+      }));
+
+      // One signing call for every waiting photo, not one per row — `referee-day-lookup.tsx`'s
+      // lesson. A signing call that fails outright leaves the map empty, which reports every
+      // photo as unopenable rather than as a day never proved; the list itself still renders.
+      const paths = waiting.flatMap((row) => row.evidencePaths);
+      const proofUrls = new Map<string, string>();
+
+      if (paths.length > 0) {
+        const { data: signed } = await supabase.storage
+          .from(EVIDENCE_BUCKET)
+          .createSignedUrls(paths, EVIDENCE_URL_TTL_SECONDS);
+        if (cancelled) return;
+
+        for (const item of signed ?? []) {
+          if (item.path && item.signedUrl && !item.error) proofUrls.set(item.path, item.signedUrl);
+        }
+      }
+
       // Owed penalties (Story 4.7), oldest first — "uncollected debts age visibly" is
       // satisfied by surfacing the oldest debt first (Always boundary), not a counter.
       // Every kind, day or week: a week-kind Penalty (Week Close, 3.4 — a Weekly Quota
@@ -258,6 +332,8 @@ export function RefereeHome() {
         })),
         owedPenalties,
         goneQuietSince,
+        waiting,
+        proofUrls,
       });
     }
 
@@ -303,6 +379,34 @@ export function RefereeHome() {
   }
 
   /**
+   * Story 8.4 — one decision on one waiting row. `sign_off_day()` is the sole judge (AD-1): the
+   * day, a closed window, a decision already made and every refusal guard are its to refuse, in
+   * its own words, and those words land on this row only.
+   *
+   * Nothing reloads, either way. A success leaves the row on screen saying what he did; a refusal
+   * leaves it where it was with the reason attached — the same invariant `markCollected` keeps,
+   * because a row that vanishes is a row he has to guess about.
+   */
+  async function decide(row: RefereeWaitingRow, approved: boolean) {
+    const key = waitingKey(row);
+    setDecision((d) => ({ ...d, [key]: { kind: approved ? 'approving' : 'refusing' } }));
+
+    const { error } = await createClient().rpc('sign_off_day', {
+      p_commitment_id: row.commitmentId,
+      p_for_day: row.forDay,
+      p_approved: approved,
+      p_reason: approved ? null : (reasons[key] ?? ''),
+    });
+
+    if (error) {
+      setDecision((d) => ({ ...d, [key]: { kind: 'failed', reason: error.message } }));
+      return;
+    }
+
+    setDecision((d) => ({ ...d, [key]: { kind: approved ? 'approved' : 'refused' } }));
+  }
+
+  /**
    * The copy control. Places the pre-written text on the clipboard unchanged — no compose
    * field, no editable message (Never boundary). This is the first `navigator.clipboard` use
    * in this codebase: an unsupported browser, a denied permission and an insecure context all
@@ -342,9 +446,12 @@ export function RefereeHome() {
           </p>
         )}
 
-        {view.kind === 'ready' && view.pendingAppeals === 0 && view.owedCount === 0 && (
-          <p>{REFEREE_HOME_COPY.empty}</p>
-        )}
+        {/* "Nothing for you right now" would be false above a list of photos he was asked to
+            see, so it steps aside whenever the waiting section below renders. */}
+        {view.kind === 'ready' &&
+          view.pendingAppeals === 0 &&
+          view.owedCount === 0 &&
+          view.waiting.length === 0 && <p>{REFEREE_HOME_COPY.empty}</p>}
 
         {view.kind === 'ready' && (view.pendingAppeals > 0 || view.owedCount > 0) && (
           <>
@@ -519,6 +626,132 @@ export function RefereeHome() {
                       )}
                     </div>
                   </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Story 8.4 — what is waiting for him today.
+
+            The deliberate reversal of Epic 6's "no referee approval queue", and it stays
+            affordable only while nothing here nags, counts, or implies a duty: every one of these
+            days holds at midnight on its photograph alone. So no heading count, no badge, no time
+            left — and no empty state. With nothing in it the section is not rendered at all,
+            because "all done" is a queue drained. */}
+        {view.kind === 'ready' && view.waiting.length > 0 && (
+          <section aria-label={REFEREE_WAITING_COPY.heading}>
+            <h2>{REFEREE_WAITING_COPY.heading}</h2>
+            <p>{REFEREE_WAITING_COPY.intro}</p>
+            <div className="card">
+              {view.waiting.map((row) => {
+                const key = waitingKey(row);
+                const state: DecisionState = decision[key] ?? { kind: 'idle' };
+                const settled = state.kind === 'approved' || state.kind === 'refused';
+                const busy = state.kind === 'approving' || state.kind === 'refusing';
+                const refusable = refusalIsOffered(row);
+                const signed = row.evidencePaths
+                  .map((path) => ({ path, url: view.proofUrls.get(path) }))
+                  .filter((item): item is { path: string; url: string } => Boolean(item.url));
+                const unopenable = row.evidencePaths.length - signed.length;
+
+                return (
+                  <div className="row" key={key}>
+                    <div className="row-main">
+                      <div className="row-name">{row.commitmentName}</div>
+
+                      {signed.map((item, index) => (
+                        // A signed URL into a private bucket — see referee-day-lookup.tsx for why
+                        // this is a plain, lazily loaded <img> rather than next/image.
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={item.path}
+                          className="kept-photo"
+                          src={item.url}
+                          loading="lazy"
+                          decoding="async"
+                          alt={REFEREE_WAITING_COPY.proofAlt(
+                            row.commitmentName,
+                            index + 1,
+                            signed.length,
+                          )}
+                        />
+                      ))}
+                      {unopenable > 0 && (
+                        <p role="status">{REFEREE_WAITING_COPY.proofLoadFailed(unopenable)}</p>
+                      )}
+
+                      {!settled && (
+                        <>
+                          <div className="actions">
+                            <button
+                              type="button"
+                              disabled={busy}
+                              aria-busy={state.kind === 'approving'}
+                              aria-label={REFEREE_WAITING_COPY.approveLabel(row.commitmentName)}
+                              onClick={() => void decide(row, true)}
+                            >
+                              {state.kind === 'approving'
+                                ? REFEREE_WAITING_COPY.approving
+                                : REFEREE_WAITING_COPY.approve}
+                            </button>
+                          </div>
+
+                          {refusable ? (
+                            <>
+                              <label htmlFor={`sign-off-reason-${key}`}>
+                                {REFEREE_WAITING_COPY.reasonLabel}
+                              </label>
+                              <textarea
+                                id={`sign-off-reason-${key}`}
+                                rows={3}
+                                // The bound `referee_decision_says_why` enforces; sign_off_day()
+                                // words the refusal too, but the kinder answer is not to let him
+                                // write past it.
+                                maxLength={SIGN_OFF_REASON_MAX}
+                                placeholder={REFEREE_WAITING_COPY.reasonPlaceholder}
+                                value={reasons[key] ?? ''}
+                                onChange={(event) =>
+                                  setReasons((r) => ({ ...r, [key]: event.target.value }))
+                                }
+                              />
+                              <p>{REFEREE_WAITING_COPY.finalWarning}</p>
+                              <div className="actions">
+                                <button
+                                  type="button"
+                                  // Required server-side (`referee_decision_says_why` and
+                                  // sign_off_day()'s own refusal); disabling here only spares
+                                  // him a round trip to be told what he can already see.
+                                  disabled={(reasons[key] ?? '').trim() === '' || busy}
+                                  aria-busy={state.kind === 'refusing'}
+                                  aria-label={REFEREE_WAITING_COPY.refuseLabel(row.commitmentName)}
+                                  onClick={() => void decide(row, false)}
+                                >
+                                  {state.kind === 'refusing'
+                                    ? REFEREE_WAITING_COPY.refusing
+                                    : REFEREE_WAITING_COPY.refuse}
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <p>{REFEREE_WAITING_COPY.refusalNotOffered}</p>
+                          )}
+                        </>
+                      )}
+
+                      {state.kind === 'approved' && (
+                        <p role="status">{REFEREE_WAITING_COPY.approved}</p>
+                      )}
+                      {state.kind === 'refused' && (
+                        <p role="status">{REFEREE_WAITING_COPY.refused}</p>
+                      )}
+                      {state.kind === 'failed' && (
+                        <p role="status">
+                          <strong>{REFEREE_WAITING_COPY.failed}</strong> {state.reason}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
             </div>
