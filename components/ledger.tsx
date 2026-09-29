@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import {
   OBJECTION_COPY,
+  REFUSAL_COPY,
   buildLedger,
   ledgerPillFamily,
   ledgerPillLabel,
@@ -93,6 +94,7 @@ export function Ledger({
         { data: weekPenalties, error: weekPenaltiesError },
         { data: grace, error: graceError },
         { data: objections, error: objectionsError },
+        { data: refusals, error: refusalsError },
       ] = await Promise.all([
         supabase.from('settlement_current').select('period,verdict,missed_count').eq('kind', 'day'),
         supabase.from('penalty_current').select('amount_dong,state,period').eq('kind', 'day'),
@@ -112,6 +114,13 @@ export function Ledger({
         // Unfiltered by verdict or penalty state on purpose — a day since forgiven by a Grace
         // Day reads clean again, and what he said about it still stands.
         supabase.from('objection').select('for_day,reason'),
+        // Story 8.5: every refusal of one of his days, read under `referee_decision: read own`.
+        // Approvals are excluded here rather than in the fold: an approval changes nothing and has
+        // no words, so there is nothing of it for the Ledger to say.
+        supabase
+          .from('referee_decision')
+          .select('id,for_day,approved,reason,commitment:commitment_id(name)')
+          .eq('approved', false),
       ]);
 
       if (cancelled) return;
@@ -125,7 +134,8 @@ export function Ledger({
         weekSettlementsError ??
         weekPenaltiesError ??
         graceError ??
-        objectionsError;
+        objectionsError ??
+        refusalsError;
       if (failed) {
         setView({ kind: 'failed', reason: failed.message });
         return;
@@ -167,6 +177,19 @@ export function Ledger({
             for_day: o.for_day as string,
             reason: o.reason as string,
           })),
+          // Filtered again here, not only in the query: an approval has a null reason, and a
+          // dropped `.eq()` would otherwise render it as a refusal of "null". Blank names fall
+          // back the way refusal_payload() does, so the Ledger and the push name it alike.
+          (refusals ?? [])
+            .filter((r) => r.approved === false && typeof r.reason === 'string')
+            .map((r) => ({
+              id: r.id as string,
+              for_day: r.for_day as string,
+              commitment_name:
+                (r.commitment as unknown as { name: string } | null)?.name?.trim() ||
+                'A commitment',
+              reason: r.reason as string,
+            })),
         ),
       });
     }
@@ -285,7 +308,12 @@ export function Ledger({
                                 : row.verdict === 'expired'
                                   ? `${row.day}, expired unanswered, owed ${formatDong(row.amountDong ?? 0)}`
                                   : `${row.day}, owed ${formatDong(row.amountDong ?? 0)}, for ${row.missed.join(' and ')}`
-                }${row.objection ? `. ${OBJECTION_COPY.heading}: ${row.objection}` : ''}`}
+                }${row.objection ? `. ${OBJECTION_COPY.heading}: ${row.objection}` : ''}${row.refusals
+                  .map(
+                    (r) =>
+                      `. ${REFUSAL_COPY.heading}: ${REFUSAL_COPY.line(r.commitmentName, r.reason)}`,
+                  )
+                  .join('')}`}
               >
                 <div className="row-main">
                   <div className="row-name">
@@ -318,6 +346,17 @@ export function Ledger({
                       {OBJECTION_COPY.reason(row.objection)}
                     </p>
                   )}
+
+                  {/* Story 8.5: each refusal, verbatim, on the day it names — seen here and heard
+                      in the row's `aria-label`, so hidden from the reader here for the reason the
+                      objection above is. No control: a refusal is final, and the Grace Day below
+                      is the recourse, with no special case. */}
+                  {row.refusals.map((r) => (
+                    <p className="row-objection" aria-hidden="true" key={r.id}>
+                      <strong>{REFUSAL_COPY.heading}</strong>{' '}
+                      {REFUSAL_COPY.line(r.commitmentName, r.reason)}
+                    </p>
+                  ))}
 
                   {/* Contest: only on an eligible owed failed-day row (a machine-filed miss whose
                   Penalty has not already moved to held/dropped/anything else). One control

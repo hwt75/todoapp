@@ -593,7 +593,12 @@ begin
     -- definer`, so no client grant would buy anything. Deliberately NOT here:
     -- referee_waiting_today() itself, which is granted to `authenticated` as the referee's own
     -- read and asserted in both directions in step 9 below.
-    'public.commitment_day_photographs(uuid, date)'
+    'public.commitment_day_photographs(uuid, date)',
+    -- Story 8.5. The refusal push's body and payload. Called only from sign_off_day(), which is
+    -- `security definer`; a client that could call them could learn nothing it needs and has no
+    -- outbox to hand the result to -- the same argument objection_body() is listed on.
+    'public.refusal_body(date, boolean)',
+    'public.refusal_payload(text, date, text)'
   ]
   loop
     foreach r in array array['anon', 'authenticated'] loop
@@ -710,7 +715,7 @@ begin
   end loop;
 
   raise notice using message =
-    'Step 6 ok: thirty-nine deciding functions and the outbox are all out of reach of anon '
+    'Step 6 ok: forty-one deciding functions and the outbox are all out of reach of anon '
     'and authenticated, and the eight Story 6.6 touches carry an explicit ACL that still lets '
     'postgres and service_role in, with search_path pinned to empty.';
   raise notice using message =

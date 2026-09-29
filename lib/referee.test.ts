@@ -193,6 +193,7 @@ describe('OWED_PENALTIES_COPY (Story 7.2)', () => {
       appealable: [],
       graceable: true,
       objection: null,
+      refusals: [],
     };
     expect(OWED_PENALTIES_COPY.owedLabel).toBe(ledgerPillLabel(owed));
   });

@@ -61,6 +61,39 @@ describe('resolvePushContent', () => {
     });
   });
 
+  // Story 8.5. The referee's reason rides beside the body, never inside it, so the outbox check
+  // on `body` cannot abort a refusal over his wording.
+  describe('the quote', () => {
+    const refusal = {
+      title: 'Thuốc — your referee refused it',
+      body: 'Your referee refused it for Tuesday, 2026-09-29. That day will close as a failed day at midnight. His reason, in his words:',
+    };
+
+    it('shows the reason under the body, verbatim and in quotation marks', () => {
+      const quote = '  He is currently on his phone.\nNot the pill.  ';
+      const { title, body } = resolvePushContent(JSON.stringify({ ...refusal, quote }));
+
+      expect(title).toBe(refusal.title);
+      expect(body).toBe(`${refusal.body}\n\n“${quote}”`);
+    });
+
+    it('never attaches a quote to the fallback body', () => {
+      const { body } = resolvePushContent(JSON.stringify({ title: 'x', quote: 'His words.' }));
+      expect(body).toBe(PUSH_FALLBACK.body);
+    });
+
+    it('leaves the body alone when there is no quote, as every push before this did', () => {
+      expect(resolvePushContent(JSON.stringify(refusal)).body).toBe(refusal.body);
+    });
+
+    it.each([[''], ['   '], [42], [null], [{ text: 'x' }]])(
+      'ignores a quote that is not a usable string (%j)',
+      (quote) => {
+        expect(resolvePushContent(JSON.stringify({ ...refusal, quote })).body).toBe(refusal.body);
+      },
+    );
+  });
+
   it('never returns an empty title or body, whatever it is given', () => {
     const inputs = ['', '{}', 'garbage', JSON.stringify({ title: '', body: '' }), null];
     for (const raw of inputs) {

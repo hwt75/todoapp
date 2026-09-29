@@ -95,6 +95,33 @@ export const OBJECTION_COPY = {
   reason: (reason: string): string => `“${reason}”`,
 } as const;
 
+/**
+ * Story 8.5. One refusal of one flagged commitment on one of the author's days, as
+ * `referee_decision` stores it — read under `referee_decision: read own`, approvals excluded.
+ *
+ * Unlike an objection there can be several on one day: a refusal names one commitment, and the
+ * referee may refuse two flagged commitments on the same evening. So this folds into a list per
+ * day rather than onto a single value.
+ *
+ * **This is where the reason is always whole.** The push that told him carries it only when it
+ * fits (`refusal_payload()` leaves it out rather than cut it) and then says to look here.
+ */
+export interface RefusalRecord {
+  /** The decision's own id — the only thing that tells two refusals apart when two commitments
+   *  share a name and the referee said the same words about both. */
+  id: string;
+  for_day: string;
+  commitment_name: string;
+  reason: string;
+}
+
+/** What the Ledger says above each refusal. The reason is quoted and never paraphrased — an app
+ *  that restates the referee's words is an app taking a side. */
+export const REFUSAL_COPY = {
+  heading: 'Your referee refused',
+  line: (commitmentName: string, reason: string): string => `${commitmentName}: “${reason}”`,
+} as const;
+
 export interface LedgerRow {
   day: string;
   kind: LedgerKind;
@@ -128,6 +155,10 @@ export interface LedgerRow {
    *  Shown rather than acted on — an objection is final when he makes it, and the author's
    *  recourse is the Grace Day control already on the row. */
   objection: string | null;
+  /** Story 8.5: every commitment the referee refused on this day, with his reason verbatim, in
+   *  commitment-name order. Empty otherwise, which is almost every day, and always empty on a week
+   *  row. Shown, never acted on: a refusal is final, and a Grace Day is the recourse. */
+  refusals: { id: string; commitmentName: string; reason: string }[];
 }
 
 /**
@@ -151,6 +182,8 @@ export function buildLedger(
   // Story 6.7, appended last with a default for the reason every parameter before it was: every
   // existing caller and fixture keeps compiling and simply carries no objection.
   objections: readonly ObjectionRecord[] = [],
+  // Story 8.5, appended last with a default for the same reason `objections` was.
+  refusals: readonly RefusalRecord[] = [],
 ): LedgerRow[] {
   // Keyed by kind as well as period: a week's period and a day's period both come from the
   // same date domain and commonly coincide (a week starts on some ordinary calendar day),
@@ -176,6 +209,14 @@ export function buildLedger(
   // describe; last-in-wins is the same shape `penaltyByKey` above already uses.
   const objectionByDay = new Map<string, string>();
   for (const o of objections) objectionByDay.set(o.for_day, o.reason);
+
+  const refusalsByDay = new Map<string, { id: string; commitmentName: string; reason: string }[]>();
+  for (const r of refusals) {
+    refusalsByDay.set(r.for_day, [
+      ...(refusalsByDay.get(r.for_day) ?? []),
+      { id: r.id, commitmentName: r.commitment_name, reason: r.reason },
+    ]);
+  }
 
   const toRow = (kind: LedgerKind, settlement: SettlementRecord): LedgerRow => {
     const penalty = penaltyByKey.get(`${kind}:${settlement.period}`) ?? null;
@@ -203,6 +244,18 @@ export function buildLedger(
       // verdict and penalty state — a day the author has since spent a Grace Day on reads
       // `clean`/`waived` again, and the referee's words about it still stand.
       objection: kind === 'day' ? (objectionByDay.get(settlement.period) ?? null) : null,
+      // Story 8.5. Day rows only — a refusal names a commitment-day — and independent of verdict
+      // and penalty state for the reason `objection` is: a Grace Day forgives the money, and what
+      // the referee said still stands.
+      refusals:
+        kind === 'day'
+          ? (refusalsByDay.get(settlement.period) ?? [])
+              .slice()
+              .sort(
+                (a, b) =>
+                  a.commitmentName.localeCompare(b.commitmentName) || a.id.localeCompare(b.id),
+              )
+          : [],
     };
   };
 

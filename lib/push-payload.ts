@@ -51,10 +51,17 @@ export function resolvePushContent(raw: string | null | undefined): PushNotifica
 
   if (typeof parsed !== 'object' || parsed === null) return PUSH_FALLBACK;
 
-  const { title, body } = parsed as { title?: unknown; body?: unknown };
+  const { title, body, quote } = parsed as { title?: unknown; body?: unknown; quote?: unknown };
+  const resolvedBody = usableString(body) ? body : PUSH_FALLBACK.body;
 
   return {
     title: usableString(title) ? title : PUSH_FALLBACK.title,
-    body: usableString(body) ? body : PUSH_FALLBACK.body,
+    // Story 8.5. Someone else's words, shown under the app's own sentence and never inside it:
+    // `outbox_body_is_sendable` judges only `body`, so a referee's reason that says "currently"
+    // cannot abort the refusal that carries it. Verbatim — never trimmed or cut; the server leaves
+    // a reason out whole when it will not fit a push, so there is nothing to shorten here.
+    // Only under a body the app actually sent: attached to the fallback it would be someone's
+    // words with no sentence saying whose, or why.
+    body: usableString(quote) && usableString(body) ? `${body}\n\n“${quote}”` : resolvedBody,
   };
 }
