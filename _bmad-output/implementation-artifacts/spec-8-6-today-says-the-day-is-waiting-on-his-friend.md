@@ -229,3 +229,12 @@ clean.
 
 - The one assertion 8-4 had to move one step down.
   [`8-4-…sql:439`](../../supabase/tests/8-4-what-is-waiting-for-him-today.sql#L439)
+
+## On the live project — 2026-09-29
+
+`npx supabase db push` applied `20260929110000` to `hxzalpnlrunctbajgtkv` after a dry run named
+only it; `npm run migrations:check` reports **all 83 matching**. PR #21 merged green. Read from the
+live catalog: `waiting_on_my_referee()` executable by `authenticated` and not `anon`,
+`commitment_days_waiting_on_referee()` by neither, both `security definer` with an empty
+`search_path`. The security advisor has no ERROR; its one new WARN is `waiting_on_my_referee()`,
+the author's own door, granted on purpose. No done checkpoint on this story, so parity closes it.
