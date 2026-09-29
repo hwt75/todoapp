@@ -25,6 +25,11 @@ import {
   type TimedWindowState,
 } from '@/lib/timed-window';
 import { createClient } from '@/lib/supabase/client';
+import {
+  WAITING_ON_REFEREE_COPY,
+  readWaitingOnReferee,
+  type WaitingRead,
+} from '@/lib/referee-waiting';
 import { DebtBlock } from '@/components/debt-block';
 import { totalOwed } from '@/lib/money';
 import type { WeeklyQuotaPosition } from '@/lib/weekly-quota';
@@ -172,6 +177,9 @@ function timedRowsToday(
   );
 }
 
+/** The answer before any read has come back, or after one read for another day. */
+const NO_WAITING: ReadonlySet<string> = new Set();
+
 /**
  * The screen the author opens, and the only one he opens under reluctance.
  *
@@ -214,6 +222,14 @@ export function Today({
    *  Deliberately not a dependency of the main read below: re-running that one would clear
    *  `evidenceState`, taking "Proof saved." off the screen the moment it was earned. */
   const [filedReload, setFiledReload] = useState(0);
+  /** Story 8.6: which rows' referee has not looked at today's photograph yet, stamped with the day
+   *  it was read for — see `waitingOnReferee` below for why a stale answer is discarded rather than
+   *  cleared. Read on load, after an upload, and whenever the app is shown again. */
+  const [waitingRead, setWaitingRead] = useState<WaitingRead | null>(null);
+  /** Bumped when the page becomes visible again. The referee decides on his own screen and nothing
+   *  tells this one — so an author who left the app open and comes back to it is the moment a
+   *  decision that has landed since should stop being described as not having happened. */
+  const [shownAgain, setShownAgain] = useState(0);
   /**
    * The instant every window state on this screen is read against (Story 6.5).
    *
@@ -450,6 +466,53 @@ export function Today({
    */
   const refereeReach =
     reachRead !== null && reachRead.day === localDay ? reachRead.answer : NO_REFEREE_REACH;
+
+  useEffect(() => {
+    function onVisibility() {
+      if (document.visibilityState === 'visible') setShownAgain((token) => token + 1);
+    }
+    // A page restored from the back/forward cache is shown without a visibilitychange at all.
+    function onPageShow(event: PageTransitionEvent) {
+      if (event.persisted) setShownAgain((token) => token + 1);
+    }
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, []);
+
+  /**
+   * Story 8.6 — whether his referee has looked yet.
+   *
+   * Re-read after an upload (`filedReload`), because attaching the photo is what makes a flagged
+   * row start waiting, and when the app is shown again (`shownAgain`), because a decision lands on
+   * the referee's screen and nothing tells this one. Not on the fifteen-second tick: that would be
+   * a poll, and the only boundary a tick can cross here — midnight — changes `localDay`, which is a
+   * dependency already.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    async function read() {
+      const answer = await readWaitingOnReferee(localDay);
+      if (cancelled) return;
+      // A read that did not come back keeps whatever answer this screen already has; the stamp
+      // below still discards it at midnight. One dropped request is not news about his referee.
+      if (answer !== null) setWaitingRead(answer);
+    }
+
+    void read();
+    return () => {
+      cancelled = true;
+    };
+  }, [localDay, filedReload, shownAgain]);
+
+  /** The waiting answer, but only if it is about the day on screen — the `refereeReach` rule, for
+   *  the same reason: the same ids survive midnight. */
+  const waitingOnReferee: ReadonlySet<string> =
+    waitingRead !== null && waitingRead.day === localDay ? waitingRead.ids : NO_WAITING;
 
   // Story 6.9: the read, plus whatever this browser has since failed to load out of it.
   const keptPhotos = useKeptPhotos(filed);
@@ -724,10 +787,27 @@ export function Today({
                         there is one, dated when you tapped.
                       </p>
                     ) : state === 'proven' ? (
-                      <p className="row-muted">{`${row.name} — claimed and proven for today.`}</p>
+                      <>
+                        <p className="row-muted">{`${row.name} — claimed and proven for today.`}</p>
+                        {/* Story 8.6. The server's answer, not this row's state, decides: a proof
+                            attached this session leaves the row reading "claimed" until the next
+                            full read, and the line must not wait for that. */}
+                        {waitingOnReferee.has(row.id) && (
+                          <p className="row-muted" role="status">
+                            {WAITING_ON_REFEREE_COPY.line}
+                          </p>
+                        )}
+                      </>
                     ) : state === 'claimed' ? (
                       <>
                         <p className="row-muted">{`${row.name} — claimed for today.`}</p>
+                        {/* Story 8.6 — the proof just attached, before the row's own state has
+                            caught up with it. See the proven branch above. */}
+                        {waitingOnReferee.has(row.id) && (
+                          <p className="row-muted" role="status">
+                            {WAITING_ON_REFEREE_COPY.line}
+                          </p>
+                        )}
 
                         {/* Story 6.3 — the photo, and only once the claim has actually landed.
                             Evidence references the declaration row by id, and a claim sitting
@@ -926,6 +1006,15 @@ export function Today({
                         photos={keptPhotos.photosOn(row.id, localDay)}
                         view={keptPhotos}
                       />
+
+                      {/* Story 8.6 — under the photo it is about. Information, not a control:
+                          nothing to tap, and nothing here if the read failed, because the day
+                          holds whether or not he is told his referee has not looked. */}
+                      {waitingOnReferee.has(row.id) && (
+                        <p className="row-muted" role="status">
+                          {WAITING_ON_REFEREE_COPY.line}
+                        </p>
+                      )}
                     </div>
                   );
                 })}

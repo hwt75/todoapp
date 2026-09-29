@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Today } from './today';
@@ -74,6 +74,13 @@ const rpcCalls: Array<{ fn: string; args: Record<string, unknown> }> = [];
 const rpcSettled: string[] = [];
 let rpcGate: Promise<void> | null = null;
 let releaseRpc: (() => void) | null = null;
+// Story 8.6: what `waiting_on_my_referee()` answers — the ids of rows whose referee has not looked
+// yet — or the error it fails with. Counted, so a test can prove a re-read actually happened.
+let waitingIds: unknown = [];
+let waitingError: unknown = null;
+let waitingReads = 0;
+/** The day the server says it answered for; defaults to the screen's own day. */
+let waitingDay: string | null = null;
 
 function holdTheReadOpen() {
   rpcGate = new Promise((resolve) => {
@@ -84,6 +91,19 @@ function holdTheReadOpen() {
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     rpc: async (fn: string, args: Record<string, unknown>) => {
+      if (fn === 'waiting_on_my_referee') {
+        waitingReads += 1;
+        if (rpcGate) await rpcGate;
+        return waitingError
+          ? { data: null, error: waitingError }
+          : {
+              data: (waitingIds as string[]).map((id) => ({
+                commitment_id: id,
+                for_day: waitingDay ?? todayLocal(),
+              })),
+              error: null,
+            };
+      }
       rpcCalls.push({ fn, args });
       // Held open so a test can stand inside the window where a new read is in flight and the
       // previous answer is all the screen has — which is where the day-rollover defect lived.
@@ -207,6 +227,10 @@ beforeEach(() => {
   rpcSettled.length = 0;
   rpcGate = null;
   releaseRpc = null;
+  waitingIds = [];
+  waitingError = null;
+  waitingReads = 0;
+  waitingDay = null;
   for (const key of Object.keys(rows)) delete rows[key];
   // Story 6.9: nothing filed, which is what most of this suite is about.
   rows.evidence = { data: [], error: null };
@@ -1746,5 +1770,177 @@ describe('opening a photo kept for today', () => {
 
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(screen.getByText(EVIDENCE_COPY.photosFailed(1))).toBeInTheDocument();
+  });
+});
+
+/**
+ * Story 8.6 — the author is told his referee has not looked yet.
+ *
+ * Which rows is the server's answer (`waiting_on_my_referee()`, the same definition the referee's
+ * list reads); these tests pin what Today does with it. **The sentence is information, never a
+ * task**, so most of what is asserted is where it does *not* appear, and that it never asks him to
+ * do anything.
+ */
+describe('his referee has not looked yet (Story 8.6)', () => {
+  afterEach(() => vi.useRealTimers());
+
+  const LINE = /Your referee hasn’t looked at this yet/;
+
+  function renderToday() {
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+  }
+
+  it('says so under a kept photo on a waiting row', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [{ ...sketchbook, requires_referee_approval: true }], error: null };
+    signOffAsOf = { c3: true };
+    waitingIds = ['c3'];
+
+    renderToday();
+
+    expect(await screen.findByText(LINE)).toBeInTheDocument();
+    expect(screen.getByText(/If he never does, it holds at midnight on your photo/)).toBeVisible();
+  });
+
+  it('says so under a timed row proved with its photo', async () => {
+    atLocalTime('20:40');
+    rows.commitment = { data: [{ ...pill, requires_photo: true }], error: null };
+    rows.timed_claim_today = {
+      data: [{ commitment_id: 'c2', declaration_id: 'decl-9', proven: true }],
+      error: null,
+    };
+    waitingIds = ['c2'];
+
+    renderToday();
+
+    expect(await screen.findByText(LINE)).toBeInTheDocument();
+  });
+
+  // Flagged, signed off as of today, a photo on file — everything a client could notice — and still
+  // no line, because the server did not name it. The line comes from the answer and nowhere else.
+  it('says nothing on a row the server did not name, however waiting it looks', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [{ ...sketchbook, requires_referee_approval: true }], error: null };
+    signOffAsOf = { c3: true };
+    rows.evidence = {
+      data: [{ id: 'e1', commitment_id: 'c3', for_day: todayLocal(), storage_path: 'c3/a.jpg' }],
+      error: null,
+    };
+    waitingIds = [];
+
+    renderToday();
+    await screen.findByLabelText('Proof — Sketchbook');
+    await vi.waitFor(() => expect(waitingReads).toBeGreaterThan(0));
+
+    expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+  });
+
+  it('says nothing, and fails nothing else, when the read fails', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [sketchbook], error: null };
+    waitingError = { message: 'nope' };
+
+    renderToday();
+    await screen.findByLabelText('Proof — Sketchbook');
+    await vi.waitFor(() => expect(waitingReads).toBeGreaterThan(0));
+
+    expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+    expect(screen.queryByText(/nope/)).not.toBeInTheDocument();
+  });
+
+  it('appears once he attaches the photo, without a reload', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [{ ...sketchbook, requires_referee_approval: true }], error: null };
+    signOffAsOf = { c3: true };
+
+    renderToday();
+    const input = await screen.findByLabelText('Proof — Sketchbook');
+    expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+
+    waitingIds = ['c3'];
+    fireEvent.change(input, {
+      target: { files: [new File(['x'], 'sketch.jpg', { type: 'image/jpeg' })] },
+    });
+
+    expect(await screen.findByText(LINE)).toBeInTheDocument();
+  });
+
+  it('goes once the app is shown again after his referee decided', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [{ ...sketchbook, requires_referee_approval: true }], error: null };
+    signOffAsOf = { c3: true };
+    waitingIds = ['c3'];
+
+    renderToday();
+    expect(await screen.findByText(LINE)).toBeInTheDocument();
+
+    waitingIds = [];
+    const reads = waitingReads;
+    // A spy rather than defineProperty, so the override goes with the test instead of leaking into
+    // every test after it.
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    await vi.waitFor(() => expect(waitingReads).toBeGreaterThan(reads));
+    await vi.waitFor(() => expect(screen.queryByText(LINE)).not.toBeInTheDocument());
+    visibility.mockRestore();
+  });
+
+  it('keeps the line through a re-read that does not come back', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [{ ...sketchbook, requires_referee_approval: true }], error: null };
+    signOffAsOf = { c3: true };
+    waitingIds = ['c3'];
+
+    renderToday();
+    expect(await screen.findByText(LINE)).toBeInTheDocument();
+
+    waitingError = { message: 'offline' };
+    const reads = waitingReads;
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    await vi.waitFor(() => expect(waitingReads).toBeGreaterThan(reads));
+    expect(screen.getByText(LINE)).toBeInTheDocument();
+    visibility.mockRestore();
+  });
+
+  it('never shows an answer the server stamped with another day', async () => {
+    atLocalTime('11:30');
+    rows.commitment = { data: [{ ...sketchbook, requires_referee_approval: true }], error: null };
+    signOffAsOf = { c3: true };
+    waitingIds = ['c3'];
+    waitingDay = '2026-08-29';
+
+    renderToday();
+    await screen.findByLabelText('Proof — Sketchbook');
+    await vi.waitFor(() => expect(waitingReads).toBeGreaterThan(0));
+
+    expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+  });
+
+  it("drops yesterday's answer the moment the day turns over", async () => {
+    atLocalTime('23:59');
+    rows.commitment = { data: [{ ...sketchbook, requires_referee_approval: true }], error: null };
+    signOffAsOf = { c3: true };
+    waitingIds = ['c3'];
+
+    renderToday();
+    expect(await screen.findByText(LINE)).toBeInTheDocument();
+
+    // The new day's read is held open: whatever the screen shows now, it shows on the old answer.
+    holdTheReadOpen();
+    await act(async () => {
+      vi.advanceTimersByTime(90_000);
+    });
+
+    // The row is still there -- it is the stale answer that went, not the row it was about.
+    expect(screen.getByLabelText('Proof — Sketchbook')).toBeInTheDocument();
+    expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+    await act(async () => {
+      releaseRpc?.();
+    });
   });
 });

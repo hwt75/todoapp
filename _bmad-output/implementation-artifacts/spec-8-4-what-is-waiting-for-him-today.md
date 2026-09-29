@@ -313,3 +313,18 @@ the referee in a browser.
 8. **Silence.** On another day, flag and photograph a commitment and let the referee do nothing.
    After midnight it holds on the photo alone — no penalty, chain unbroken.
 9. Reload `/referee` after steps 5 and 6: both rows are gone. The list keeps no history.
+
+## On the live project — 2026-09-29
+
+`npx supabase db push` applied `20260929090000` and `20260929100000` to `hxzalpnlrunctbajgtkv`
+after a dry run named exactly those two; `npm run migrations:check` then reported **all 82
+matching**. PRs #19 and #20 merged green, in that order.
+
+**Security advisor, run against the live schema** — the debt Stories 8.1 and 8.3 recorded. No
+ERROR-level finding and nothing executable by `anon`. Sixteen WARNs of
+`authenticated_security_definer_function_executable`, every one a door granted on purpose and
+documented where it is granted — `referee_waiting_today()` among them, `sign_off_day()`,
+`photograph_reaches_the_referee()` and the rest of Epic 8's. `commitment_day_photographs()`,
+`refusal_body()` and `refusal_payload()` are executable by neither client role, read from the live
+catalog. The one other WARN, leaked-password protection, is Auth configuration and predates the
+epic.
