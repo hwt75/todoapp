@@ -433,11 +433,16 @@ begin
       'predicate and the list can answer "which photographs" differently.';
   end if;
 
+  -- Two steps since Story 8.6, which moved "waiting" into one definition both the referee and the
+  -- author read: the list names the definition, and the definition names the predicate.
   if pg_get_functiondef('public.referee_waiting_today()'::regprocedure)
+       not like '%commitment_days_waiting_on_referee%'
+     or pg_get_functiondef('public.commitment_days_waiting_on_referee(uuid, date)'::regprocedure)
        not like '%photograph_reaches_the_referee%' then
     raise exception
-      'referee_waiting_today() is no longer gated by photograph_reaches_the_referee(). A row it '
-      'lists could then be one he cannot open, or cannot decide.';
+      'referee_waiting_today() is no longer gated by photograph_reaches_the_referee() through '
+      'commitment_days_waiting_on_referee(). A row it lists could then be one he cannot open, or '
+      'cannot decide -- or one the author is not told is waiting.';
   end if;
 
   raise notice using message =

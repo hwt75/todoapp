@@ -598,7 +598,13 @@ begin
     -- `security definer`; a client that could call them could learn nothing it needs and has no
     -- outbox to hand the result to -- the same argument objection_body() is listed on.
     'public.refusal_body(date, boolean)',
-    'public.refusal_payload(text, date, text)'
+    'public.refusal_payload(text, date, text)',
+    -- Story 8.6. The one definition of "waiting on the referee". It takes an owner as an argument,
+    -- so a client that could call it could ask about any account; both callers are `security
+    -- definer` and establish the owner from the session. Deliberately NOT here:
+    -- waiting_on_my_referee(), the author's own door, granted to `authenticated` and asserted in
+    -- both directions in `8-6-today-says-the-day-is-waiting-on-his-friend.sql`.
+    'public.commitment_days_waiting_on_referee(uuid, date)'
   ]
   loop
     foreach r in array array['anon', 'authenticated'] loop
@@ -715,7 +721,7 @@ begin
   end loop;
 
   raise notice using message =
-    'Step 6 ok: forty-one deciding functions and the outbox are all out of reach of anon '
+    'Step 6 ok: forty-two deciding functions and the outbox are all out of reach of anon '
     'and authenticated, and the eight Story 6.6 touches carry an explicit ACL that still lets '
     'postgres and service_role in, with search_path pinned to empty.';
   raise notice using message =
