@@ -22,6 +22,13 @@
 
 begin;
 
+-- The bucket is `config.toml` configuration created through the storage API, not by a migration,
+-- so CI's database (started with `-x storage-api`) has the schema and not the row. README.md,
+-- "A fixture that writes `evidence` also writes its photograph".
+insert into storage.buckets (id, name)
+values ('appeal-evidence', 'appeal-evidence')
+on conflict (id) do nothing;
+
 -- =================================================================================
 -- Step 0: the doors, in both directions.
 -- =================================================================================
