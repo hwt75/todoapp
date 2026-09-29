@@ -5,6 +5,8 @@ import {
   type PenaltyRecord,
   type SettlementRecord,
   OBJECTION_COPY,
+  REFUSAL_COPY,
+  type RefusalRecord,
   buildLedger,
   ledgerPillFamily,
   ledgerPillLabel,
@@ -594,5 +596,59 @@ describe('OBJECTION_COPY', () => {
   it('attributes the sentence to the referee and quotes it rather than paraphrasing', () => {
     expect(OBJECTION_COPY.heading).toBe('The referee objected');
     expect(OBJECTION_COPY.reason('He never took it.')).toContain('He never took it.');
+  });
+});
+
+/**
+ * Story 8.5 — the referee's refusals, folded onto the day they name.
+ *
+ * The push carries the reason only when it fits and otherwise says to look here, so this is the
+ * one place the reason is always whole. Several per day, unlike an objection: a refusal names one
+ * commitment.
+ */
+describe('refusals are shown against the day they name', () => {
+  const gym: RefusalRecord = {
+    id: 'd-gym',
+    for_day: '2026-08-18',
+    commitment_name: 'Gym',
+    reason: 'That is a photo of your kitchen.',
+  };
+  const pill: RefusalRecord = {
+    id: 'd-pill',
+    for_day: '2026-08-18',
+    commitment_name: 'Thuốc',
+    reason: '  He is currently lying.\nAsk me.  ',
+  };
+
+  it('carries every refusal of that day, verbatim, in commitment-name order', () => {
+    const rows = buildLedger([failedDay], [penalty], misses, [], [], [], [pill, gym]);
+    expect(rows[0].refusals).toEqual([
+      { id: 'd-gym', commitmentName: 'Gym', reason: 'That is a photo of your kitchen.' },
+      { id: 'd-pill', commitmentName: 'Thuốc', reason: '  He is currently lying.\nAsk me.  ' },
+    ]);
+  });
+
+  it('leaves every other day, and every week, alone', () => {
+    const week = { period: '2026-08-18', verdict: 'clean' as const, missed_count: 0 };
+    const rows = buildLedger([failedDay, cleanDay], [penalty], misses, [week], [], [], [gym]);
+    expect(rows.find((r) => r.kind === 'day' && r.day === '2026-08-17')!.refusals).toEqual([]);
+    expect(rows.find((r) => r.kind === 'week')!.refusals).toEqual([]);
+  });
+
+  it('is empty on every row when nothing was refused, and existing callers still compile', () => {
+    const rows = buildLedger([failedDay, cleanDay], [penalty], misses);
+    expect(rows.every((r) => r.refusals.length === 0)).toBe(true);
+  });
+
+  it('keeps two same-named, same-worded refusals apart, in a stable order', () => {
+    const a = { ...gym, id: 'd-2' };
+    const b = { ...gym, id: 'd-1' };
+    const rows = buildLedger([failedDay], [penalty], misses, [], [], [], [a, b]);
+    expect(rows[0].refusals.map((r) => r.id)).toEqual(['d-1', 'd-2']);
+  });
+
+  it('quotes the reason and attributes it rather than paraphrasing', () => {
+    expect(REFUSAL_COPY.heading).toBe('Your referee refused');
+    expect(REFUSAL_COPY.line('Gym', 'Not today.')).toBe('Gym: “Not today.”');
   });
 });

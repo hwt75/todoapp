@@ -814,3 +814,105 @@ describe('the objection is announced once, not twice (Story 6.7)', () => {
     );
   });
 });
+
+/**
+ * Story 8.5 — each refusal of a day, verbatim, on that day's row: heard once through the row's
+ * name and seen once in the body, the same arrangement the objection has.
+ */
+describe('refusals on the day they name (Story 8.5)', () => {
+  function withRefusals(refusals: unknown[]) {
+    rows.referee_decision = { data: refusals, error: null };
+  }
+
+  it('shows every refusal with its commitment and his words, and announces each once', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 2 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+      [
+        { for_day: '2026-08-18', commitment: { name: 'Gym', carries_penalty: true } },
+        { for_day: '2026-08-18', commitment: { name: 'Thuốc', carries_penalty: true } },
+      ],
+    );
+    withRefusals([
+      {
+        id: 'd1',
+        for_day: '2026-08-18',
+        approved: false,
+        reason: 'Not today’s pill.',
+        commitment: { name: 'Thuốc' },
+      },
+      {
+        id: 'd2',
+        for_day: '2026-08-18',
+        approved: false,
+        reason: 'That is your kitchen.',
+        commitment: { name: 'Gym' },
+      },
+    ]);
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    const row = await screen.findByRole('group');
+    expect(row).toHaveAccessibleName(
+      '2026-08-18, owed 500.000₫, for Gym and Thuốc. Your referee refused: Gym: “That is your ' +
+        'kitchen.”. Your referee refused: Thuốc: “Not today’s pill.”',
+    );
+    const seen = screen.getByText('Thuốc: “Not today’s pill.”');
+    expect(seen.closest('p')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByText('Gym: “That is your kitchen.”')).toBeInTheDocument();
+    // No control of its own: a refusal is final, and the Grace Day is the recourse.
+    expect(screen.queryByRole('button', { name: /refus/i })).not.toBeInTheDocument();
+  });
+
+  // The query filters approvals out; this is the belt to that brace. An approval has a null
+  // reason, and rendered it would read as a refusal of "null".
+  it('never shows an approval, even one the query let through, and names a blank commitment', async () => {
+    withDays(
+      [{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }],
+      [{ amount_dong: 500000, state: 'owed', period: '2026-08-18' }],
+      [{ for_day: '2026-08-18', commitment: { name: 'Gym', carries_penalty: true } }],
+    );
+    withRefusals([
+      {
+        id: 'd1',
+        for_day: '2026-08-18',
+        approved: true,
+        reason: null,
+        commitment: { name: 'Gym' },
+      },
+      {
+        id: 'd2',
+        for_day: '2026-08-18',
+        approved: false,
+        reason: 'No.',
+        commitment: { name: '  ' },
+      },
+    ]);
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('group')).toHaveAccessibleName(
+      '2026-08-18, owed 500.000₫, for Gym. Your referee refused: A commitment: “No.”',
+    );
+    expect(screen.queryByText(/null/)).not.toBeInTheDocument();
+  });
+
+  it('leaves a day with no refusal exactly as it read before', async () => {
+    withDays([{ period: '2026-08-17', verdict: 'clean', missed_count: 0 }]);
+    withRefusals([]);
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('group')).toHaveAccessibleName('2026-08-17, clean');
+    expect(screen.queryByText(/Your referee refused/)).not.toBeInTheDocument();
+  });
+
+  it('fails the whole screen rather than rendering a ledger missing a refusal', async () => {
+    withDays([{ period: '2026-08-18', verdict: 'failed', missed_count: 1 }], [], []);
+    rows.referee_decision = { data: null, error: { message: 'refusal read failed' } };
+
+    render(<Ledger ownerId="u1" onClose={vi.fn()} />);
+
+    expect(await screen.findByText(/refusal read failed/)).toBeInTheDocument();
+  });
+});

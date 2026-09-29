@@ -612,11 +612,11 @@ begin
   -- =================================================================================
   -- Step 2: the decisions, all before midnight and all before anything settles.
   -- =================================================================================
-  -- sign_off_day()'s comment ends "Enqueues nothing -- telling the author is Story 8.5", and that
-  -- split is a frozen decision: folding the notification in is the merge that produced Epic 6's
-  -- 1,579-line single-block test file. A stray outbox_enqueue() added later would ship green
-  -- against a file that never mentions the table, so the whole queue is counted across the nine
-  -- decisions below rather than a dedupe-key prefix guessed in advance.
+  -- Telling the author was split out to Story 8.5 on purpose: folding the notification in is the
+  -- merge that produced Epic 6's 1,579-line single-block test file. 8.5 has since landed, so the
+  -- count below is exactly one push per refusal and none for the approval -- counted across the
+  -- whole queue rather than a dedupe-key prefix guessed in advance, so a stray second enqueue
+  -- still turns this red. What each push says is `8-5-the-author-is-told-he-was-refused.sql`'s.
   select count(*) into v_outbox from public.outbox;
 
   perform set_config('role', 'authenticated', true);
@@ -666,16 +666,15 @@ begin
   end if;
 
   select count(*) - v_outbox into v_count from public.outbox;
-  if v_count <> 0 then
+  if v_count <> 10 then
     raise exception using message = format(
-      'Eleven decisions enqueued %s outbox row(s), expected 0. sign_off_day() tells the author '
-      'nothing -- that is Story 8.5, split out on purpose -- and its own comment says so.',
-      v_count);
+      'Eleven decisions enqueued %s outbox row(s), expected 10: one push per refusal and none for '
+      'the approval (Story 8.5).', v_count);
   end if;
 
   raise notice using message =
     'Step 2 ok: eleven decisions, one approval and ten refusals, every one of them before its '
-    'day closed, and not one outbox row between them.';
+    'day closed, and exactly one push per refusal between them.';
 
   -- =================================================================================
   -- Step 3: the four edits `commitment: edit own` permits between a refusal and midnight, and
