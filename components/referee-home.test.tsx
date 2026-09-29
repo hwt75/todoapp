@@ -29,6 +29,12 @@ let markCollectedResult: unknown = { data: null, error: null };
 // Story 5.3 — the escalated "gone quiet" episode, if any. Empty by default: most tests never
 // see this row, the same way most never see an owed penalty.
 let silenceResult: unknown = { data: [], error: null };
+// Story 8.4 — today's waiting list, the per-call answer of sign_off_day(), and the one signing
+// call behind the list's photos. Empty by default, like every other list on this screen.
+let waitingResult: unknown = { data: [], error: null };
+let signOff: (args: Record<string, unknown>) => unknown = () => ({ data: null, error: null });
+let signedUrlsResult: unknown = { data: [], error: null };
+const createSignedUrls = vi.fn();
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
@@ -67,7 +73,19 @@ vi.mock('@/lib/supabase/client', () => ({
       if (name === 'referee_missed_commitments') {
         return Promise.resolve(missedCommitmentsResult);
       }
+      if (name === 'referee_waiting_today') return Promise.resolve(waitingResult);
+      if (name === 'sign_off_day') {
+        return Promise.resolve(signOff(args[0] as Record<string, unknown>));
+      }
       return Promise.resolve(markCollectedResult);
+    },
+    storage: {
+      from: () => ({
+        createSignedUrls: (paths: string[], ttl: number) => {
+          createSignedUrls(paths, ttl);
+          return Promise.resolve(signedUrlsResult);
+        },
+      }),
     },
   }),
 }));
@@ -95,6 +113,10 @@ beforeEach(() => {
   missedCommitmentsResult = { data: [], error: null };
   markCollectedResult = { data: null, error: null };
   silenceResult = { data: [], error: null };
+  waitingResult = { data: [], error: null };
+  signOff = () => ({ data: null, error: null });
+  signedUrlsResult = { data: [], error: null };
+  createSignedUrls.mockClear();
   rpc.mockClear();
   replace.mockClear();
   push.mockClear();
@@ -909,5 +931,285 @@ describe('the way in to a day, and the list that must not appear (Story 6.7)', (
     expect(rpc).not.toHaveBeenCalledWith('referee_day_lookup', expect.anything());
     expect(screen.queryByText(/day(s)? (to review|awaiting|pending)/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/proven day/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Story 8.4 — what is waiting for him today.
+ *
+ * **Most of what is asserted here is an absence**, for the reason the day lookup's own tests give:
+ * this list is affordable only while nothing on it nags, counts or implies a duty. So with nothing
+ * waiting the section does not exist at all, and nothing anywhere names a number of days.
+ *
+ * `sign_off_day()` is the sole judge (AD-1). The screen passes back the day the server named,
+ * mirrors two facts to decide whether a refuse control renders, and shows every refusal verbatim
+ * on the one row it belongs to.
+ */
+describe('what is waiting for him today (Story 8.4)', () => {
+  function waitingRow(overrides: Record<string, unknown> = {}) {
+    return {
+      commitment_id: 'c1',
+      commitment_name: 'Thuoc',
+      for_day: '2026-09-29',
+      carries_penalty: true,
+      cadence: 'daily',
+      evidence_paths: ['c1/2026-09-29.jpg'],
+      ...overrides,
+    };
+  }
+
+  function signs(...paths: string[]) {
+    signedUrlsResult = {
+      data: paths.map((path) => ({ path, signedUrl: `https://signed/${path}`, error: null })),
+      error: null,
+    };
+  }
+
+  it('renders no section at all when nothing is waiting, and the empty line stands', async () => {
+    render(<RefereeHome />);
+
+    expect(
+      await screen.findByText('Nothing for you right now. 0 appeals pending, 0 penalties owed.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /asked you to see/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/do not have to do anything/i)).not.toBeInTheDocument();
+    expect(createSignedUrls).not.toHaveBeenCalled();
+  });
+
+  it('lists each waiting day with its photo, signed in one call, and nothing counted', async () => {
+    waitingResult = {
+      data: [
+        waitingRow(),
+        waitingRow({
+          commitment_id: 'c2',
+          commitment_name: 'Gym',
+          evidence_paths: ['d2/proof.jpg'],
+        }),
+      ],
+      error: null,
+    };
+    signs('c1/2026-09-29.jpg', 'd2/proof.jpg');
+
+    render(<RefereeHome />);
+
+    const section = await screen.findByRole('region', { name: /asked you to see/i });
+    expect(screen.getByText(/say nothing, each of these days holds at midnight/i)).toBeVisible();
+    expect(screen.getByRole('img', { name: 'The photo for Thuoc' })).toHaveAttribute(
+      'src',
+      'https://signed/c1/2026-09-29.jpg',
+    );
+    expect(screen.getByRole('img', { name: 'The photo for Gym' })).toBeInTheDocument();
+
+    expect(createSignedUrls).toHaveBeenCalledTimes(1);
+    expect(createSignedUrls.mock.calls[0][0]).toEqual(['c1/2026-09-29.jpg', 'd2/proof.jpg']);
+
+    // "Nothing for you right now" would be false above a list of photos.
+    expect(screen.queryByText(/Nothing for you right now/)).not.toBeInTheDocument();
+    // No number anywhere in the section: not in the heading, not in a badge, not in the intro.
+    expect(section.textContent).not.toMatch(/\d/);
+  });
+
+  it('passes back the day the server named and says the approval changed nothing', async () => {
+    waitingResult = { data: [waitingRow({ for_day: '2031-01-02' })], error: null };
+    signs('c1/2026-09-29.jpg');
+
+    render(<RefereeHome />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark Thuoc done' }));
+
+    expect(await screen.findByText(/Marked done\. The day holds/)).toBeInTheDocument();
+    expect(rpc).toHaveBeenCalledWith('sign_off_day', {
+      p_commitment_id: 'c1',
+      p_for_day: '2031-01-02',
+      p_approved: true,
+      p_reason: null,
+    });
+    // The row stays, and its controls are gone -- a decision is final.
+    expect(screen.getByText('Thuoc')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mark Thuoc done' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Refuse Thuoc' })).not.toBeInTheDocument();
+  });
+
+  it('will not refuse without a reason, warns it is final, and never says he was told', async () => {
+    waitingResult = { data: [waitingRow()], error: null };
+    signs('c1/2026-09-29.jpg');
+
+    render(<RefereeHome />);
+    const refuse = await screen.findByRole('button', { name: 'Refuse Thuoc' });
+
+    expect(refuse).toBeDisabled();
+    expect(screen.getByText(/This is final/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Why does this day not hold?'), {
+      target: { value: '  That is last week’s photo.  ' },
+    });
+    expect(refuse).toBeEnabled();
+    fireEvent.click(refuse);
+
+    const refused = await screen.findByText(/Refused\. The day will close as a failed day\./);
+    expect(refused.textContent).not.toMatch(/told|notified|message/i);
+    expect(rpc).toHaveBeenCalledWith('sign_off_day', {
+      p_commitment_id: 'c1',
+      p_for_day: '2026-09-29',
+      p_approved: false,
+      // Verbatim -- sign_off_day() trims before it writes; the screen never edits his words.
+      p_reason: '  That is last week’s photo.  ',
+    });
+  });
+
+  it.each([
+    ['carries no penalty today', { carries_penalty: false }],
+    ['is a Weekly Quota', { cadence: 'weekly_quota' }],
+    ['is an hours quota', { cadence: 'daily_hours_quota' }],
+  ])('offers only Mark done where the commitment %s', async (_label, overrides) => {
+    waitingResult = { data: [waitingRow(overrides)], error: null };
+    signs('c1/2026-09-29.jpg');
+
+    render(<RefereeHome />);
+
+    expect(await screen.findByRole('button', { name: 'Mark Thuoc done' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Refuse Thuoc' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Why does this day not hold?')).not.toBeInTheDocument();
+    expect(screen.getByText(/can only be marked done/)).toBeInTheDocument();
+  });
+
+  it('shows a refusal from the server on its own row only, and reloads nothing', async () => {
+    waitingResult = {
+      data: [
+        waitingRow(),
+        waitingRow({ commitment_id: 'c2', commitment_name: 'Gym', evidence_paths: [] }),
+      ],
+      error: null,
+    };
+    signs('c1/2026-09-29.jpg');
+    signOff = (args) =>
+      args.p_commitment_id === 'c1'
+        ? {
+            data: null,
+            error: { message: 'That day has already been decided, and a decision is final.' },
+          }
+        : { data: null, error: null };
+
+    render(<RefereeHome />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark Thuoc done' }));
+
+    expect(
+      await screen.findByText('That day has already been decided, and a decision is final.'),
+    ).toBeInTheDocument();
+    // The failing row keeps its controls so he can see where he is; the other row is untouched.
+    expect(screen.getByRole('button', { name: 'Mark Thuoc done' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Mark Gym done' })).toBeEnabled();
+    expect(screen.getAllByText(/Failed\./)).toHaveLength(1);
+    expect(rpc.mock.calls.filter((call) => call[0] === 'referee_waiting_today')).toHaveLength(1);
+  });
+
+  it('counts a photo that would not sign on its row rather than dropping it', async () => {
+    waitingResult = {
+      data: [waitingRow({ evidence_paths: ['c1/a.jpg', 'c1/b.jpg'] })],
+      error: null,
+    };
+    signedUrlsResult = {
+      data: [
+        { path: 'c1/a.jpg', signedUrl: 'https://signed/c1/a.jpg', error: null },
+        { path: 'c1/b.jpg', signedUrl: null, error: 'Object not found' },
+      ],
+      error: null,
+    };
+
+    render(<RefereeHome />);
+
+    expect(await screen.findByText('One photo here could not be opened.')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'The photo for Thuoc' })).toBeInTheDocument();
+  });
+
+  it('fails the screen in the server’s own words when the list cannot be read', async () => {
+    waitingResult = { data: null, error: { message: 'permission denied' } };
+
+    render(<RefereeHome />);
+
+    expect(await screen.findByText('permission denied')).toBeInTheDocument();
+  });
+
+  // The acceptance criterion as written: a *refusal* the server rejects lands on its own row, and
+  // leaves what he typed where he typed it -- a reason he has to write again is a reason lost.
+  it('keeps a rejected refusal on its row with his words still in the box', async () => {
+    waitingResult = {
+      data: [
+        waitingRow(),
+        waitingRow({ commitment_id: 'c2', commitment_name: 'Gym', evidence_paths: [] }),
+      ],
+      error: null,
+    };
+    signs('c1/2026-09-29.jpg');
+    signOff = (args) =>
+      args.p_commitment_id === 'c1'
+        ? {
+            data: null,
+            error: {
+              message: 'That day has closed. A signature lands before midnight or not at all.',
+            },
+          }
+        : { data: null, error: null };
+
+    render(<RefereeHome />);
+    const [thuocReason, gymReason] = await screen.findAllByLabelText('Why does this day not hold?');
+    fireEvent.change(thuocReason, { target: { value: 'Not today’s pill.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Refuse Thuoc' }));
+
+    expect(
+      await screen.findByText(
+        'That day has closed. A signature lands before midnight or not at all.',
+      ),
+    ).toBeInTheDocument();
+    expect(thuocReason).toHaveValue('Not today’s pill.');
+    expect(screen.getByRole('button', { name: 'Refuse Thuoc' })).toBeEnabled();
+    // The other row neither shows the error nor lost its own controls.
+    expect(gymReason).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Mark Gym done' })).toBeEnabled();
+    expect(screen.getAllByText(/Failed\./)).toHaveLength(1);
+  });
+
+  // A double tap must not become two decisions. The second would come back "already decided",
+  // overwrite the success, and put the controls back on a day that is already final.
+  it('disables both controls on a row while its decision is in flight', async () => {
+    waitingResult = { data: [waitingRow()], error: null };
+    signs('c1/2026-09-29.jpg');
+    let release: (value: unknown) => void = () => {};
+    signOff = () =>
+      new Promise((resolve) => {
+        release = resolve;
+      });
+
+    render(<RefereeHome />);
+    fireEvent.change(await screen.findByLabelText('Why does this day not hold?'), {
+      target: { value: 'Not today’s pill.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Thuoc done' }));
+
+    const approve = await screen.findByRole('button', { name: 'Mark Thuoc done' });
+    expect(approve).toBeDisabled();
+    expect(approve).toHaveTextContent('Marking…');
+    expect(approve).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('button', { name: 'Refuse Thuoc' })).toBeDisabled();
+
+    fireEvent.click(approve);
+    fireEvent.click(screen.getByRole('button', { name: 'Refuse Thuoc' }));
+    release({ data: null, error: null });
+
+    expect(await screen.findByText(/Marked done\. The day holds/)).toBeInTheDocument();
+    expect(rpc.mock.calls.filter((call) => call[0] === 'sign_off_day')).toHaveLength(1);
+  });
+
+  // Storage down entirely, not one item failing inside a call that worked: every photo is
+  // reported unopenable and the screen still reaches ready -- never a home screen stuck on
+  // loading because the photos could not be signed.
+  it('reports every photo unopenable when the signing call fails outright', async () => {
+    waitingResult = { data: [waitingRow()], error: null };
+    signedUrlsResult = { data: null, error: { message: 'storage unavailable' } };
+
+    render(<RefereeHome />);
+
+    expect(await screen.findByText('One photo here could not be opened.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark Thuoc done' })).toBeEnabled();
+    expect(screen.queryByRole('img', { name: /for Thuoc/ })).not.toBeInTheDocument();
   });
 });
