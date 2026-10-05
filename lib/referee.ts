@@ -509,12 +509,19 @@ export interface RefereeDayRow {
    *  happens in one call for the whole day, never one round trip per photo. Empty for a day with
    *  no proof, never null, so nothing has to test for two shapes of "none". */
   evidencePaths: string[];
+  /** Whether this commitment asked for his signature on the day looked up —
+   *  `requires_referee_approval_as_of()`, the same door `object_to_day()` reads to refuse it
+   *  (20261005100000). His decision on such a day was `sign_off_day()`, before midnight, and the
+   *  48-hour objection is not a second way in. As of that day, never live: switching the flag off
+   *  afterwards does not reopen this door. */
+  askedForSignature: boolean;
 }
 
 /**
- * Whether this row may still be objected to — the three conditions `object_to_day()` checks that
- * a client can honestly see: the day recorded `held` for this commitment, nobody has objected to
- * the day yet, and the window is still open.
+ * Whether this row may still be objected to — the four conditions `object_to_day()` checks that
+ * a client can honestly see: the day recorded `held` for this commitment, the commitment did not
+ * ask for his signature on that day, nobody has objected to the day yet, and the window is still
+ * open.
  *
  * Deliberately NOT a full mirror. It does not know whether the day's penalty has been collected,
  * and it must not try to: a `collected` penalty is terminal and this feature never reads one. That
@@ -527,6 +534,7 @@ export interface RefereeDayRow {
 export function objectionIsOffered(row: RefereeDayRow, now: Date): boolean {
   return (
     row.outcome === 'held' &&
+    !row.askedForSignature &&
     !row.alreadyObjected &&
     new Date(row.objectionDeadline).getTime() > now.getTime()
   );
@@ -578,6 +586,12 @@ export const REFEREE_DAY_COPY = {
    *  when the day stops being his to question. */
   window: (deadline: string): string => `You can object until ${formatWindowClose(deadline)}.`,
   windowClosed: 'The window on this day has closed. It stands.',
+  /** A commitment that asked for his signature was his to decide on the day itself, before
+   *  midnight (Story 8.2). Said in place of the window, because the window is not closed — it is
+   *  simply not his door, and `object_to_day()` refuses it in these terms. */
+  signedOnTheDay:
+    'This commitment asked for your signature on the day itself, so there is no objection ' +
+    'afterwards. It stands as it was decided.',
   alreadyObjected: 'You have already objected to this day.',
   notHeld: 'This day did not hold anyway. There is nothing to object to.',
   reasonLabel: 'Why does that day not hold?',

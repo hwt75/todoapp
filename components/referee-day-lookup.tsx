@@ -173,6 +173,7 @@ export function RefereeDayLookup() {
           objectionDeadline: row.objection_deadline as string,
           alreadyObjected: Boolean(row.already_objected),
           evidencePaths: (row.evidence_paths as string[] | null) ?? [],
+          askedForSignature: Boolean(row.asked_for_signature),
         });
       }
     }
@@ -354,11 +355,19 @@ export function RefereeDayLookup() {
                             missing. The day-level flag covers every other commitment on a day one
                             objection has already spoken for — `objection_once_per_day` is
                             (subject, for_day), so those rows could only ever be refused. */}
-                        {row.outcome === 'held' && spoken && state.kind !== 'objected' && (
-                          <p>{REFEREE_DAY_COPY.alreadyObjected}</p>
+                        {row.outcome === 'held' &&
+                          !row.askedForSignature &&
+                          spoken &&
+                          state.kind !== 'objected' && <p>{REFEREE_DAY_COPY.alreadyObjected}</p>}
+
+                        {/* A flagged row's one sentence, whatever else is true of the day: the
+                            objection was never its door, so neither "closed" nor "already
+                            objected" is the reason the control is missing. */}
+                        {row.outcome === 'held' && row.askedForSignature && (
+                          <p>{REFEREE_DAY_COPY.signedOnTheDay}</p>
                         )}
 
-                        {row.outcome === 'held' && !spoken && !open && (
+                        {row.outcome === 'held' && !row.askedForSignature && !spoken && !open && (
                           <p>{REFEREE_DAY_COPY.windowClosed}</p>
                         )}
 

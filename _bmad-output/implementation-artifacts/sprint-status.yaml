@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 09-29-2026 00:00
+last_updated: 10-05-2026 00:00
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -92,7 +92,9 @@ development_status:
   6-9-a-photo-i-can-open-again: done
   epic-6-retrospective: done
 
-  epic-7: in-progress
+  # Closed 2026-10-05 on hwt75's decision: both stories are merged and done, and no third story
+  # was ever defined -- epics.md has no Epic 7 section; the epic is the two redesign stories.
+  epic-7: done
   7-1-a-surface-i-am-less-reluctant-to-open: done
   7-2-a-message-meant-to-be-said-out-loud: done
   epic-7-retrospective: optional
@@ -456,8 +458,11 @@ action_items:
     action: "Move apply_grace_days() onto frozen settlement rows, the last correction
       writer still rebuilding from live commitments_owing()."
     owner: "hwt75"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-07.md"
+    note: "Built on branch the-settler-takes-the-account-lock (migration 20261005090000, test
+      supabase/tests/the-settler-takes-the-account-lock.sql step 2). Not done until the SQL suite
+      has passed in CI and the migration is on the remote project."
   - id: "epic-6-retro-item-45-extract-the-evidence-write-path-shared-b"
     epic: 6
     action: "Extract the evidence write path shared by today.tsx and appeal-form.tsx;

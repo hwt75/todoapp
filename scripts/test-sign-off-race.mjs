@@ -6,19 +6,19 @@
 // this reproduces, is one person with the app open on a phone and a laptop, or one tap retried
 // over a slow connection — two connections carrying one `sub`.
 //
-// `sign_off_day()` takes no advisory lock, unlike `object_to_day()` — it writes one row and moves
-// no money, so its only contention is two decisions on one commitment-day, and what serialises
-// that is `referee_decision_once_per_commitment_day` plus `on conflict do nothing`. That argument
-// is the whole of Story 8.2's decision 3, and **a single-session test cannot reach it at all**:
-// the RPC's own check-then-act read ("That day has already been decided") raises first, so the
-// `on conflict do nothing` branch below it is unreachable from one connection and the decision's
-// reasoning would ship unverified.
+// Since 20261005090000 `sign_off_day()` takes the per-account advisory lock, the key
+// `settle_day()` and every other writer of a day's money take. That reverses Story 8.2's decision
+// 3, on hwt75's decision of 2026-10-05: without a shared key a refusal committing mid-settlement
+// left a `clean` settlement beside a frozen `missed`. **A single-session test cannot see the wait
+// at all**: the RPC's own check-then-act read ("That day has already been decided") raises first,
+// so whether a second decision really waits is only visible from a second connection.
 //
 // So: two real psql sessions. The winner holds its transaction open past the insert; the loser
-// runs the same call and must block on the unique index rather than sail past a read that saw
-// nothing. When the winner commits, the loser's insert finds its own conflict, inserts nothing,
-// and the RPC turns that into the same sentence a plain repeat gets — never a silent no-op, and
-// never a second row.
+// runs the same call and must block on the account key rather than sail past a read that saw
+// nothing. When the winner commits, the loser takes the key, meets the decided check, and raises
+// the same sentence a plain repeat gets — never a silent no-op, and never a second row. The
+// unique constraint is still underneath as the guarantee; it is simply no longer what the loser
+// meets.
 //
 //   node scripts/test-sign-off-race.mjs
 //
@@ -165,11 +165,10 @@ async function waitFor(session, predicate, description) {
   throw new Error(`Timed out waiting for ${description}. Output:\n${session.output()}`);
 }
 
-// The tuple lock, not the advisory one: sign_off_day() takes no advisory lock at all, and that is
-// the property under test. A second insert against referee_decision_once_per_commitment_day waits
-// on the first transaction's unsettled tuple, which pg_stat_activity reports as a `tuple` lock
-// wait (or `transactionid`, depending on which half of the wait it is in when this looks).
-async function waitForRowLock(applicationName, loser) {
+// The account key, which is the property under test. The loser must be waiting on the advisory
+// lock the winner took, not on the unique index: an index wait would mean it had already passed
+// the settled and decided checks without the key, which is the read the key exists to protect.
+async function waitForAdvisoryLock(applicationName, loser) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const result = psql(`
@@ -177,7 +176,7 @@ async function waitForRowLock(applicationName, loser) {
         from pg_stat_activity
        where application_name = ${quote(applicationName)}
          and wait_event_type = 'Lock'
-         and wait_event in ('tuple', 'transactionid');
+         and wait_event = 'advisory';
     `);
     if (Number(result.stdout.trim()) === 1) return;
     const finished = await Promise.race([
@@ -186,31 +185,12 @@ async function waitForRowLock(applicationName, loser) {
     ]);
     if (finished) {
       throw new Error(
-        `The losing session exited before waiting on the unique index. Nothing serialised the ` +
-          `two decisions, so both could have been written:\n${loser.output()}`,
+        `The losing session exited before waiting on the account key. Nothing serialised the ` +
+          `two decisions:\n${loser.output()}`,
       );
     }
   }
-  throw new Error(`The losing session never waited on the unique index:\n${loser.output()}`);
-}
-
-// And the negative that keeps the check above honest: it must NOT be waiting on an advisory lock.
-// If sign_off_day() ever grows one it would put a referee in the way of the author's own Grace
-// Day, which is exactly what decision 3 refuses.
-function assertNoAdvisoryWait(applicationName) {
-  const result = psql(`
-    select count(*)
-      from pg_stat_activity
-     where application_name = ${quote(applicationName)}
-       and wait_event_type = 'Lock'
-       and wait_event = 'advisory';
-  `);
-  if (Number(result.stdout.trim()) !== 0) {
-    throw new Error(
-      'The losing session is waiting on an advisory lock. sign_off_day() decides nothing at ' +
-        "write time and must not hold the author's per-account serialization key (decision 3).",
-    );
-  }
+  throw new Error(`The losing session never waited on the account key:\n${loser.output()}`);
 }
 
 function expectRefusal(result, fragment) {
@@ -390,11 +370,9 @@ async function bothDecideAtOnce() {
   );
   loser.child.stdin.end();
 
-  // It must block, and it must block on the index rather than on an advisory lock it should never
-  // be taking. The check-then-act read above the insert sees nothing — the winner has not
-  // committed — so the only thing standing here is the unique constraint.
-  await waitForRowLock(loserName, loser);
-  assertNoAdvisoryWait(loserName);
+  // It must block, and on the account key: the settled and decided checks are read under it, so
+  // the loser reads them only after the winner has committed.
+  await waitForAdvisoryLock(loserName, loser);
 
   winner.child.stdin.end('commit;\n');
 
@@ -479,7 +457,7 @@ try {
 
 if (passed) {
   console.log(
-    'PASS: two concurrent decisions on one commitment-day serialise on the unique index with no ' +
-      'advisory lock taken, the loser raises rather than no-ops, and exactly one row survives.',
+    'PASS: two concurrent decisions on one commitment-day serialise on the account key, the ' +
+      'loser raises rather than no-ops, and exactly one row survives.',
   );
 }
