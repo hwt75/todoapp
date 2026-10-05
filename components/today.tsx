@@ -11,13 +11,9 @@ import {
   queuedTimedClaims,
   type QueuedTimedClaims,
 } from '@/lib/queued-claim';
+import { writeEvidence } from '@/lib/evidence-write';
 import {
-  EVIDENCE_BUCKET,
   EVIDENCE_COPY,
-  compressEvidencePhoto,
-  evidenceObjectPath,
-  fileCapturedOn,
-  isEvidenceDated,
   readKeptPhotos,
   readRefereeReach,
   NO_REFEREE_REACH,
@@ -671,90 +667,37 @@ export function Today({
    */
   async function attachProof(commitmentId: string, parent: EvidenceParent, file: File) {
     // `localDay`, never a fresh `new Date()`. The two disagree for up to one tick after local
-    // midnight, and with a second clock here the guard would pass a file captured on the new day
-    // while the insert named the old one — the object written to Storage and only then refused
-    // by the trigger, which is the one outcome this check exists to prevent.
-    const today = localDay;
+    // midnight, and with a second clock the check would pass a file captured on the new day while
+    // the insert named the old one. `writeEvidence` takes the day for exactly that reason.
+    const outcome = await writeEvidence(file, parent, localDay, () =>
+      setEvidenceState((c) => ({ ...c, [commitmentId]: { kind: 'uploading' } })),
+    );
 
-    // Refused before any upload starts, so an evidently wrong-dated file never reaches Storage.
-    if (!isEvidenceDated(file, today)) {
-      setEvidenceState((c) => ({
-        ...c,
-        [commitmentId]: { kind: 'failed', reason: EVIDENCE_COPY.wrongDay },
-      }));
-      return;
-    }
+    // The write itself finished whatever happened to this screen — the insert is never
+    // conditional on it (item 39, now inside `writeEvidence`). Only the state updates are.
+    if (outcome.kind !== 'wrong-day' && !mounted.current) return;
 
-    setEvidenceState((c) => ({ ...c, [commitmentId]: { kind: 'uploading' } }));
+    setEvidenceState((c) => ({
+      ...c,
+      [commitmentId]:
+        outcome.kind === 'saved'
+          ? { kind: 'saved' }
+          : {
+              kind: 'failed',
+              reason:
+                outcome.kind === 'wrong-day'
+                  ? EVIDENCE_COPY.wrongDay
+                  : outcome.kind === 'upload-failed'
+                    ? EVIDENCE_COPY.failed
+                    : outcome.reason,
+            },
+    }));
 
-    try {
-      const supabase = createClient();
-      // Shrunk before it goes up, never after: the referee reads this in a box under half his
-      // screen, and the full-size original was the whole of why that screen was slow. Declines
-      // and hands back the original on any format it cannot decode, so a photo is never lost to
-      // this — and carries `lastModified` across, which is what `captured_on` below reads.
-      const stored = await compressEvidencePhoto(file);
-
-      // Leads with the parent's own id whichever parent it is — that is what the bucket's
-      // policies read via `storage.foldername(name)` to derive access (NFR4).
-      const path = evidenceObjectPath(parent.id, crypto.randomUUID(), stored.name);
-
-      const { error: uploadError } = await supabase.storage
-        .from(EVIDENCE_BUCKET)
-        .upload(path, stored, { contentType: stored.type || undefined });
-
-      if (uploadError) {
-        // Nothing reached Storage, so there is nothing to finish — only a state update, and
-        // that is the one thing an unmounted screen must not do.
-        if (mounted.current) {
-          setEvidenceState((c) => ({
-            ...c,
-            [commitmentId]: { kind: 'failed', reason: EVIDENCE_COPY.failed },
-          }));
-        }
-        return;
-      }
-
-      // Deliberately *not* guarded by `mounted.current`, unlike every state update below.
-      //
-      // The object is already in Storage by the time this line runs. Returning here because the
-      // author swiped to another tab while the upload was in flight would leave the photo he
-      // took existing but proving nothing: no `evidence` row, so the timed claim it was meant to
-      // prove has no proof, and the object becomes an orphan nothing in the product can reach or
-      // clean up (`deferred-work.md`). The upload and this insert are two halves of one write,
-      // and the second half cannot be conditional on a screen still being open.
-      const { error: insertError } = await supabase.from('evidence').insert({
-        // Exactly one parent, and `for_day` only ever alongside a commitment — the shape
-        // `evidence_exactly_one_parent` and `evidence_for_day_belongs_to_a_commitment` enforce.
-        ...(parent.kind === 'declaration'
-          ? { declaration_id: parent.id }
-          : { commitment_id: parent.id, for_day: today }),
-        storage_path: path,
-        captured_on: fileCapturedOn(file),
-      });
-
-      if (!mounted.current) return;
-
-      setEvidenceState((c) => ({
-        ...c,
-        [commitmentId]: insertError
-          ? { kind: 'failed', reason: insertError.message }
-          : { kind: 'saved' },
-      }));
-
-      // Story 6.9: ask the server what exists now, rather than pushing the file just sent onto
-      // the list. `attachProof` inserts with no `.select()`, so no row id ever reaches this
-      // client, and adding one would make a save's own reported success depend on a second round
-      // trip that can fail by itself. If this re-read fails, the save still stands and the photo
-      // section says it could not load — which is the truth.
-      if (!insertError) setFiledReload((token) => token + 1);
-    } catch (error) {
-      if (!mounted.current) return;
-      setEvidenceState((c) => ({
-        ...c,
-        [commitmentId]: { kind: 'failed', reason: String(error) },
-      }));
-    }
+    // Story 6.9: ask the server what exists now, rather than pushing the file just sent onto the
+    // list. No row id comes back from the insert, and adding one would make a save's own reported
+    // success depend on a second round trip that can fail by itself. If this re-read fails, the
+    // save still stands and the photo section says it could not load — which is the truth.
+    if (outcome.kind === 'saved') setFiledReload((token) => token + 1);
   }
 
   async function spendGraceDay(forDay: string) {
