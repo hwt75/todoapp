@@ -84,8 +84,16 @@ export function useKeptPhotos(read: KeptPhotoRead | null): KeptPhotoView {
  * asset that optimiser is set up to fetch.
  */
 export function KeptPhotos({ photos, view }: { photos: KeptPhoto[]; view: KeptPhotoView }) {
+  // Nothing at all for a day with no photo, the count included: a day that never needed one is
+  // not missing anything, and "0 photos" would say it was.
+  if (photos.length === 0) return null;
+
   return (
     <>
+      {/* The words a sighted reader gets, beside the alt text a screen reader gets (Epic 6
+          retrospective item 46). The count of what is on screen, not of what was filed: a photo
+          that would not load is counted by KeptPhotoNote, in its own sentence. */}
+      <p className="row-muted">{EVIDENCE_COPY.photosKept(photos.length)}</p>
       {photos.map((photo) => (
         // eslint-disable-next-line @next/next/no-img-element
         <img

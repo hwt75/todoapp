@@ -590,6 +590,15 @@ export const EVIDENCE_COPY = {
    */
   photoAlt: (position: number, total: number): string => `Photo ${position} of ${total} you kept.`,
 
+  /**
+   * Epic 6 retrospective item 46: the textual signal a kept photo lacked. After a reload the only
+   * evidence one existed was the image and its alt text, which a sighted reader never sees, and
+   * "Proof saved." is gone by then. One sentence beside the photos, said once however many there
+   * are. It names no day for the reason `photoAlt` gives: the day is already on screen.
+   */
+  photosKept: (count: number): string =>
+    `${count} photo${count === 1 ? '' : 's'} kept for this day.`,
+
   /** Some photos are on screen and some are not — a count, never a shorter list. Covers a URL
    *  that could not be signed and one that would not load, because to the author looking at
    *  the screen those are one fact. */
