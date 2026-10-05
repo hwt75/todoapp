@@ -82,6 +82,7 @@ function heldRow(overrides: Record<string, unknown> = {}) {
     objection_deadline: OPEN,
     already_objected: false,
     evidence_paths: [],
+    asked_for_signature: false,
     ...overrides,
   };
 }
@@ -187,6 +188,31 @@ describe('what the day recorded, and whether it can be objected to', () => {
 
     expect(await screen.findByText(/window on this day has closed/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Object to/ })).not.toBeInTheDocument();
+  });
+
+  it('offers nothing on a commitment that asked for his signature on the day itself', async () => {
+    // object_to_day() refuses it every time; the decision was his before midnight (Story 8.2).
+    lookupResult = { data: [heldRow({ asked_for_signature: true })], error: null };
+    await lookUp();
+
+    expect(await screen.findByText(/signature on the day itself/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Object to/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    // Not the closed-window sentence: the window is open, it is simply not his door.
+    expect(screen.queryByText(/window on this day has closed/i)).not.toBeInTheDocument();
+  });
+
+  it('still offers the objection on an unflagged commitment beside a flagged one', async () => {
+    lookupResult = {
+      data: [
+        heldRow({ asked_for_signature: true }),
+        heldRow({ commitment_id: 'c2', commitment_name: 'Gym' }),
+      ],
+      error: null,
+    };
+    await lookUp();
+
+    expect(await screen.findAllByRole('button', { name: /Object to/ })).toHaveLength(1);
   });
 
   it('offers nothing on a day already objected to — one objection per day', async () => {

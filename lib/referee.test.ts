@@ -270,6 +270,7 @@ const heldRow: RefereeDayRow = {
   // Retro item 43. Not read by `objectionIsOffered` at all, and deliberately: whether a day may
   // still be questioned has nothing to do with whether it was photographed.
   evidencePaths: [],
+  askedForSignature: false,
 };
 
 describe('objectionIsOffered (Story 6.7)', () => {
@@ -287,6 +288,14 @@ describe('objectionIsOffered (Story 6.7)', () => {
   it('withdraws it once the day has been objected to — one objection per day', () => {
     expect(
       objectionIsOffered({ ...heldRow, alreadyObjected: true }, new Date('2026-09-04T00:00:00Z')),
+    ).toBe(false);
+  });
+
+  it('never offers it on a commitment that asked for his signature on the day itself', () => {
+    // object_to_day() refuses that row in its own words every time (Story 8.2); his power over it
+    // was sign_off_day(), before midnight. Offering the control anyway was the deferred defect.
+    expect(
+      objectionIsOffered({ ...heldRow, askedForSignature: true }, new Date('2026-09-04T00:00:00Z')),
     ).toBe(false);
   });
 
