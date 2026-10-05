@@ -4,6 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import { CommitmentRow, type RowCommitment } from '@/components/commitment-row';
 import { submitDeclaration, type QueuedClaim } from '@/lib/declaration-write';
 import { calendarMoment } from '@/lib/declaration';
+import { readQueue } from '@/lib/offline-queue';
+import {
+  NO_QUEUED_CLAIMS,
+  QUEUED_CLAIM_COPY,
+  queuedTimedClaims,
+  type QueuedTimedClaims,
+} from '@/lib/queued-claim';
 import {
   EVIDENCE_BUCKET,
   EVIDENCE_COPY,
@@ -113,6 +120,9 @@ interface TimedRow {
   claim: ClaimState;
   /** What a photo attaches to — from this session's own claim, or from the view after a reload. */
   declarationId: string | null;
+  /** A claim for this commitment still on the device for a day that has already closed, and that
+   *  day (Epic 6 retrospective item 48). It cannot be proven any more, and the row says so. */
+  strandedDay: string | null;
 }
 
 /**
@@ -124,6 +134,7 @@ interface TimedRow {
  * nothing it cannot support.
  */
 function offersSomething(timed: TimedRow): boolean {
+  if (timed.strandedDay !== null) return true;
   return timed.state !== 'ahead' && timed.state !== 'shut' ? true : timed.claim.kind !== 'idle';
 }
 
@@ -132,13 +143,15 @@ function offersSomething(timed: TimedRow): boolean {
  *
  * The server knows what was claimed and proven, the clock knows where the window is, and the
  * device knows about a claim still sitting in the offline queue that the server has never seen.
- * Only the last of those can be missing from a reload, which is why it is the one kept in
- * component state rather than re-read.
+ * This session's own claims are kept in component state; the queue itself is read as well,
+ * because it is what survives a reload — a claim queued before the app was closed would otherwise
+ * be offered again, and one stranded past midnight would say nothing at all.
  */
 function timedRowsToday(
   rows: RowCommitment[],
   windows: Record<string, { declarationId: string | null; proven: boolean }>,
   claimState: Record<string, ClaimState>,
+  queued: QueuedTimedClaims,
   now: Date,
 ): TimedRow[] {
   return (
@@ -152,7 +165,8 @@ function timedRowsToday(
       .filter((row) => row.due_time && windows[row.id] !== undefined)
       .map((row) => {
         const server = windows[row.id];
-        const claim: ClaimState = claimState[row.id] ?? { kind: 'idle' };
+        const claim: ClaimState =
+          claimState[row.id] ?? (queued.today.has(row.id) ? { kind: 'queued' } : { kind: 'idle' });
         const position: TimedWindowPosition = {
           dueTime: row.due_time as string,
           // `commitment_time_needs_a_moment` makes the two columns null together
@@ -172,6 +186,7 @@ function timedRowsToday(
             (claim.kind === 'claimed' ? claim.declarationId : null) ??
             server?.declarationId ??
             null,
+          strandedDay: queued.stranded.get(row.id) ?? null,
         };
       })
   );
@@ -273,6 +288,10 @@ export function Today({
     // stands above this morning's empty control, which is the screen claiming something for a
     // day it is no longer showing — and the comment on the block below promises the opposite.
     setEvidenceState({});
+    // The same rule for this session's claims. Every one of them was about the day that just
+    // ended: a `claimed` left standing would read as today's claim, and a `queued` one is now a
+    // claim for a closed day, which the queue read below describes in its own words.
+    setClaimState({});
     // And Story 6.9's half of the same rule: yesterday's photo must not sit under today's
     // control for the one round trip it takes the new day's read to come back.
     setFiled(null);
@@ -517,6 +536,75 @@ export function Today({
   // Story 6.9: the read, plus whatever this browser has since failed to load out of it.
   const keptPhotos = useKeptPhotos(filed);
 
+  /**
+   * Epic 6 retrospective item 48 — what the offline queue holds for today's timed rows.
+   *
+   * Read from the queue, not from `claimState`, because the queue is what survives a reload.
+   * Re-read when the day turns over (a claim from yesterday becomes stranded at that instant),
+   * after every claim (a submit flushes the whole queue), and when the app is shown again.
+   */
+  const [queuedClaims, setQueuedClaims] = useState<QueuedTimedClaims>(NO_QUEUED_CLAIMS);
+  useEffect(() => {
+    try {
+      setQueuedClaims(queuedTimedClaims(readQueue<QueuedClaim>(window.localStorage), localDay));
+    } catch {
+      // Storage can be unavailable (a private window, blocked site data). Saying nothing is what
+      // this screen did before it read the queue at all, never a wrong sentence.
+      setQueuedClaims(NO_QUEUED_CLAIMS);
+    }
+  }, [localDay, claimState, shownAgain]);
+
+  /**
+   * Finding A5 — a claim that landed but whose id never came back.
+   *
+   * The id is fetched in a second round trip after the insert, and on a flaky connection that one
+   * can fail while the insert succeeded. The row then read as claimed with no photo control, and
+   * nothing re-read it until the app was reopened, so a lost id at 20:05 cost the day's photo.
+   * This asks `timed_claim_today` for it, once when such a claim appears and again whenever the
+   * app is shown, and hands it to the row as if the claim had returned it.
+   */
+  const unreadClaims = Object.entries(claimState)
+    .filter(([, c]) => c.kind === 'claimed' && c.declarationId === null)
+    .map(([id]) => id)
+    .sort()
+    .join(',');
+  useEffect(() => {
+    if (unreadClaims === '') return;
+    let cancelled = false;
+    const ids = new Set(unreadClaims.split(','));
+
+    async function read() {
+      const { data, error } = await createClient()
+        .from('timed_claim_today')
+        .select('commitment_id,declaration_id,proven');
+      if (cancelled || error) return;
+
+      const found = new Map<string, string>();
+      for (const w of data ?? []) {
+        const id = w.commitment_id as string;
+        const declarationId = w.declaration_id as string | null;
+        if (ids.has(id) && declarationId) found.set(id, declarationId);
+      }
+      if (found.size === 0) return;
+
+      setClaimState((current) => {
+        const next = { ...current };
+        for (const [id, declarationId] of found) {
+          const claimed = current[id];
+          if (claimed?.kind === 'claimed' && claimed.declarationId === null) {
+            next[id] = { kind: 'claimed', declarationId };
+          }
+        }
+        return next;
+      });
+    }
+
+    void read();
+    return () => {
+      cancelled = true;
+    };
+  }, [unreadClaims, shownAgain]);
+
   /** Spends a Grace Day against one Failed, owed day. See `components/ledger.tsx`'s own
    *  identical function for the full reasoning — this is the same control, offered from the
    *  Day summary rather than a Ledger row (FR-17's own two current entry points). */
@@ -699,7 +787,9 @@ export function Today({
   // Story 6.5: one fold, read by the rows above and the controls below alike, so a pill and the
   // control beneath it can never disagree about where the same window stands.
   const timed =
-    view.kind === 'ready' ? timedRowsToday(view.rows, view.windows, claimState, now) : [];
+    view.kind === 'ready'
+      ? timedRowsToday(view.rows, view.windows, claimState, queuedClaims, now)
+      : [];
   const timedByCommitment = Object.fromEntries(timed.map((t) => [t.row.id, t]));
 
   return (
@@ -775,17 +865,23 @@ export function Today({
             <div className="card card-pad stack">
               {timed
                 .filter(offersSomething)
-                .map(({ row, state, claim: claimStatus, declarationId }) => (
+                .map(({ row, state, claim: claimStatus, declarationId, strandedDay }) => (
                   <div key={row.id}>
+                    {/* Epic 6 retrospective item 48. Said above today's control and never in
+                        place of it: the stranded claim belongs to a day that has closed, and today
+                        is still its own day to claim. A live region, because it is news the
+                        author did not ask for and needs before he does anything else here. */}
+                    {strandedDay !== null && (
+                      <p className="row-muted" role="status">
+                        {QUEUED_CLAIM_COPY.stranded(strandedDay)}
+                      </p>
+                    )}
                     {/* Queued first, before anything the clock decides: the claim is on the
                         device dated when it was tapped, but the server has never seen it, so
                         every server-derived state below would still read unclaimed and offer
                         the button a second time. */}
                     {claimStatus.kind === 'queued' ? (
-                      <p className="row-muted">
-                        Saved on this device — there is no connection right now. It will go when
-                        there is one, dated when you tapped.
-                      </p>
+                      <p className="row-muted">{QUEUED_CLAIM_COPY.queued}</p>
                     ) : state === 'proven' ? (
                       <>
                         <p className="row-muted">{`${row.name} — claimed and proven for today.`}</p>
