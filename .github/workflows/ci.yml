@@ -152,10 +152,15 @@ jobs:
       - name: Run the due-time reminder race
         run: node scripts/test-due-reminder-race.mjs
 
-      # And the same reason again, for the one writer that deliberately takes no lock at all.
-      # `sign_off_day()` serialises two decisions on one commitment-day on its unique index rather
-      # than on the account key, because it moves no money — and a single-session test cannot
-      # reach that branch, since the RPC's own check-then-act read always raises first. Without
-      # this step Story 8.2's whole no-advisory-lock argument ships unverified.
+      # And the same reason again for the referee's decision. Since 20261005090000 `sign_off_day()`
+      # takes the account key too, so that a refusal and the settlement of its day cannot
+      # interleave; the second of two decisions waits on that key and then meets the decided
+      # check, which a single session can never reach because its own read always raises first.
       - name: Run the referee sign-off race
         run: node scripts/test-sign-off-race.mjs
+
+      # The scheduled writers: settle_day(), supersede_expiries() and apply_grace_days() each
+      # wait for an account key another writer holds rather than reading the day underneath it.
+      # Only a second session can see a wait.
+      - name: Run the settlement lock check
+        run: node scripts/test-settlement-lock.mjs
