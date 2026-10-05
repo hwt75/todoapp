@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeEvidence } from './evidence-write';
+import { EVIDENCE_COPY, evidenceRefusal } from './evidence';
 
 /**
  * Epic 6 retrospective item 45: the write half of the evidence path, once. What each parent
@@ -99,12 +100,47 @@ describe('writeEvidence', () => {
   });
 
   it('carries the server’s own words when the row is refused', async () => {
-    insertError = { message: 'That day has ended.' };
+    insertError = { message: 'That day has ended.', hint: 'evidence:day-ended' };
     const outcome = await writeEvidence(
       takenOn('2026-10-05'),
       { kind: 'declaration', id: 'd1' },
       '2026-10-05',
     );
-    expect(outcome).toEqual({ kind: 'refused', reason: 'That day has ended.' });
+    expect(outcome).toEqual({
+      kind: 'refused',
+      reason: 'That day has ended.',
+      hint: 'evidence:day-ended',
+    });
+  });
+
+  it('reports no hint as null rather than an empty string', async () => {
+    insertError = { message: 'new row violates row-level security policy', hint: '' };
+    const outcome = await writeEvidence(
+      takenOn('2026-10-05'),
+      { kind: 'declaration', id: 'd1' },
+      '2026-10-05',
+    );
+    expect(outcome).toMatchObject({ kind: 'refused', hint: null });
+  });
+});
+
+describe('evidenceRefusal (deferred from epic-6 retro item 42)', () => {
+  it('turns every hint the server sends into this product’s own sentence', () => {
+    for (const hint of [
+      'evidence:day-ended',
+      'evidence:not-today',
+      'evidence:wrong-capture-date',
+      'evidence:no-object',
+      'evidence:no-parent',
+    ]) {
+      const sentence = evidenceRefusal(hint, 'raw database words');
+      expect(sentence).toBe(EVIDENCE_COPY.refusals[hint]);
+      expect(sentence).not.toContain('raw database words');
+    }
+  });
+
+  it('keeps the server’s words for a refusal it does not know, never silence', () => {
+    expect(evidenceRefusal(null, 'Something new.')).toBe('Something new.');
+    expect(evidenceRefusal('evidence:added-later', 'Something new.')).toBe('Something new.');
   });
 });

@@ -36,8 +36,10 @@ export type EvidenceWriteOutcome =
   | { kind: 'wrong-day' }
   /** Nothing reached Storage. */
   | { kind: 'upload-failed' }
-  /** The object is in Storage and the row was refused, with the server's own words. */
-  | { kind: 'refused'; reason: string }
+  /** The object is in Storage and the row was refused, with the server's own words and the
+   *  stable hint each evidence refusal carries since 20261005130000 (null for any other refusal,
+   *  such as RLS). Callers turn the hint into their own sentence with `evidenceRefusal()`. */
+  | { kind: 'refused'; reason: string; hint: string | null }
   /** Something threw on the way — a network failure, a compression crash. */
   | { kind: 'error'; reason: string }
   | { kind: 'saved' };
@@ -100,7 +102,9 @@ export async function writeEvidence(
       captured_on: fileCapturedOn(file),
     });
 
-    return insertError ? { kind: 'refused', reason: insertError.message } : { kind: 'saved' };
+    return insertError
+      ? { kind: 'refused', reason: insertError.message, hint: insertError.hint || null }
+      : { kind: 'saved' };
   } catch (error) {
     return { kind: 'error', reason: String(error) };
   }

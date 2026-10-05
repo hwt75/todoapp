@@ -14,6 +14,7 @@ import {
 import { writeEvidence } from '@/lib/evidence-write';
 import {
   EVIDENCE_COPY,
+  evidenceRefusal,
   readKeptPhotos,
   readRefereeReach,
   NO_REFEREE_REACH,
@@ -689,7 +690,9 @@ export function Today({
                   ? EVIDENCE_COPY.wrongDay
                   : outcome.kind === 'upload-failed'
                     ? EVIDENCE_COPY.failed
-                    : outcome.reason,
+                    : outcome.kind === 'refused'
+                      ? evidenceRefusal(outcome.hint, outcome.reason)
+                      : outcome.reason,
             },
     }));
 

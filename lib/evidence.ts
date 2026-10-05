@@ -580,6 +580,20 @@ export const EVIDENCE_COPY = {
   wrongDay: 'That photo was not taken today, so it cannot prove today.',
 
   /**
+   * The server's refusals, in this screen's words rather than the database's (deferred from epic-6
+   * retro item 42). Keyed by the `hint` each refusal carries since 20261005130000, never by its
+   * message: `evidenceRefusal()` is the only reader.
+   */
+  refusals: {
+    'evidence:day-ended': 'That day has ended, so a photo can no longer prove it.',
+    'evidence:not-today': 'That day has ended, so a photo can no longer be kept against it.',
+    'evidence:wrong-capture-date': 'That photo was not taken today, so it cannot prove today.',
+    'evidence:no-object': 'The photo did not finish uploading. Try again.',
+    'evidence:no-parent':
+      'There is nothing to attach this photo to any more. Reopen the app and try again.',
+  } as Record<string, string>,
+
+  /**
    * Story 6.9, the read side. One alt-text rule for all three surfaces.
    *
    * Names no day, deliberately. The day is already on screen every time — it is the only day
@@ -625,3 +639,14 @@ export const EVIDENCE_COPY = {
    *  an RLS refusal and a dead connection are different problems. */
   photosUnreadable: 'Photos could not be loaded.',
 } as const;
+
+/**
+ * The sentence for a refused evidence row (deferred from epic-6 retro item 42).
+ *
+ * A hint this client knows becomes `EVIDENCE_COPY`'s own sentence. Anything else -- no hint, or
+ * one added after this client was built -- keeps the server's words, so a new refusal is never
+ * turned into silence or into a sentence that is not about it.
+ */
+export function evidenceRefusal(hint: string | null, message: string): string {
+  return (hint !== null ? EVIDENCE_COPY.refusals[hint] : undefined) ?? message;
+}
