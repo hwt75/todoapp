@@ -406,13 +406,20 @@ begin
   values (v_k, gen_random_uuid(), 'Weekly quota', 'do', 'weekly_quota', true, true, true, 3, 1)
   returning id into v_k_week;
 
-  -- `do` + `daily_hours_quota` + the flag: saveable, and inert, which is exactly what Story 8.1's
-  -- deferred entry left open. The RPC is what closes the half of it that matters.
+  -- `do` + `daily_hours_quota` + the flag. Saveable and inert when this file was written, which is
+  -- what Story 8.1's deferred entry left open; since 20261005120000
+  -- `commitment_sign_off_not_on_hours_quota` refuses the combination on the live row. The RPC's guard
+  -- is still reachable, and this builds the one way to reach it: flagged as of today (created today,
+  -- so the flag's earliest value governs it), then moved to an hours quota with the flag switched
+  -- off in the same update, which the CHECK permits. sign_off_day() reads the cadence live.
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
-                                 carries_penalty, requires_photo, requires_referee_approval,
-                                 daily_minutes_target)
-  values (v_k, gen_random_uuid(), 'Hours quota', 'do', 'daily_hours_quota', true, true, true, 60)
+                                 carries_penalty, requires_photo, requires_referee_approval)
+  values (v_k, gen_random_uuid(), 'Hours quota', 'do', 'daily', true, true, true)
   returning id into v_k_hours;
+  update public.commitment
+     set cadence = 'daily_hours_quota', daily_minutes_target = 60,
+         requires_referee_approval = false
+   where id = v_k_hours;
 
   insert into public.commitment (owner_id, idempotency_key, name, kind, cadence,
                                  carries_penalty, requires_photo, requires_referee_approval)
@@ -689,8 +696,12 @@ begin
   update public.commitment
      set cadence = 'weekly_quota', weekly_target = 3, week_start_day = 1
    where id = v_g_flag;
+  -- The flag comes off in the same update: since 20261005120000 a flagged row cannot carry an hours
+  -- quota (`commitment_sign_off_not_on_hours_quota`), so this is now the only way the author can make
+  -- this edit. It still has to leave the refusal standing.
   update public.commitment
-     set cadence = 'daily_hours_quota', daily_minutes_target = 60
+     set cadence = 'daily_hours_quota', daily_minutes_target = 60,
+         requires_referee_approval = false
    where id = v_h_flag;
   update public.commitment set requires_referee_approval = false where id = v_i_flag;
 
