@@ -329,7 +329,7 @@ describe('the time of day on a commitment form', () => {
       />,
     );
 
-    expect(screen.getByText('The late window has to end before midnight.')).toBeInTheDocument();
+    expect(screen.getByText(TIMED_COMMITMENT_COPY.windowTooLate)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(onSave).not.toHaveBeenCalled();
   });
@@ -455,6 +455,16 @@ describe('asking the referee to sign a commitment off', () => {
     expect(screen.getByText(REFEREE_SIGN_OFF_COPY.wrongKind)).toBeInTheDocument();
     expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.autoChecked)).not.toBeInTheDocument();
     expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.noReferee)).not.toBeInTheDocument();
+  });
+
+  it('is disabled on an hours quota, which has no day to sign, and says so', async () => {
+    render(<CommitmentForm hasReferee onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.selectOptions(screen.getByLabelText('Cadence'), 'daily_hours_quota');
+
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).toBeDisabled();
+    expect(screen.getByText(REFEREE_SIGN_OFF_COPY.hoursQuota)).toBeInTheDocument();
+    expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.wrongKind)).not.toBeInTheDocument();
   });
 
   it('is disabled when a machine already answers, and says so', async () => {

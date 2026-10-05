@@ -111,6 +111,7 @@ declare
   v_fix_due   time;
   v_fix_shuts text;
   v_wide_shuts text;
+  v_wide_min  integer;
 
   v_key       text;
   v_count     integer;
@@ -707,10 +708,16 @@ begin
       v_fix_shuts, coalesce(v_body, 'no row at all'));
   end if;
 
-  v_wide_shuts := to_char(v_fix_local + interval '60 minutes', 'HH24:MI');
+  -- Wider by as much as the window rule allows, up to an hour. Since 20261005110000 a window must
+  -- end by 23:30 so the photo has time to land before midnight, and the fixture time can be as
+  -- late as 22:59 -- where an hour would be refused by the constraint rather than tested. 31
+  -- minutes at the latest, so it is always a widening.
+  v_wide_min := least(60, 1410 - (extract(hour from v_fix_due) * 60
+                                  + extract(minute from v_fix_due))::integer);
+  v_wide_shuts := to_char(v_fix_local + make_interval(mins => v_wide_min), 'HH24:MI');
 
   perform set_config('role', 'authenticated', true);
-  update public.commitment set late_window_minutes = 60 where id = v_widened;
+  update public.commitment set late_window_minutes = v_wide_min where id = v_widened;
   perform set_config('role', 'postgres', true);
 
   select count(*), min(payload ->> 'body') into v_count, v_body

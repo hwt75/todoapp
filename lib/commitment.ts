@@ -91,8 +91,13 @@ export const LATE_WINDOW_MAX_MINUTES = 240;
 /** What a window is set to when a time is first switched on. */
 export const LATE_WINDOW_DEFAULT_MINUTES = 30;
 
-/** Mirrors `commitment_window_within_the_day`. Half-open: a window ending here is inside the day. */
-export const MINUTES_IN_A_DAY = 1440;
+/**
+ * Mirrors `commitment_window_leaves_time_for_the_photo`: a window ends by 23:30. A claim made in
+ * its last minute still has half an hour to attach the photo before midnight decides the day
+ * (Epic 6 retrospective item 47). Until 2026-10-05 the bound was midnight itself, which let a day
+ * fail for a photo nobody could attach.
+ */
+export const LATEST_WINDOW_END_MINUTES = 1410;
 
 /**
  * A blank commitment. `carriesPenalty` is false and that is the point: money is never a
@@ -185,11 +190,15 @@ export function canBeTimed(kind: CommitmentKind, cadence: CommitmentCadence): bo
  * rather than an act at all. So this refuses `open_ended` where the other two accept it, and the
  * three must never be merged.
  *
- * Takes no cadence, again unlike the other two: the rule is about the kind and nothing else.
- * Mirrors `commitment_sign_off_needs_a_do`; the constraint is what actually decides.
+ * And not on an hours quota, for a reason of its own rather than borrowed from the other two: no
+ * day of one is ever held or missed — banked minutes decide it and `commitments_owing()` never
+ * names its days — so there is no day for a referee to sign.
+ *
+ * Mirrors `commitment_sign_off_needs_a_do` and `commitment_sign_off_not_on_hours_quota`; the
+ * constraints are what actually decide.
  */
-export function canBeSignedOff(kind: CommitmentKind): boolean {
-  return kind === 'do';
+export function canBeSignedOff(kind: CommitmentKind, cadence: CommitmentCadence): boolean {
+  return kind === 'do' && cadence !== 'daily_hours_quota';
 }
 
 /** `HH:MM`, 24-hour, whole minutes — the shape `<input type="time">` produces and the database accepts. */
@@ -239,6 +248,10 @@ export const TIMED_COMMITMENT_COPY = {
   warning:
     'A timed commitment is settled by a photo, not by the morning question. No photo before ' +
     'midnight is a failed day — and you have only two Grace Days a month to undo one.',
+  /** `commitment_window_leaves_time_for_the_photo`. Says why, because 23:30 is not an obvious
+   *  number and an unexplained limit reads as arbitrary. */
+  windowTooLate:
+    'The late window has to end by 23:30, so there is time to attach the photo before midnight.',
 } as const;
 
 /**
@@ -290,6 +303,10 @@ export const REFEREE_SIGN_OFF_COPY = {
     'nothing, and reminding him is not your job.',
   /** `commitment_sign_off_needs_a_do`. */
   wrongKind: 'Only a Do-it commitment has something done for him to put his name to.',
+  /** `commitment_sign_off_not_on_hours_quota`. */
+  hoursQuota:
+    'An Hours-per-day commitment is decided by the minutes you bank, so there is no day for him ' +
+    'to sign.',
   /** `commitment_sign_off_not_with_auto_check`. */
   autoChecked:
     'An Auto-check already answers for this one. Two answers to one question is how they come ' +
@@ -419,11 +436,11 @@ export function draftProblems(draft: CommitmentDraft, context?: DraftContext): s
         problems.push(
           `The late window must be a whole number of minutes from ${LATE_WINDOW_MIN_MINUTES} to ${LATE_WINDOW_MAX_MINUTES}.`,
         );
-      } else if (startsAt + draft.lateWindowMinutes > MINUTES_IN_A_DAY) {
+      } else if (startsAt + draft.lateWindowMinutes > LATEST_WINDOW_END_MINUTES) {
         // Not arithmetic on a time value, on purpose. `time + interval` wraps in Postgres and
         // in most date libraries, so 23:30 plus an hour reads as 00:30 and the check passes on
         // exactly the case it exists to refuse.
-        problems.push('The late window has to end before midnight.');
+        problems.push(TIMED_COMMITMENT_COPY.windowTooLate);
       }
     }
   }
@@ -461,8 +478,10 @@ export function draftProblems(draft: CommitmentDraft, context?: DraftContext): s
     // Mirrors `canBeSignedOff()`. Its own message rather than one shared with the time or the
     // Auto-check rule: those exclude two kinds for reasons that are not this one, and a shared
     // sentence would imply a shared cause.
-    if (!canBeSignedOff(draft.kind)) {
-      problems.push(REFEREE_SIGN_OFF_COPY.wrongKind);
+    if (!canBeSignedOff(draft.kind, draft.cadence)) {
+      problems.push(
+        draft.kind !== 'do' ? REFEREE_SIGN_OFF_COPY.wrongKind : REFEREE_SIGN_OFF_COPY.hoursQuota,
+      );
     }
 
     if (draft.autoCheckEnabled) {
@@ -496,7 +515,7 @@ export function draftProblems(draft: CommitmentDraft, context?: DraftContext): s
 export function withKind(draft: CommitmentDraft, kind: CommitmentKind): CommitmentDraft {
   const checksPossible = autoChecksPossible(kind, draft.cadence);
   const timeable = canBeTimed(kind, draft.cadence);
-  const signable = canBeSignedOff(kind);
+  const signable = canBeSignedOff(kind, draft.cadence);
   return {
     ...draft,
     kind,
@@ -521,10 +540,10 @@ export function withKind(draft: CommitmentDraft, kind: CommitmentKind): Commitme
 /**
  * Clears whatever the previous cadence needed, so switching cadence cannot leave a stale target.
  *
- * `requiresRefereeApproval` is carried through untouched, unlike in `withKind()`:
- * `commitment_sign_off_needs_a_do` names a kind and no cadence at all, so no cadence can make the
- * flag refusable. Clearing it here would lose a decision the author made for a reason the database
- * does not have.
+ * `requiresRefereeApproval` is carried through every cadence but one. An hours quota has no day to
+ * sign, and `commitment_sign_off_not_on_hours_quota` refuses the flag there, so it is cleared on
+ * the way in exactly as `withKind()` clears it for a kind with nothing done. `requiresPhoto` stays:
+ * the photo outlives the signature in both places.
  */
 export function withCadence(draft: CommitmentDraft, cadence: CommitmentCadence): CommitmentDraft {
   const required = requiredTargets(cadence);
@@ -540,6 +559,9 @@ export function withCadence(draft: CommitmentDraft, cadence: CommitmentCadence):
     dailyMinutesTarget: required.includes('dailyMinutesTarget') ? draft.dailyMinutesTarget : null,
     autoCheckEnabled: checksPossible ? draft.autoCheckEnabled : false,
     autoCheckAccountRef: checksPossible ? draft.autoCheckAccountRef : '',
+    requiresRefereeApproval: canBeSignedOff(draft.kind, cadence)
+      ? draft.requiresRefereeApproval
+      : false,
   };
 }
 

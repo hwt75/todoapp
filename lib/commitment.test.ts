@@ -5,7 +5,7 @@ import {
   EMPTY_DRAFT,
   KEPT_PHOTO_COPY,
   LATE_WINDOW_DEFAULT_MINUTES,
-  MINUTES_IN_A_DAY,
+  LATEST_WINDOW_END_MINUTES,
   REFEREE_SIGN_OFF_COPY,
   TIMED_COMMITMENT_COPY,
   type CommitmentDraft,
@@ -415,10 +415,11 @@ describe('a timed draft the database would accept', () => {
     expect(draftProblems(draft({ dueTime: '20:00', lateWindowMinutes: 30 }))).toEqual([]);
   });
 
-  it('a window ending at exactly midnight — the half-open boundary', () => {
-    // 23:30 + 30 = 1440. The last instant inside it is 23:59:59.999, so it is still this day.
-    expect(minutesIntoDay('23:30')! + 30).toBe(MINUTES_IN_A_DAY);
-    expect(draftProblems(draft({ dueTime: '23:30', lateWindowMinutes: 30 }))).toEqual([]);
+  it('a window ending at exactly 23:30 — the latest a window may end', () => {
+    // 23:00 + 30 = 1410. Half an hour is left between the last valid claim and the midnight that
+    // decides the day, which is the time the photo needs (Epic 6 retrospective item 47).
+    expect(minutesIntoDay('23:00')! + 30).toBe(LATEST_WINDOW_END_MINUTES);
+    expect(draftProblems(draft({ dueTime: '23:00', lateWindowMinutes: 30 }))).toEqual([]);
   });
 
   it('the shortest and longest windows allowed', () => {
@@ -436,10 +437,21 @@ describe('a timed draft the database would refuse', () => {
     // Written as a time plus an interval, 23:30 + 60 minutes reads as 00:30 and passes —
     // which is the whole reason this rule is arithmetic on minutes from midnight.
     expect(draftProblems(draft({ dueTime: '23:30', lateWindowMinutes: 60 }))).toContain(
-      'The late window has to end before midnight.',
+      TIMED_COMMITMENT_COPY.windowTooLate,
     );
     expect(draftProblems(draft({ dueTime: '23:30', lateWindowMinutes: 31 }))).toContain(
-      'The late window has to end before midnight.',
+      TIMED_COMMITMENT_COPY.windowTooLate,
+    );
+  });
+
+  it('a window ending at midnight, or one minute past 23:30', () => {
+    // Allowed until 2026-10-05. A claim in its last minute could not be proven: the photo is
+    // refused once midnight passes, and midnight is what decides a timed day.
+    expect(draftProblems(draft({ dueTime: '23:30', lateWindowMinutes: 30 }))).toContain(
+      TIMED_COMMITMENT_COPY.windowTooLate,
+    );
+    expect(draftProblems(draft({ dueTime: '23:00', lateWindowMinutes: 31 }))).toContain(
+      TIMED_COMMITMENT_COPY.windowTooLate,
     );
   });
 
@@ -658,9 +670,9 @@ describe('asking for the referee’s signature', () => {
   it('is refused on any kind but Do-it', () => {
     // Narrower than `canBeTimed()`: that accepts `open_ended`, and this does not. A signature is
     // a statement that a thing was done, and hours banked are not an act anyone witnessed.
-    expect(canBeSignedOff('do')).toBe(true);
+    expect(canBeSignedOff('do', 'daily')).toBe(true);
     for (const kind of ['abstain', 'open_ended'] as const) {
-      expect(canBeSignedOff(kind)).toBe(false);
+      expect(canBeSignedOff(kind, 'daily')).toBe(false);
       expect(draftProblems(draft({ ...signable, kind }), { hasPairedReferee: true })).toContain(
         REFEREE_SIGN_OFF_COPY.wrongKind,
       );
@@ -729,9 +741,27 @@ describe('asking for the referee’s signature', () => {
     expect(draftProblems(cleared, { hasPairedReferee: true })).toEqual([]);
   });
 
-  it('survives a switch of cadence, which no constraint refuses it for', () => {
+  it('survives a switch to a cadence that has days to sign', () => {
     const kept = withCadence(draft({ ...signable, weeklyTarget: 3, weekStartDay: 1 }), 'daily');
     expect(kept.requiresRefereeApproval).toBe(true);
+  });
+
+  it('is refused on an hours quota, which has no day to sign', () => {
+    // `commitment_sign_off_not_on_hours_quota`. Minutes banked decide it, and commitments_owing()
+    // never names one of its days.
+    expect(canBeSignedOff('do', 'daily_hours_quota')).toBe(false);
+    expect(canBeSignedOff('do', 'weekly_quota')).toBe(true);
+    expect(
+      draftProblems(draft({ ...signable, cadence: 'daily_hours_quota', dailyMinutesTarget: 60 }), {
+        hasPairedReferee: true,
+      }),
+    ).toContain(REFEREE_SIGN_OFF_COPY.hoursQuota);
+  });
+
+  it('is cleared when the cadence becomes an hours quota, as the kind rule clears it', () => {
+    const cleared = withCadence(draft(signable), 'daily_hours_quota');
+    expect(cleared.requiresRefereeApproval).toBe(false);
+    expect(cleared.requiresPhoto).toBe(true);
   });
 
   it('reaches the database as its own column, off by default', () => {

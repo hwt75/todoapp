@@ -113,13 +113,15 @@ export function CommitmentForm({
   // and greying the control on it would be the form deciding an outcome the server has not been
   // asked about (AD-1). The trigger refuses the save with its own sentence if there really is
   // nobody to ask.
-  const signOffRefusal = !canBeSignedOff(draft.kind)
+  const signOffRefusal = !canBeSignedOff(draft.kind, 'daily')
     ? REFEREE_SIGN_OFF_COPY.wrongKind
-    : autoCheckActive
-      ? REFEREE_SIGN_OFF_COPY.autoChecked
-      : hasReferee === false
-        ? REFEREE_SIGN_OFF_COPY.noReferee
-        : null;
+    : !canBeSignedOff(draft.kind, draft.cadence)
+      ? REFEREE_SIGN_OFF_COPY.hoursQuota
+      : autoCheckActive
+        ? REFEREE_SIGN_OFF_COPY.autoChecked
+        : hasReferee === false
+          ? REFEREE_SIGN_OFF_COPY.noReferee
+          : null;
 
   // **Never disabled while it is ticked.** A control the author cannot untick is a commitment he
   // cannot save and cannot repair — and the database is deliberately kinder than that: a pairing

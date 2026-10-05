@@ -11,6 +11,12 @@
 -- and a constraint written the obvious way would accept exactly the case it exists to refuse.
 -- Both sides of the boundary are asserted so a future rewrite cannot quietly reintroduce it.
 --
+-- **The boundary moved on 2026-10-05.** `20261005110000` replaced that constraint with
+-- `commitment_window_leaves_time_for_the_photo`: a window must end by 23:30, not 24:00, because a
+-- claim made in its last minute still needs time to attach the photo before midnight decides the
+-- day (Epic 6 retrospective item 47). Steps 1 and 2 assert the new edge on both sides, and keep
+-- the midnight-crossing cases, which the new rule refuses a fortiori.
+--
 --   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/6-1-timed-commitment-constraints.sql
 --
 -- One transaction, rolled back at the end. It settles nothing and is safe against any database.
@@ -44,16 +50,15 @@ begin
   -- -------------------------------------------------------------------------------
   -- 1. What the database accepts.
   --
-  -- Including the boundary: 23:30 with a thirty-minute window ends at exactly 1440. The
-  -- window is half-open, so its last valid instant is 23:59:59.999 and it is still inside
-  -- its own day. `< 1440` here would refuse a legitimate commitment.
+  -- Including the boundary: 23:00 with a thirty-minute window ends at exactly 23:30, minute
+  -- 1410, which is the latest a window may end. `< 1410` here would refuse a legitimate one.
   -- -------------------------------------------------------------------------------
   foreach v_case in array array[
     'no time at all',
     'an ordinary evening',
     'the shortest window',
     'the longest window',
-    'a window ending at exactly midnight',
+    'a window ending at exactly 23:30',
     'on a weekly quota'
   ]
   loop
@@ -61,7 +66,7 @@ begin
                when 'no time at all' then null
                when 'the shortest window' then time '06:00'
                when 'the longest window' then time '06:00'
-               when 'a window ending at exactly midnight' then time '23:30'
+               when 'a window ending at exactly 23:30' then time '23:00'
                else time '20:00'
              end;
     v_window := case v_case
@@ -93,7 +98,7 @@ begin
   end loop;
 
   raise notice using message =
-    'Step 1 ok: six well-formed commitments accepted, including a window ending at 1440.';
+    'Step 1 ok: six well-formed commitments accepted, including a window ending at 23:30.';
 
   -- -------------------------------------------------------------------------------
   -- 2. What the database refuses.
@@ -110,6 +115,8 @@ begin
     'a window above the ceiling',
     'an hour past midnight',
     'one minute past midnight',
+    'a window ending at midnight',
+    'one minute past 23:30',
     'a time with seconds in it',
     'a time on an abstention',
     'a time on an hours quota'
@@ -125,6 +132,8 @@ begin
                when 'a window with no time' then null
                when 'an hour past midnight' then time '23:30'
                when 'one minute past midnight' then time '23:30'
+               when 'a window ending at midnight' then time '23:30'
+               when 'one minute past 23:30' then time '23:00'
                when 'a time with seconds in it' then time '20:00:30'
                else time '20:00'
              end;
@@ -135,6 +144,7 @@ begin
                   when 'a window above the ceiling' then 241
                   when 'an hour past midnight' then 60
                   when 'one minute past midnight' then 31
+                  when 'one minute past 23:30' then 31
                   else 30
                 end;
 
@@ -156,7 +166,8 @@ begin
   end loop;
 
   raise notice using message =
-    'Step 2 ok: ten malformed times were all refused, including 23:30 + 31 minutes -- the '
+    'Step 2 ok: twelve malformed times were all refused, including 23:00 + 31 minutes and '
+    '23:30 + 31 minutes -- the '
     'case a wrapping `time + interval` would have accepted.';
 
   -- -------------------------------------------------------------------------------
