@@ -186,7 +186,10 @@ vi.mock('@/lib/supabase/client', () => ({
           call.filters.push([column, value]);
           return query;
         },
-        order: () => Promise.resolve(result()),
+        // Chainable and still awaitable: `query` is a thenable. The evidence read pages with
+        // `.order().range()`; every other read awaits `.order()` directly.
+        order: () => query,
+        range: () => query,
         maybeSingle: () => Promise.resolve(result()),
         insert: (payload: unknown) => {
           inserted.push({ table, payload });

@@ -3,6 +3,7 @@ import {
   EVIDENCE_COMPRESS_ABOVE_BYTES,
   EVIDENCE_COPY,
   EVIDENCE_MAX_EDGE,
+  EVIDENCE_ROWS_PER_PAGE,
   compressEvidencePhoto,
   evidenceObjectPath,
   fileCapturedOn,
@@ -37,6 +38,10 @@ const filters: Array<[string, unknown]> = [];
 /** Every batch of paths handed to `createSignedUrls`, with the expiry it asked for. */
 const signCalls: Array<{ paths: string[]; ttl: number }> = [];
 let selected: string | null = null;
+/** Every `.order()` and `.range()` the evidence read applied — the pagination is asserted,
+ *  not assumed. */
+const orderedBy: string[] = [];
+const ranges: Array<[number, number]> = [];
 const tables: string[] = [];
 
 /** Story 8.3: what `requires_referee_approval_as_of()` answers per commitment id, and every call
@@ -67,6 +72,7 @@ vi.mock('@/lib/supabase/client', () => ({
     from: (table: string) => {
       tables.push(table);
       let days: string[] = [];
+      let page: [number, number] | null = null;
       const query = {
         select: (columns: string) => {
           selected = columns;
@@ -77,10 +83,28 @@ vi.mock('@/lib/supabase/client', () => ({
           if (column === 'for_day') days = value as string[];
           return query;
         },
-        then: (resolve: (value: unknown) => unknown) =>
-          Promise.resolve(
-            evidenceByDays[days.join(',')] ?? evidenceByDays['*'] ?? { data: [], error: null },
-          ).then(resolve),
+        order: (column: string) => {
+          orderedBy.push(column);
+          return query;
+        },
+        range: (from: number, to: number) => {
+          page = [from, to];
+          ranges.push(page);
+          return query;
+        },
+        // A range slices whatever the test configured, the way PostgREST would.
+        then: (resolve: (value: unknown) => unknown) => {
+          const answer = (evidenceByDays[days.join(',')] ??
+            evidenceByDays['*'] ?? { data: [], error: null }) as {
+            data: unknown[] | null;
+            error: unknown;
+          };
+          const sliced =
+            page && Array.isArray(answer.data)
+              ? { ...answer, data: answer.data.slice(page[0], page[1] + 1) }
+              : answer;
+          return Promise.resolve(sliced).then(resolve);
+        },
       };
       return query;
     },
@@ -119,6 +143,8 @@ beforeEach(() => {
   signCalls.length = 0;
   selected = null;
   tables.length = 0;
+  orderedBy.length = 0;
+  ranges.length = 0;
   signOffAsOf = {};
   signOffError = null;
   signOffThrowsFor = null;
@@ -522,6 +548,31 @@ describe('readKeptPhotos', () => {
     expect(dayFilters.map(([, value]) => (value as string[]).length)).toEqual([100, 100, 50]);
     // Every day is still asked about — chunking is the same answer, not a shorter one.
     expect(dayFilters.flatMap(([, value]) => value as string[])).toEqual(year);
+  });
+
+  it('reads past the row cap in ordered pages rather than stopping at a silent partial history', async () => {
+    // One more photo than a page holds, all on one chunk of days. PostgREST would cap the
+    // unpaged read at max_rows and say nothing about it.
+    const many = Array.from({ length: EVIDENCE_ROWS_PER_PAGE + 1 }, (_, i) =>
+      row(`e${String(i).padStart(5, '0')}`, '2026-09-03', `c1/e${i}.jpg`),
+    );
+    evidenceByDays['*'] = { data: many, error: null };
+
+    const read = await readKeptPhotos(['c1'], ['2026-09-03']);
+
+    expect(read.photos).toHaveLength(EVIDENCE_ROWS_PER_PAGE + 1);
+    expect(ranges).toEqual([
+      [0, EVIDENCE_ROWS_PER_PAGE - 1],
+      [EVIDENCE_ROWS_PER_PAGE, 2 * EVIDENCE_ROWS_PER_PAGE - 1],
+    ]);
+    // Ordered, so a page boundary can neither skip nor repeat a row.
+    expect(orderedBy.every((column) => column === 'id')).toBe(true);
+  });
+
+  it('stops after one page when the page is short, which is every ordinary history', async () => {
+    evidenceByDays['*'] = { data: [row('e1', '2026-09-03', 'c1/e1.jpg')], error: null };
+    await readKeptPhotos(['c1'], ['2026-09-03']);
+    expect(ranges).toHaveLength(1);
   });
 
   it('signs every path in one call, for an hour, numbered within its own day', async () => {

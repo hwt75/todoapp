@@ -178,6 +178,17 @@ export const EVIDENCE_RETENTION_DAYS = 30;
  */
 const DAYS_PER_QUERY = 100;
 
+/**
+ * How many rows one page of that read asks for (deferred from the Epic 6 retrospective).
+ *
+ * The Data API caps every response at `max_rows` (`supabase/config.toml`: 1000) and says nothing
+ * when it does, so a chunk of days holding more photos than that came back as a silent partial
+ * history. Each chunk is now read in ordered pages of this size until a short page says there is
+ * nothing more. At or below the cap on purpose: a page larger than it would be cut to the cap and
+ * look short, ending the read early.
+ */
+export const EVIDENCE_ROWS_PER_PAGE = 1000;
+
 /** One photo the author filed, resolved to something his own browser can load. The bucket is
  *  private, so `evidence` carries a storage path and never a URL. */
 export interface KeptPhoto {
@@ -268,15 +279,26 @@ export async function readKeptPhotos(
 
   const supabase = createClient();
 
-  const pages = await Promise.all(
-    chunk(wanted, DAYS_PER_QUERY).map((someDays) =>
-      supabase
+  // Every page of one chunk, in id order so a page boundary cannot skip or repeat a row. A
+  // failed page ends that chunk with its error, which fails the whole read below.
+  async function readChunk(someDays: string[]) {
+    const data: unknown[] = [];
+    for (let from = 0; ; from += EVIDENCE_ROWS_PER_PAGE) {
+      const page = await supabase
         .from('evidence')
         .select('id,commitment_id,for_day,storage_path,swept_at')
         .in('commitment_id', ids)
-        .in('for_day', someDays),
-    ),
-  );
+        .in('for_day', someDays)
+        .order('id')
+        .range(from, from + EVIDENCE_ROWS_PER_PAGE - 1);
+      if (page.error) return { data: null, error: page.error };
+      const rows = (page.data ?? []) as unknown[];
+      data.push(...rows);
+      if (rows.length < EVIDENCE_ROWS_PER_PAGE || cancelled()) return { data, error: null };
+    }
+  }
+
+  const pages = await Promise.all(chunk(wanted, DAYS_PER_QUERY).map(readChunk));
 
   if (cancelled()) return NOTHING_KEPT;
 
