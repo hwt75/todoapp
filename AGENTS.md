@@ -28,6 +28,8 @@
 - Authorization is enforced with RLS, not only application checks. A table and its RLS policies ship in the same migration.
 - Verdict history is append-only. Corrections are new rows; deletion of a commitment means setting `archived_at`.
 - An unavailable external check must never become a miss.
+- When a rule gains a single door (an `_as_of()` reader, a shared helper, a view), move every reader of the old column or table through it in the same change. Grep for every reader first and name them in the story, because a reader left on the old path is how one rule ends up with two answers (Epic 6 retrospective item 50).
+- Every writer of a day's settlement, Penalty, or the decisions that settle a day takes the per-account advisory lock `pg_advisory_xact_lock(hashtext(owner_id::text))` before reading the state it acts on.
 - Never test settlement overrides against the live doer account. Use a local Supabase stack or a preview branch for database tests.
 - Never commit service-role/secret keys, VAPID private keys, push subscriptions, or production credentials. Keep the Supabase service-role key out of `.env`, Vercel, migrations, logs, and artifacts.
 
