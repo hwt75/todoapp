@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { formatDeadline } from '@/lib/appeal';
 import { EVIDENCE_BUCKET, EVIDENCE_URL_TTL_SECONDS } from '@/lib/evidence';
+import { RefereePhotos } from '@/components/referee-photos';
 import { formatDong, PENALTY_DONG } from '@/lib/money';
 import type { PenaltyState } from '@/lib/ledger';
 import {
@@ -215,7 +216,7 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
             evidenceFailures++;
             continue;
           }
-          evidence.push({ id: row.id as string, url });
+          evidence.push({ id: row.id as string, url, path: row.storage_path as string });
         }
       }
 
@@ -306,21 +307,13 @@ export function RefereeAppealDetail({ appealId }: { appealId: string }) {
                 No `width`/`height`: nothing here knows the photograph's real dimensions —
                 `evidence` stores a path, not a size — and attributes that disagree with the
                 image would reserve the wrong box and shift the page anyway. */}
-            {view.evidence.map((item, index) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={item.id}
-                src={item.url}
-                loading="lazy"
-                decoding="async"
-                alt={REFEREE_APPEAL_DETAIL_COPY.evidenceAlt(index + 1, view.evidence.length)}
-              />
-            ))}
-            {view.evidenceFailures > 0 && (
-              <p role="status">
-                {REFEREE_APPEAL_DETAIL_COPY.evidenceLoadFailed(view.evidenceFailures)}
-              </p>
-            )}
+            <RefereePhotos
+              photos={view.evidence}
+              unsigned={view.evidenceFailures}
+              alt={REFEREE_APPEAL_DETAIL_COPY.evidenceAlt}
+              failed={REFEREE_APPEAL_DETAIL_COPY.evidenceLoadFailed}
+              className=""
+            />
             {/* "No evidence attached" would be a lie about an appeal that was filed with a
                 photograph — he needs to know one existed and that its absence is the product's
                 doing, not the author's. */}

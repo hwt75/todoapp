@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { CommitmentOutcome } from '@/lib/chain';
 import { EVIDENCE_BUCKET, EVIDENCE_URL_TTL_SECONDS } from '@/lib/evidence';
+import { RefereePhotos } from '@/components/referee-photos';
 import {
   OBJECTION_REASON_MAX,
   REFEREE_DAY_COPY,
@@ -322,30 +323,16 @@ export function RefereeDayLookup() {
                             .filter((item): item is { path: string; url: string } =>
                               Boolean(item.url),
                             );
-                          const unopenable = row.evidencePaths.length - signed.length;
-
+                          // This screen stacks every commitment's proof for a whole day, which is
+                          // why the images load lazily — and RefereePhotos is what counts one that
+                          // signed and then would not load, rather than drawing a broken frame.
                           return (
-                            <>
-                              {signed.map((item, index) => (
-                                // A signed URL into a private bucket, not an asset next/image's
-                                // own optimiser is set up to fetch. `lazy` matters most here:
-                                // this screen stacks every commitment's proof for a whole day,
-                                // and without it they all pull at once and the first one — the
-                                // one on screen — finishes last.
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  key={item.path}
-                                  className="kept-photo"
-                                  src={item.url}
-                                  loading="lazy"
-                                  decoding="async"
-                                  alt={REFEREE_DAY_COPY.proofAlt(index + 1, signed.length)}
-                                />
-                              ))}
-                              {unopenable > 0 && (
-                                <p role="status">{REFEREE_DAY_COPY.proofLoadFailed(unopenable)}</p>
-                              )}
-                            </>
+                            <RefereePhotos
+                              photos={signed}
+                              unsigned={row.evidencePaths.length - signed.length}
+                              alt={REFEREE_DAY_COPY.proofAlt}
+                              failed={REFEREE_DAY_COPY.proofLoadFailed}
+                            />
                           );
                         })()}
 
