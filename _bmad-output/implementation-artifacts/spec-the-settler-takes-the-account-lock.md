@@ -2,7 +2,7 @@
 title: 'The settler takes the account lock, and the day lookup knows which door'
 type: 'bugfix'
 created: '2026-10-05'
-status: 'in-progress'
+status: 'done'
 review_loop_iteration: 0
 baseline_commit: '41e90fe'
 context:
@@ -83,6 +83,21 @@ refusal `object_to_day()` already makes for a Penalty in any state but owed.
 Run on this machine, 2026-10-05: `npm test`, `npm run lint`, `npm run format:check`, `npm run build`.
 
 **Not run here.** The SQL files and both race harnesses need a local Supabase stack, and this
-machine has no Docker. They run in CI's `db-tests` job on push. The story stays `in-progress`, and
-retro item 44 stays `in-progress`, until that job is green and both migrations are on the remote
-project (`npm run migrations:check`).
+machine has no Docker. They run in CI's `db-tests` job on push.
+
+## Results — 2026-10-05
+
+- PR #24 merged as `387250b`. CI `db-tests` was green on both runs. Its log shows every step of
+  both new SQL files passing, `test-sign-off-race.mjs` and `test-settlement-lock.mjs` both
+  printing PASS, and no file skipped for its clock window.
+- `npx supabase db push --dry-run` named exactly `20261005090000` and `20261005100000`. Both were
+  then pushed, and `npm run migrations:check` reports all 85 matching.
+- Read back from the live project: `settle_day`, `supersede_expiries`, `apply_grace_days` and
+  `sign_off_day` all carry the account key. `referee_day_lookup` returns `asked_for_signature`,
+  still excludes commitment-day photographs, and is executable by `authenticated` and not by
+  `anon`.
+- Security advisor: no ERROR and nothing open to `anon`. The 17 authenticated SECURITY DEFINER
+  WARNs are the same count as after Story 8.6, and both functions this change touched were
+  already among them.
+- The referee lookup screen was not exercised on a device. Its behaviour is covered by
+  `components/referee-day-lookup.test.tsx`.
