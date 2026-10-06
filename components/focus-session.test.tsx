@@ -65,6 +65,9 @@ vi.mock('@/lib/supabase/client', () => ({
           filters.push([table, column, String(value)]);
           return query;
         },
+        // The evidence read pages in id order. One page here: no test holds a thousand rows.
+        order: () => query,
+        range: () => query,
         // Scoped to `evidence` on purpose. An unscoped `then` hands evidence rows to whatever
         // else is ever awaited without `.maybeSingle()`, which would make a read of the wrong
         // table look like it worked.

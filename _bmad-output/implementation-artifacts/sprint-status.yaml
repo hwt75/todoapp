@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-11-2026 14:30
-last_updated: 10-05-2026 17:10
+last_updated: 10-05-2026 18:00
 project: todoapp
 project_key: NOKEY
 tracking_system: file-system
@@ -97,7 +97,8 @@ development_status:
   epic-7: done
   7-1-a-surface-i-am-less-reluctant-to-open: done
   7-2-a-message-meant-to-be-said-out-loud: done
-  epic-7-retrospective: optional
+  # Skipped on hwt75's decision of 2026-10-05: marked done without a retrospective being run.
+  epic-7-retrospective: done
 
   # Epic 8 is defined by _bmad-output/specs/spec-commitments-the-referee-signs-off/SPEC.md,
   # the pattern Epic 6 set: the SPEC folder is the epic. Approved as a scope change in
@@ -113,7 +114,8 @@ development_status:
   8-4-what-is-waiting-for-him-today: done
   8-5-the-author-is-told-he-was-refused: done
   8-6-today-says-the-day-is-waiting-on-his-friend: done
-  epic-8-retrospective: optional
+  # Skipped on hwt75's decision of 2026-10-05: marked done without a retrospective being run.
+  epic-8-retrospective: done
 action_items:
   - id: "epic-1-retro-item-1-record-whether-a-research-spike-may-skip"
     epic: 1
@@ -469,40 +471,46 @@ action_items:
     action: "Extract the evidence write path shared by today.tsx and appeal-form.tsx;
       the two copies diverged over the item 39 unmount fix."
     owner: "hwt75"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-07.md"
+    note: "Built on branch the-rest-of-the-backlog (2026-10-05): lib/evidence-write.ts is the one write path, and Today and the appeal form both call it. Done when it merges with CI green."
   - id: "epic-6-retro-item-46-give-a-kept-photo-a-textual-signal-a-cou"
     epic: 6
     action: "Give a kept photo a textual signal - a count or caption, not only an
       alt attribute that sighted readers never see."
     owner: "hwt75"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-07.md"
+    note: "Built on branch the-rest-of-the-backlog (2026-10-05): KeptPhotos says 'N photo(s) kept for this day.' beside the images on all three surfaces. Done when it merges."
   - id: "epic-6-retro-item-47-decide-what-a-window-ending-at-24-00-mea"
     epic: 6
     action: "Decide what a window ending at 24:00 means, given the photo the day is
       judged on cannot be attached after midnight."
     owner: "hwt75"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-07.md"
+    note: "hwt75 decided 2026-10-05 that a window ends by 23:30. Built on branch the-rest-of-the-backlog (2026-10-05): migration 20261005110000 and its client mirror. Done when it merges with db-tests green and the migration is on the remote project."
   - id: "epic-6-retro-item-48-tell-the-author-when-a-queued-claim-has"
     epic: 6
     action: "Tell the author when a queued claim has become unprovable, rather than
       letting the day fail silently."
     owner: "hwt75"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-07.md"
+    note: "Built on branch the-rest-of-the-backlog (2026-10-05): Today reads the offline queue, says a claim stranded past midnight can no longer be proven (naming the Grace Day), and re-reads a claim whose id never came back (A5). Done when it merges."
   - id: "epic-6-retro-item-49-constrain-is_live_doer-to-one-account-or"
     epic: 6
     action: "Constrain is_live_doer to one account or record why two is acceptable;
       settle_day still reads it for AD-16."
     owner: "hwt75"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-07.md"
+    note: "Already done by 20260907180000_one_live_doer.sql (partial unique index profile_one_live_doer), with supabase/tests/one-live-doer.sql. Confirmed on the live project 2026-10-05: one live doer, the index present."
   - id: "epic-6-retro-item-50-process-when-a-rule-gains-a-one-door-abs"
     epic: 6
     action: "Process: when a rule gains a one-door abstraction, move every reader
       through it in the same change - three defects on 2026-09-07 were that one shape."
     owner: "hwt75"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-09-07.md"
+    note: "Built on branch the-rest-of-the-backlog (2026-10-05): AGENTS.md's non-negotiable rules now state it, with the account-lock rule beside it. Done when it merges."

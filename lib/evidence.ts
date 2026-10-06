@@ -178,6 +178,17 @@ export const EVIDENCE_RETENTION_DAYS = 30;
  */
 const DAYS_PER_QUERY = 100;
 
+/**
+ * How many rows one page of that read asks for (deferred from the Epic 6 retrospective).
+ *
+ * The Data API caps every response at `max_rows` (`supabase/config.toml`: 1000) and says nothing
+ * when it does, so a chunk of days holding more photos than that came back as a silent partial
+ * history. Each chunk is now read in ordered pages of this size until a short page says there is
+ * nothing more. At or below the cap on purpose: a page larger than it would be cut to the cap and
+ * look short, ending the read early.
+ */
+export const EVIDENCE_ROWS_PER_PAGE = 1000;
+
 /** One photo the author filed, resolved to something his own browser can load. The bucket is
  *  private, so `evidence` carries a storage path and never a URL. */
 export interface KeptPhoto {
@@ -268,15 +279,26 @@ export async function readKeptPhotos(
 
   const supabase = createClient();
 
-  const pages = await Promise.all(
-    chunk(wanted, DAYS_PER_QUERY).map((someDays) =>
-      supabase
+  // Every page of one chunk, in id order so a page boundary cannot skip or repeat a row. A
+  // failed page ends that chunk with its error, which fails the whole read below.
+  async function readChunk(someDays: string[]) {
+    const data: unknown[] = [];
+    for (let from = 0; ; from += EVIDENCE_ROWS_PER_PAGE) {
+      const page = await supabase
         .from('evidence')
         .select('id,commitment_id,for_day,storage_path,swept_at')
         .in('commitment_id', ids)
-        .in('for_day', someDays),
-    ),
-  );
+        .in('for_day', someDays)
+        .order('id')
+        .range(from, from + EVIDENCE_ROWS_PER_PAGE - 1);
+      if (page.error) return { data: null, error: page.error };
+      const rows = (page.data ?? []) as unknown[];
+      data.push(...rows);
+      if (rows.length < EVIDENCE_ROWS_PER_PAGE || cancelled()) return { data, error: null };
+    }
+  }
+
+  const pages = await Promise.all(chunk(wanted, DAYS_PER_QUERY).map(readChunk));
 
   if (cancelled()) return NOTHING_KEPT;
 
@@ -580,6 +602,20 @@ export const EVIDENCE_COPY = {
   wrongDay: 'That photo was not taken today, so it cannot prove today.',
 
   /**
+   * The server's refusals, in this screen's words rather than the database's (deferred from epic-6
+   * retro item 42). Keyed by the `hint` each refusal carries since 20261005130000, never by its
+   * message: `evidenceRefusal()` is the only reader.
+   */
+  refusals: {
+    'evidence:day-ended': 'That day has ended, so a photo can no longer prove it.',
+    'evidence:not-today': 'That day has ended, so a photo can no longer be kept against it.',
+    'evidence:wrong-capture-date': 'That photo was not taken today, so it cannot prove today.',
+    'evidence:no-object': 'The photo did not finish uploading. Try again.',
+    'evidence:no-parent':
+      'There is nothing to attach this photo to any more. Reopen the app and try again.',
+  } as Record<string, string>,
+
+  /**
    * Story 6.9, the read side. One alt-text rule for all three surfaces.
    *
    * Names no day, deliberately. The day is already on screen every time — it is the only day
@@ -589,6 +625,15 @@ export const EVIDENCE_COPY = {
    * the day was. 1-indexed, the way a count is said out loud.
    */
   photoAlt: (position: number, total: number): string => `Photo ${position} of ${total} you kept.`,
+
+  /**
+   * Epic 6 retrospective item 46: the textual signal a kept photo lacked. After a reload the only
+   * evidence one existed was the image and its alt text, which a sighted reader never sees, and
+   * "Proof saved." is gone by then. One sentence beside the photos, said once however many there
+   * are. It names no day for the reason `photoAlt` gives: the day is already on screen.
+   */
+  photosKept: (count: number): string =>
+    `${count} photo${count === 1 ? '' : 's'} kept for this day.`,
 
   /** Some photos are on screen and some are not — a count, never a shorter list. Covers a URL
    *  that could not be signed and one that would not load, because to the author looking at
@@ -616,3 +661,14 @@ export const EVIDENCE_COPY = {
    *  an RLS refusal and a dead connection are different problems. */
   photosUnreadable: 'Photos could not be loaded.',
 } as const;
+
+/**
+ * The sentence for a refused evidence row (deferred from epic-6 retro item 42).
+ *
+ * A hint this client knows becomes `EVIDENCE_COPY`'s own sentence. Anything else -- no hint, or
+ * one added after this client was built -- keeps the server's words, so a new refusal is never
+ * turned into silence or into a sentence that is not about it.
+ */
+export function evidenceRefusal(hint: string | null, message: string): string {
+  return (hint !== null ? EVIDENCE_COPY.refusals[hint] : undefined) ?? message;
+}

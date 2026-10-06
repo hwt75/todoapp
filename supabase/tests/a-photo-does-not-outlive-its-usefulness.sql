@@ -11,6 +11,15 @@
 --
 --   docker exec -i supabase_db_todoapp psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/a-photo-does-not-outlive-its-usefulness.sql
 --
+-- **Clock-bound since 20261005110000.** The fixture needs a timed window that contains this very
+-- instant, so a claim made now lands today. A window must now end by 23:30, which leaves no window
+-- that can contain an instant after 23:29. The `raise` below refuses to run from 23:00, at hour
+-- granularity because that is what CI reads. The line after this paragraph says the same in a form
+-- CI can read, so the job skips this file in that hour and says so; `lib/sql-clock-window.test.ts`
+-- keeps the two in step.
+--
+-- ci-clock-window: 0-22 Asia/Ho_Chi_Minh
+--
 -- One transaction, rolled back at the end.
 
 begin;
@@ -41,7 +50,15 @@ declare
   v_now_min integer := floor(extract(epoch from (now() at time zone 'Asia/Ho_Chi_Minh')::time) / 60)::int;
   v_due_min integer := greatest(0, v_now_min + 1 - 240);
   v_win     integer;
+  v_hour    integer := extract(hour from now() at time zone 'Asia/Ho_Chi_Minh')::integer;
 begin
+  if v_hour < 0 or v_hour > 22 then
+    raise exception using message = format(
+      'No timed window can contain an instant after 23:29 (20261005110000), and this fixture '
+      'needs one that contains now. The local hour is %s. Run it before 23:00 Asia/Ho_Chi_Minh.',
+      v_hour);
+  end if;
+
   v_win := greatest(5, v_now_min + 1 - v_due_min);
 
   insert into auth.users (id, instance_id, aud, role, email, encrypted_password,

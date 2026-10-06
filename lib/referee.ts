@@ -329,6 +329,8 @@ export interface RefereeAppealDetail {
 export interface RefereeEvidenceItem {
   id: string;
   url: string;
+  /** The storage path, kept so the screen can sign it again when the URL expires. */
+  path: string;
 }
 
 /** The rejection sentence, named once — `REFEREE_APPEAL_DETAIL_COPY.gracedAfterRejection`

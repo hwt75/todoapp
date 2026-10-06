@@ -113,13 +113,15 @@ export function CommitmentForm({
   // and greying the control on it would be the form deciding an outcome the server has not been
   // asked about (AD-1). The trigger refuses the save with its own sentence if there really is
   // nobody to ask.
-  const signOffRefusal = !canBeSignedOff(draft.kind)
+  const signOffRefusal = !canBeSignedOff(draft.kind, 'daily')
     ? REFEREE_SIGN_OFF_COPY.wrongKind
-    : autoCheckActive
-      ? REFEREE_SIGN_OFF_COPY.autoChecked
-      : hasReferee === false
-        ? REFEREE_SIGN_OFF_COPY.noReferee
-        : null;
+    : !canBeSignedOff(draft.kind, draft.cadence)
+      ? REFEREE_SIGN_OFF_COPY.hoursQuota
+      : autoCheckActive
+        ? REFEREE_SIGN_OFF_COPY.autoChecked
+        : hasReferee === false
+          ? REFEREE_SIGN_OFF_COPY.noReferee
+          : null;
 
   // **Never disabled while it is ticked.** A control the author cannot untick is a commitment he
   // cannot save and cannot repair — and the database is deliberately kinder than that: a pairing
@@ -267,6 +269,7 @@ export function CommitmentForm({
                 <label htmlFor="commitment-late-window">Late window, in minutes</label>
                 <input
                   id="commitment-late-window"
+                  aria-describedby="commitment-timed-warning"
                   type="number"
                   min={LATE_WINDOW_MIN_MINUTES}
                   max={LATE_WINDOW_MAX_MINUTES}
@@ -281,7 +284,9 @@ export function CommitmentForm({
 
                 {/* The trade a time makes: three days to answer becomes a deadline at
                     midnight. Said here, once, rather than discovered at the end of a month. */}
-                <p className="row-muted">{TIMED_COMMITMENT_COPY.warning}</p>
+                <p className="row-muted" id="commitment-timed-warning">
+                  {TIMED_COMMITMENT_COPY.warning}
+                </p>
               </>
             )}
           </>
@@ -323,6 +328,7 @@ export function CommitmentForm({
           <label>
             <input
               type="checkbox"
+              aria-describedby="commitment-photo-note"
               disabled={draft.requiresRefereeApproval}
               checked={draft.requiresPhoto}
               onChange={(event) => set('requiresPhoto', event.target.checked)}
@@ -347,7 +353,7 @@ export function CommitmentForm({
             this says `signedOff` a day before the referee can really open anything. That errs
             toward the author believing the photo is *less* private than it is, which is the
             benign direction — the same asymmetry that decides the unknown case on Today. */}
-        <p className="row-muted">
+        <p className="row-muted" id="commitment-photo-note">
           {draft.requiresRefereeApproval || signedOffToday === true
             ? KEPT_PHOTO_COPY.signedOff
             : draft.dueTime === null
@@ -370,6 +376,16 @@ export function CommitmentForm({
           <label>
             <input
               type="checkbox"
+              // Deferred from Story 8.1's review: a disabled checkbox is not focusable, so the
+              // sentence saying why reaches a screen reader only as the control's own description.
+              // Whichever one sentence is on screen describes it, and nothing when neither is.
+              aria-describedby={
+                signOffDisabled
+                  ? 'commitment-sign-off-why'
+                  : draft.requiresRefereeApproval
+                    ? 'commitment-sign-off-warning'
+                    : undefined
+              }
               disabled={signOffDisabled}
               checked={draft.requiresRefereeApproval}
               onChange={(event) =>
@@ -383,9 +399,15 @@ export function CommitmentForm({
             {REFEREE_SIGN_OFF_COPY.label}
           </label>
         </p>
-        {signOffDisabled && <p className="row-muted">{signOffRefusal}</p>}
+        {signOffDisabled && (
+          <p className="row-muted" id="commitment-sign-off-why">
+            {signOffRefusal}
+          </p>
+        )}
         {draft.requiresRefereeApproval && (
-          <p className="row-muted">{REFEREE_SIGN_OFF_COPY.warning}</p>
+          <p className="row-muted" id="commitment-sign-off-warning">
+            {REFEREE_SIGN_OFF_COPY.warning}
+          </p>
         )}
       </div>
 
@@ -394,18 +416,18 @@ export function CommitmentForm({
       <div className="card card-pad">
         <h3>Auto-checks</h3>
         {checksPossible ? (
-          <p className="row-muted">
+          <p className="row-muted" id="commitment-auto-checks-why">
             Location with dwell, Phone movement and Timer don&apos;t run yet — Epic 4 builds them.
             Until then, and unless Account elsewhere is linked below, every commitment is settled by
             your morning answer.
           </p>
         ) : draft.kind === 'abstain' ? (
-          <p className="row-muted">
+          <p className="row-muted" id="commitment-auto-checks-why">
             Nothing can check this one. There is no sensor for a thing not done, so your morning
             answer is the record — and the only record.
           </p>
         ) : (
-          <p className="row-muted">
+          <p className="row-muted" id="commitment-auto-checks-why">
             Nothing can check this one. An Hours-per-day commitment is judged by the time you bank,
             never by a morning answer, so there is nothing an Auto-check could report.
           </p>
@@ -414,6 +436,7 @@ export function CommitmentForm({
           <label style={{ display: 'block' }}>
             <input
               type="checkbox"
+              aria-describedby="commitment-auto-checks-why"
               disabled={!checksPossible}
               checked={draft.autoCheckEnabled}
               onChange={(event) => set('autoCheckEnabled', event.target.checked)}

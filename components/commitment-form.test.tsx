@@ -329,7 +329,7 @@ describe('the time of day on a commitment form', () => {
       />,
     );
 
-    expect(screen.getByText('The late window has to end before midnight.')).toBeInTheDocument();
+    expect(screen.getByText(TIMED_COMMITMENT_COPY.windowTooLate)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(onSave).not.toHaveBeenCalled();
   });
@@ -455,6 +455,16 @@ describe('asking the referee to sign a commitment off', () => {
     expect(screen.getByText(REFEREE_SIGN_OFF_COPY.wrongKind)).toBeInTheDocument();
     expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.autoChecked)).not.toBeInTheDocument();
     expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.noReferee)).not.toBeInTheDocument();
+  });
+
+  it('is disabled on an hours quota, which has no day to sign, and says so', async () => {
+    render(<CommitmentForm hasReferee onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.selectOptions(screen.getByLabelText('Cadence'), 'daily_hours_quota');
+
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).toBeDisabled();
+    expect(screen.getByText(REFEREE_SIGN_OFF_COPY.hoursQuota)).toBeInTheDocument();
+    expect(screen.queryByText(REFEREE_SIGN_OFF_COPY.wrongKind)).not.toBeInTheDocument();
   });
 
   it('is disabled when a machine already answers, and says so', async () => {
@@ -722,5 +732,64 @@ describe('a flagged commitment whose referee is gone', () => {
 
     await userEvent.click(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label));
     expect(screen.getByLabelText('Keep a photo against this')).toBeEnabled();
+  });
+});
+
+/**
+ * Deferred from Story 8.1's review: the sentence that explains a disabled control was a bare
+ * sibling paragraph, and a disabled checkbox is not focusable, so a screen reader never reached
+ * it. EXPERIENCE.md's "disabled with an explanation" is only met if the explanation is the
+ * control's own description. All the controls of that shape, together, so the house pattern is
+ * fixed rather than one control.
+ */
+describe('a control says why, to the reader that cannot see it greyed', () => {
+  it('describes a disabled sign-off control with the reason it is disabled', async () => {
+    render(<CommitmentForm hasReferee onSave={vi.fn()} onCancel={vi.fn()} />);
+    await userEvent.selectOptions(screen.getByLabelText('Kind'), 'abstain');
+
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).toHaveAccessibleDescription(
+      REFEREE_SIGN_OFF_COPY.wrongKind,
+    );
+  });
+
+  it('describes a ticked sign-off control with what the referee can do', async () => {
+    render(<CommitmentForm hasReferee onSave={vi.fn()} onCancel={vi.fn()} />);
+    await userEvent.click(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label));
+
+    expect(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label)).toHaveAccessibleDescription(
+      REFEREE_SIGN_OFF_COPY.warning,
+    );
+  });
+
+  it('describes the Auto-check control with why nothing can check an abstention', async () => {
+    render(<CommitmentForm hasReferee onSave={vi.fn()} onCancel={vi.fn()} />);
+    await userEvent.selectOptions(screen.getByLabelText('Kind'), 'abstain');
+
+    expect(screen.getByLabelText('Account elsewhere')).toHaveAccessibleDescription(
+      /There is no sensor for a thing not done/,
+    );
+  });
+
+  it('describes the late window with the trade a time makes', () => {
+    render(
+      <CommitmentForm
+        initial={{ ...EMPTY_DRAFT, name: 'Pill', dueTime: '20:00', lateWindowMinutes: 30 }}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('Late window, in minutes')).toHaveAccessibleDescription(
+      TIMED_COMMITMENT_COPY.warning,
+    );
+  });
+
+  it('describes the photo control, which sign-off holds on, with the sentence that says so', async () => {
+    render(<CommitmentForm hasReferee onSave={vi.fn()} onCancel={vi.fn()} />);
+    await userEvent.click(screen.getByLabelText(REFEREE_SIGN_OFF_COPY.label));
+
+    expect(screen.getByLabelText('Keep a photo against this')).toHaveAccessibleDescription(
+      KEPT_PHOTO_COPY.signedOff,
+    );
   });
 });

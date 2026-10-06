@@ -3,13 +3,7 @@
 import { useRef, useState } from 'react';
 import { classifyConflict, classifyWriteError } from '@/lib/declaration-submit';
 import { APPEAL_COPY, holdStateCopy, toRow, type AppealDraft } from '@/lib/appeal';
-import {
-  EVIDENCE_BUCKET,
-  compressEvidencePhoto,
-  evidenceObjectPath,
-  fileCapturedOn,
-  isEvidenceDated,
-} from '@/lib/evidence';
+import { writeEvidence } from '@/lib/evidence-write';
 import { formatDong } from '@/lib/money';
 import { createClient } from '@/lib/supabase/client';
 
@@ -144,49 +138,27 @@ export function AppealForm({
   async function uploadEvidence(file: File) {
     if (submission.kind !== 'held') return;
 
-    // FR-14: refused before any upload starts — an evidently wrong-dated file never reaches
-    // Storage at all. The server enforces the same rule again on the `evidence` insert
-    // below (AD-1: a client check alone is never authoritative).
-    if (!isEvidenceDated(file, forDay)) {
-      setEvidence({ kind: 'failed', reason: APPEAL_COPY.evidenceWrongDay });
-      return;
-    }
+    // FR-14: the shared write refuses an evidently wrong-dated file before any upload starts,
+    // and the server refuses it again on the insert (AD-1). The appeal's own sentences, never the
+    // server's words: this screen has always said "not saved" and nothing more for a refusal.
+    const outcome = await writeEvidence(
+      file,
+      { kind: 'appeal', id: submission.appealId },
+      forDay,
+      () => setEvidence({ kind: 'uploading' }),
+    );
 
-    setEvidence({ kind: 'uploading' });
-
-    try {
-      const supabase = createClient();
-      // Shrunk before it goes up, for the reason `components/today.tsx` gives: the referee reads
-      // it in a box under half his screen and paid for the full original. Hands back the original
-      // untouched on any format it cannot decode, and carries `lastModified` across so
-      // `captured_on` below still names the day the photo was taken.
-      const stored = await compressEvidencePhoto(file);
-      const path = evidenceObjectPath(submission.appealId, crypto.randomUUID(), stored.name);
-
-      const { error: uploadError } = await supabase.storage
-        .from(EVIDENCE_BUCKET)
-        .upload(path, stored, { contentType: stored.type || undefined });
-
-      if (uploadError) {
-        setEvidence({ kind: 'failed', reason: APPEAL_COPY.evidenceFailed });
-        return;
-      }
-
-      const { error: insertError } = await supabase.from('evidence').insert({
-        appeal_id: submission.appealId,
-        storage_path: path,
-        captured_on: fileCapturedOn(file),
-      });
-
-      if (insertError) {
-        setEvidence({ kind: 'failed', reason: APPEAL_COPY.evidenceFailed });
-        return;
-      }
-
-      setEvidence({ kind: 'saved' });
-    } catch {
-      setEvidence({ kind: 'failed', reason: APPEAL_COPY.evidenceFailed });
-    }
+    setEvidence(
+      outcome.kind === 'saved'
+        ? { kind: 'saved' }
+        : {
+            kind: 'failed',
+            reason:
+              outcome.kind === 'wrong-day'
+                ? APPEAL_COPY.evidenceWrongDay
+                : APPEAL_COPY.evidenceFailed,
+          },
+    );
   }
 
   return (

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { formatDeadline } from '@/lib/appeal';
 import { EVIDENCE_BUCKET, EVIDENCE_URL_TTL_SECONDS } from '@/lib/evidence';
+import { RefereePhotos } from '@/components/referee-photos';
 import { formatDong } from '@/lib/money';
 import type { LedgerKind, PenaltyState } from '@/lib/ledger';
 import {
@@ -653,33 +654,20 @@ export function RefereeHome() {
                 const signed = row.evidencePaths
                   .map((path) => ({ path, url: view.proofUrls.get(path) }))
                   .filter((item): item is { path: string; url: string } => Boolean(item.url));
-                const unopenable = row.evidencePaths.length - signed.length;
 
                 return (
                   <div className="row" key={key}>
                     <div className="row-main">
                       <div className="row-name">{row.commitmentName}</div>
 
-                      {signed.map((item, index) => (
-                        // A signed URL into a private bucket — see referee-day-lookup.tsx for why
-                        // this is a plain, lazily loaded <img> rather than next/image.
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={item.path}
-                          className="kept-photo"
-                          src={item.url}
-                          loading="lazy"
-                          decoding="async"
-                          alt={REFEREE_WAITING_COPY.proofAlt(
-                            row.commitmentName,
-                            index + 1,
-                            signed.length,
-                          )}
-                        />
-                      ))}
-                      {unopenable > 0 && (
-                        <p role="status">{REFEREE_WAITING_COPY.proofLoadFailed(unopenable)}</p>
-                      )}
+                      <RefereePhotos
+                        photos={signed}
+                        unsigned={row.evidencePaths.length - signed.length}
+                        alt={(position, total) =>
+                          REFEREE_WAITING_COPY.proofAlt(row.commitmentName, position, total)
+                        }
+                        failed={REFEREE_WAITING_COPY.proofLoadFailed}
+                      />
 
                       {!settled && (
                         <>

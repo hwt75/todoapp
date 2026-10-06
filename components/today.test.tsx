@@ -186,7 +186,10 @@ vi.mock('@/lib/supabase/client', () => ({
           call.filters.push([column, value]);
           return query;
         },
-        order: () => Promise.resolve(result()),
+        // Chainable and still awaitable: `query` is a thenable. The evidence read pages with
+        // `.order().range()`; every other read awaits `.order()` directly.
+        order: () => query,
+        range: () => query,
         maybeSingle: () => Promise.resolve(result()),
         insert: (payload: unknown) => {
           inserted.push({ table, payload });
@@ -243,6 +246,9 @@ beforeEach(() => {
   rows['settlement_current:day'] = { data: [], error: null };
   rows['penalty_current:day'] = { data: [], error: null };
   rows.grace_allowance_remaining = { data: { remaining: 2 }, error: null };
+  // The offline queue lives in localStorage and outlives a test. Screens now read it on load
+  // (Epic 6 retrospective item 48), so one test's queued claim must not become the next one's.
+  window.localStorage.clear();
 });
 
 describe('the today screen', () => {
@@ -815,6 +821,83 @@ function photoTakenOn(day: string): File {
 function todayLocal(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
 }
+
+/**
+ * Epic 6 retrospective item 48 and finding A5 — a claim the server has not seen, or has seen
+ * without telling this screen which row it made.
+ */
+const QUEUE_KEY = 'todoapp.declaration-queue.v1';
+
+function queueClaimTappedAt(commitmentId: string, instant: Date): void {
+  window.localStorage.setItem(
+    QUEUE_KEY,
+    JSON.stringify([
+      {
+        idempotencyKey: 'queued-1',
+        ownerId: 'u1',
+        commitmentId,
+        answer: 'held',
+        answeredAt: instant.toISOString(),
+        timed: true,
+      },
+    ]),
+  );
+}
+
+describe('a claim the server has not seen yet', () => {
+  beforeEach(() => atLocalTime('20:10'));
+  afterEach(() => vi.useRealTimers());
+
+  it('says a claim from a day that has closed can no longer be proven, and names the remedy', async () => {
+    rows.commitment = { data: [pill], error: null };
+    // Tapped at 20:10 yesterday and never sent.
+    queueClaimTappedAt('c2', new Date(Date.now() - 24 * 60 * 60 * 1000));
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+
+    const notice = await screen.findByText(/no photo can prove it now/);
+    expect(notice).toHaveTextContent(/Aug 29, 2026/);
+    expect(notice).toHaveTextContent(/Grace Day/);
+    // Today is its own day: the stranded claim does not take today's control away.
+    expect(screen.getByRole('button', { name: 'Claim Pill' })).toBeInTheDocument();
+    expect(screen.queryByText(/dated when you tapped.$/)).not.toBeInTheDocument();
+  });
+
+  it('remembers a claim queued earlier today across a reload, rather than offering it again', async () => {
+    rows.commitment = { data: [pill], error: null };
+    queueClaimTappedAt('c2', new Date(Date.now() - 5 * 60 * 1000));
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+
+    expect(await screen.findByText(/dated when you tapped/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Claim Pill' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/no photo can prove it now/)).not.toBeInTheDocument();
+  });
+
+  it('reads the row again when a claim landed but its id did not come back (A5)', async () => {
+    rows.commitment = { data: [pill], error: null };
+    // The insert succeeds; the read that would return the new row's id comes back empty.
+    rows.declaration = { data: null, error: null };
+
+    render(
+      <Today ownerId="u1" onOpenLedger={vi.fn()} onOpenChain={vi.fn()} onOpenFocus={vi.fn()} />,
+    );
+    const button = await screen.findByRole('button', { name: 'Claim Pill' });
+
+    // What timed_claim_today says once the row exists.
+    rows.timed_claim_today = {
+      data: [{ commitment_id: 'c2', declaration_id: 'decl-9', proven: false }],
+      error: null,
+    };
+    await userEvent.click(button);
+
+    expect(await screen.findByLabelText('Proof')).toBeInTheDocument();
+  });
+});
 
 describe('proving a claim with a photo', () => {
   beforeEach(() => atLocalTime('20:10'));

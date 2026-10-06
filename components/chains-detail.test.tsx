@@ -43,6 +43,9 @@ vi.mock('@/lib/supabase/client', () => ({
             seen.push({ table, columns, column, value });
             return query;
           },
+          // The evidence read pages in id order. One page here: no test holds a thousand rows.
+          order: () => query,
+          range: () => query,
           maybeSingle: () => Promise.resolve(rows[table] ?? { data: null, error: null }),
           then: (resolve: (value: unknown) => unknown) =>
             Promise.resolve(rows[table] ?? { data: [], error: null }).then(resolve),
